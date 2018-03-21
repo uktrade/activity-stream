@@ -8,6 +8,10 @@ jobs:
     docker:
       - image: python:3.6
 
+      - image: postgres:9.5
+        environment:
+          POSTGRES_DB=activity-stream
+
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
       # documented at https://circleci.com/docs/2.0/circleci-images/
