@@ -28,8 +28,9 @@ SECRET_KEY = '%#urq+hk+5jc3+v@jzfr!h5t^93!$hzk!=3^ya&(2!&8&^qbv_'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
+# As app is running behind a host-based router supplied by Heroku or other
+# PaaS, we can open ALLOWED_HOSTS
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 
@@ -40,6 +41,8 @@ INSTALLED_APPS = (
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'core',
+    'rest_framework'
 )
 
 MIDDLEWARE_CLASSES = (
@@ -53,7 +56,7 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.security.SecurityMiddleware',
 )
 
-ROOT_URLCONF = 'core.urls'
+ROOT_URLCONF = 'conf.urls'
 
 TEMPLATES = [
     {
@@ -78,7 +81,7 @@ WSGI_APPLICATION = 'conf.wsgi.application'
 # https://docs.djangoproject.com/en/1.8/ref/settings/#databases
 
 DATABASES = {
-    'default': env.db('DATABASE_URL')
+    'default': env.db('DATABASE_URL',"postgres://postgres@localhost/activity-stream")
 }
 DATABASES['default']['ATOMIC_REQUESTS'] = True
 
@@ -101,3 +104,24 @@ USE_TZ = True
 
 STATIC_ROOT = os.path.join(PROJECT_ROOT, 'static')
 STATIC_URL = '/static/'
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+        },
+        'core': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False
+        }
+    },
+}
