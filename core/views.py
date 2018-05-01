@@ -41,7 +41,7 @@ def get_action_by_id(request, action_id):
         logger.debug(f"data {data}")
         json = JSONRenderer().render(data)
         logger.debug(f"json {repr(json)}")
-        return JsonResponse(status=200, data=data, safe=False)
+        return JsonResponse(status=200, data=data)
     except  Action.DoesNotExist:
         return HttpResponse(status=404)
 
