@@ -7,10 +7,6 @@ jobs:
   build:
     docker:
       - image: python:3.6
-
-      - image: postgres:9.5
-        environment:
-          POSTGRES_DB=activity-stream
     working_directory: ~/repo
 
     steps:
