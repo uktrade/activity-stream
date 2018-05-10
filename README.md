@@ -1,4 +1,4 @@
-# activity-stream
+# activity-stream [![CircleCI](https://circleci.com/gh/uktrade/activity-stream.svg?style=svg)](https://circleci.com/gh/uktrade/activity-stream)
 
 Activity Stream is a collector of various interactions between people and DIT.
 
