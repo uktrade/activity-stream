@@ -10,6 +10,7 @@ Activity Stream is a collector of various interactions between people and DIT.
 
 When adding a new library, first add it to requirements.in, then::
 
+    pip install pip-tools
     pip-compile --output-file requirements.txt requirements.in
     pip install -r requirements.txt
 
