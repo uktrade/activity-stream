@@ -2,6 +2,10 @@
 
 Activity Stream is a collector of various interactions between people and DIT.
 
+## Running tests
+
+    ./tests.sh
+
 ## Managing Requirements
 
 When adding a new library, first add it to requirements.in, then::
