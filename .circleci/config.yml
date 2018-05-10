@@ -36,7 +36,3 @@ jobs:
           command: |
             set -xu
             ./tests.sh
-
-      - store_artifacts:
-          path: test-reports
-          destination: test-reports
