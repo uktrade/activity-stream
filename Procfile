@@ -1,1 +1,1 @@
-web: python manage.py migrate && gunicorn conf.wsgi --config conf/gunicorn.py
+web: gunicorn conf.wsgi --config conf/gunicorn.py
