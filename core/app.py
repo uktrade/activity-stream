@@ -1,17 +1,22 @@
+import asyncio
 import logging
 import sys
 
 from aiohttp import web
 
 
-def run_application():
+async def run_application():
     async def handle(request):
         return web.Response(text='')
 
     app = web.Application()
     app.add_routes([web.get('/', handle)])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
-    web.run_app(app, access_log_format=access_log_format)
+
+    runner = web.AppRunner(app, access_log_format=access_log_format)
+    await runner.setup()
+    site = web.TCPSite(runner, '127.0.0.1', 8080)
+    await site.start()
 
 
 def setup_logging():
@@ -23,4 +28,7 @@ def setup_logging():
 
 if __name__ == '__main__':
     setup_logging()
-    run_application()
+
+    loop = asyncio.get_event_loop()
+    asyncio.ensure_future(run_application(), loop=loop)
+    loop.run_forever()
