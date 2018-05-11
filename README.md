@@ -8,7 +8,7 @@ Activity Stream is a collector of various interactions between people and DIT.
 
 ## Running locally
 
-    gunicorn core.app --config conf/gunicorn.py
+    python -m core.app
 
 ## Managing Requirements
 
@@ -20,4 +20,4 @@ When adding a new library, first add it to requirements.in, then::
 
 ## Endpoints
 
-The server responds with a 200 to all HTTP requests.
+The server responds with a 200 to GET /, and it returns an error code otherwise.

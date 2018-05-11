@@ -7,7 +7,7 @@ import urllib.request
 class TestServer(unittest.TestCase):
 
     def setUp(self):
-        self.server = Popen(['gunicorn', 'core.app', '--config', 'conf/gunicorn.py'])
+        self.server = Popen(['python', '-m', 'core.app'])
 
     def tearDown(self):
         self.server.kill()
@@ -19,7 +19,7 @@ class TestServer(unittest.TestCase):
 
 def is_http_accepted():
     try:
-        urllib.request.urlopen('http://localhost:8000', timeout=1)
+        urllib.request.urlopen('http://127.0.0.1:8080', timeout=1)
         return True
     except urllib.request.URLError as e:
         return ('nodename nor servname provided, or not known' not in str(e.reason)
