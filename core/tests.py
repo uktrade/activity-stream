@@ -6,7 +6,7 @@ import urllib.request
 class TestServer(unittest.TestCase):
 
     def setUp(self):
-        self.server = Popen(['gunicorn', 'conf.wsgi', '--config', 'conf/gunicorn.py'])
+        self.server = Popen(['gunicorn', 'core.app', '--config', 'conf/gunicorn.py'])
 
     def tearDown(self):
         self.server.kill()

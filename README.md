@@ -8,7 +8,7 @@ Activity Stream is a collector of various interactions between people and DIT.
 
 ## Running locally
 
-    gunicorn conf.wsgi --config conf/gunicorn.py
+    gunicorn core.app --config conf/gunicorn.py
 
 ## Managing Requirements
 
