@@ -1,5 +1,6 @@
 import asyncio
 from subprocess import Popen
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -33,7 +34,7 @@ class TestApplication(unittest.TestCase):
 class TestProcess(unittest.TestCase):
 
     def setUp(self):
-        self.server = Popen(['python', '-m', 'core.app'])
+        self.server = Popen([sys.executable, '-m', 'core.app'])
 
     def tearDown(self):
         self.server.kill()
