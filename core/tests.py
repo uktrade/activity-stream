@@ -18,7 +18,8 @@ class TestProcess(unittest.TestCase):
 
 def is_http_accepted():
     def is_connection_error(e):
-        return 'nodename nor servname provided, or not known' in str(e.reason)
+        return ('nodename nor servname provided, or not known' in str(e.reason)
+                or 'Connection refused' in str(e.reason))
 
     attempts = 0
     while attempts < 20:
