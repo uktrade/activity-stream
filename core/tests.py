@@ -4,7 +4,7 @@ import unittest
 import urllib.request
 
 
-class TestServer(unittest.TestCase):
+class TestProcess(unittest.TestCase):
 
     def setUp(self):
         self.server = Popen(['python', '-m', 'core.app'])
