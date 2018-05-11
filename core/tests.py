@@ -1,8 +1,33 @@
 import asyncio
 from subprocess import Popen
 import unittest
+from unittest.mock import patch
 
 import aiohttp
+
+from core.app import run_application
+
+
+class TestApplication(unittest.TestCase):
+
+    def test_application_accepts_http(self):
+        loop = asyncio.get_event_loop()
+
+        original_app_runner = aiohttp.web.AppRunner
+        runner = None
+
+        def wrapped_runner(*args, **kwargs):
+            nonlocal runner
+            runner = original_app_runner(*args, **kwargs)
+            self.addCleanup(cleanup)
+            return runner
+
+        def cleanup():
+            loop.run_until_complete(runner.cleanup())
+
+        with patch('aiohttp.web.AppRunner', wraps=wrapped_runner):
+            asyncio.ensure_future(run_application(), loop=loop)
+            self.assertTrue(is_http_accepted())
 
 
 class TestProcess(unittest.TestCase):
