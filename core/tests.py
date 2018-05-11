@@ -1,7 +1,8 @@
+import asyncio
 from subprocess import Popen
-import time
 import unittest
-import urllib.request
+
+import aiohttp
 
 
 class TestProcess(unittest.TestCase):
@@ -17,18 +18,24 @@ class TestProcess(unittest.TestCase):
 
 
 def is_http_accepted():
+    loop = asyncio.get_event_loop()
+    connected_future = asyncio.ensure_future(_is_http_accepted(), loop=loop)
+    return loop.run_until_complete(connected_future)
+
+
+async def _is_http_accepted():
     def is_connection_error(e):
-        return ('nodename nor servname provided, or not known' in str(e.reason)
-                or 'Connection refused' in str(e.reason))
+        return 'Cannot connect to host' in str(e)
 
     attempts = 0
     while attempts < 20:
         try:
-            urllib.request.urlopen('http://127.0.0.1:8080', timeout=1)
+            async with aiohttp.ClientSession() as session:
+                await session.get('http://127.0.0.1:8080', timeout=1)
             return True
-        except urllib.request.URLError as e:
+        except aiohttp.client_exceptions.ClientConnectorError as e:
             attempts += 1
-            time.sleep(0.2)
+            await asyncio.sleep(0.2)
             if not is_connection_error(e):
                 return True
 
