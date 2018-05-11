@@ -21,5 +21,6 @@ def setup_logging():
     aiohttp_log.addHandler(stdout_handler)
 
 
-setup_logging()
-run_application()
+if __name__ == '__main__':
+    setup_logging()
+    run_application()
