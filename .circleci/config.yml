@@ -10,15 +10,15 @@ jobs:
           keys:
             - v1-dependencies-{{ checksum "requirements.txt" }}
           paths:
-            - ~/cache/pip
+            - /root/cache/pip
       - run:
           name: Install dependencies
-          command: pip install --cache-dir ~/cache/pip -r requirements.txt
+          command: pip install --cache-dir /root/cache/pip -r requirements.txt
       - save_cache:
           name: Save pip cache
           key: v1-dependencies-{{ checksum "requirements.txt" }}
           paths:
-            - ~/cache/pip
+            - /root/cache/pip
       - run:
           name: Run tests
           command: |
