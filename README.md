@@ -8,6 +8,8 @@ Activity Stream is a collector of various interactions between people and DIT.
 
 ## Running locally
 
+    FEED_ENDPOINT=http://some-endpoint/ \
+    INTERNAL_API_SHARED_SECRET=some-secret \
     python -m core.app
 
 ## Managing Requirements

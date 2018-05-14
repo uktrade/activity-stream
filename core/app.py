@@ -1,11 +1,19 @@
 import asyncio
 import logging
+import os
 import sys
 
+import aiohttp
 from aiohttp import web
+
+POLLING_INTERVAL = 5
 
 
 async def run_application():
+    FEED_ENDPOINT = os.environ['FEED_ENDPOINT']
+    SHARED_SECRET = os.environ['INTERNAL_API_SHARED_SECRET']
+    feed_url = FEED_ENDPOINT + '?shared_secret=' + SHARED_SECRET
+
     async def handle(request):
         return web.Response(text='')
 
@@ -17,6 +25,16 @@ async def run_application():
     await runner.setup()
     site = web.TCPSite(runner, '127.0.0.1', 8080)
     await site.start()
+
+    async with aiohttp.ClientSession() as session:
+        async for result in poll(session.get, feed_url):
+            print(await result.content.read())
+
+
+async def poll(async_func, *args, **kwargs):
+    while True:
+        yield await async_func(*args, **kwargs)
+        await asyncio.sleep(POLLING_INTERVAL)
 
 
 def setup_logging():
