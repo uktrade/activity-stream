@@ -33,7 +33,11 @@ async def run_application():
         async for result in poll(session.get, feed_url):
             feed_contents = await result.content.read()
             es_bulk_contents = es_bulk(feed_contents)
-            await session.post(ELASTIC_SEARCH_ENDPOINT + '_bulk', data=es_bulk_contents)
+            headers = {
+                'Content-Type': 'application/x-ndjson'
+            }
+            await session.post(ELASTIC_SEARCH_ENDPOINT + '_bulk',
+                               data=es_bulk_contents, headers=headers)
 
 
 async def poll(async_func, *args, **kwargs):

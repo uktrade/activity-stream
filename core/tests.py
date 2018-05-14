@@ -61,13 +61,14 @@ class TestApplication(unittest.TestCase):
             asyncio.ensure_future(run_application())
             return await self.es_bulk
 
-        es_bulk_request = self.loop.run_until_complete(_test())
+        es_bulk_content, es_bulk_headers = self.loop.run_until_complete(_test())
         es_bulk_request_dicts = [
             json.loads(line)
-            for line in es_bulk_request.split(b'\n')[0:-1]
+            for line in es_bulk_content.split(b'\n')[0:-1]
         ]
 
-        self.assertEqual(es_bulk_request.decode('utf-8')[-1], '\n')
+        self.assertEqual(es_bulk_content.decode('utf-8')[-1], '\n')
+        self.assertEqual(es_bulk_headers['Content-Type'], 'application/x-ndjson')
 
         self.assertEqual(es_bulk_request_dicts[0]['index']['_index'], 'company_timeline')
         self.assertEqual(es_bulk_request_dicts[0]['index']['_type'], '_doc')
@@ -148,7 +149,8 @@ async def run_feed_application(feed_requested_callback):
 
 async def run_es_application(es_bulk_request_callback):
     async def handle(request):
-        asyncio.get_event_loop().call_soon(es_bulk_request_callback, await request.content.read())
+        content, headers = (await request.content.read(), request.headers)
+        asyncio.get_event_loop().call_soon(es_bulk_request_callback, (content, headers))
         return web.Response(text='')
 
     app = web.Application()
