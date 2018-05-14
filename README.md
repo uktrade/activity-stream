@@ -10,6 +10,7 @@ Activity Stream is a collector of various interactions between people and DIT.
 
     FEED_ENDPOINT=http://some-endpoint/ \
     INTERNAL_API_SHARED_SECRET=some-secret \
+    ELASTIC_SEARCH_ENDPOINT=https://some-elastic-search-endpoint/ \
     python -m core.app
 
 ## Managing Requirements

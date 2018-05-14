@@ -1,16 +1,19 @@
 import asyncio
+import json
 import logging
 import os
 import sys
 
 import aiohttp
 from aiohttp import web
+from lxml import etree
 
 POLLING_INTERVAL = 5
 
 
 async def run_application():
     FEED_ENDPOINT = os.environ['FEED_ENDPOINT']
+    ELASTIC_SEARCH_ENDPOINT = os.environ['ELASTIC_SEARCH_ENDPOINT']
     SHARED_SECRET = os.environ['INTERNAL_API_SHARED_SECRET']
     feed_url = FEED_ENDPOINT + '?shared_secret=' + SHARED_SECRET
 
@@ -28,13 +31,28 @@ async def run_application():
 
     async with aiohttp.ClientSession() as session:
         async for result in poll(session.get, feed_url):
-            print(await result.content.read())
+            feed_contents = await result.content.read()
+            es_bulk_contents = es_bulk(feed_contents)
+            await session.post(ELASTIC_SEARCH_ENDPOINT + '_bulk', data=es_bulk_contents)
 
 
 async def poll(async_func, *args, **kwargs):
     while True:
         yield await async_func(*args, **kwargs)
         await asyncio.sleep(POLLING_INTERVAL)
+
+
+def es_bulk(feed_xml):
+    feed = etree.XML(feed_xml)
+    return '\n'.join(flatten([
+        [json.dumps(contents['action_and_metadata']), json.dumps(contents['source'])]
+        for es_bulk in feed.iter('{http://trade.gov.uk/activity-stream/v1}elastic_search_bulk')
+        for contents in [json.loads(es_bulk.text)]
+    ])) + '\n'
+
+
+def flatten(l):
+    return [item for sublist in l for item in sublist]
 
 
 def setup_logging():
