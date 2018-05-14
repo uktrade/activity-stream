@@ -11,24 +11,25 @@ from core.app import run_application
 
 class TestApplication(unittest.TestCase):
 
-    def test_application_accepts_http(self):
-        loop = asyncio.get_event_loop()
-
+    def setUp(self):
+        self.loop = asyncio.get_event_loop()
         original_app_runner = aiohttp.web.AppRunner
-        runner = None
 
-        def wrapped_runner(*args, **kwargs):
-            nonlocal runner
-            runner = original_app_runner(*args, **kwargs)
-            self.addCleanup(cleanup)
-            return runner
+        def wrapped_app_runner(*args, **kwargs):
+            self.app_runner = original_app_runner(*args, **kwargs)
+            return self.app_runner
 
-        def cleanup():
-            loop.run_until_complete(runner.cleanup())
+        self.app_runner_patcher = patch('aiohttp.web.AppRunner', wraps=wrapped_app_runner)
+        self.app_runner_patcher.start()
 
-        with patch('aiohttp.web.AppRunner', wraps=wrapped_runner):
-            asyncio.ensure_future(run_application(), loop=loop)
-            self.assertTrue(is_http_accepted())
+    def tearDown(self):
+        self.loop = asyncio.get_event_loop()
+        self.loop.run_until_complete(self.app_runner.cleanup())
+        self.app_runner_patcher.stop()
+
+    def test_application_accepts_http(self):
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        self.assertTrue(is_http_accepted())
 
 
 class TestProcess(unittest.TestCase):
