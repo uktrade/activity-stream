@@ -10,7 +10,12 @@ Activity Stream is a collector of various interactions between people and DIT.
 
     FEED_ENDPOINT=http://some-endpoint/ \
     INTERNAL_API_SHARED_SECRET=some-secret \
-    ELASTIC_SEARCH_ENDPOINT=https://some-elastic-search-endpoint/ \
+    ELASTICSEARCH_AWS_ACCESS_KEY_ID=some-id \
+    ELASTICSEARCH_AWS_SECRET_ACCESS_KEY=aws-secret \
+    ELASTICSEARCH_HOST=127.0.0.1 \
+    ELASTICSEARCH_PORT=8082 \
+    ELASTICSEARCH_PROTOCOL=http \
+    ELASTICSEARCH_REGION=us-east-2 \
     python -m core.app
 
 ## Managing Requirements

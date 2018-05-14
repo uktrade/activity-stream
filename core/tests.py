@@ -1,4 +1,5 @@
 import asyncio
+from freezegun import freeze_time
 import json
 import os
 from subprocess import Popen
@@ -56,6 +57,7 @@ class TestApplication(unittest.TestCase):
         asyncio.ensure_future(run_application(), loop=self.loop)
         self.assertTrue(is_http_accepted())
 
+    @freeze_time('2012-01-14 12:00:01')
     def test_feed_passed_to_elastic_search(self):
         async def _test():
             asyncio.ensure_future(run_application())
@@ -67,6 +69,12 @@ class TestApplication(unittest.TestCase):
             for line in es_bulk_content.split(b'\n')[0:-1]
         ]
 
+        self.assertEqual(
+            es_bulk_headers['Authorization'],
+            'AWS4-HMAC-SHA256 '
+            'Credential=some-id/20120114/us-east-2/es/aws4_request, '
+            'SignedHeaders=content-type;host;x-amz-date, '
+            'Signature=2491bc4f0759767e13154defae392ab2fa45833393424a5d3d34370bc7842255')
         self.assertEqual(es_bulk_content.decode('utf-8')[-1], '\n')
         self.assertEqual(es_bulk_headers['Content-Type'], 'application/x-ndjson')
 
@@ -165,7 +173,12 @@ async def run_es_application(es_bulk_request_callback):
 def mock_env():
     return {
         'FEED_ENDPOINT': 'http://localhost:8081/feed',
-        'ELASTIC_SEARCH_ENDPOINT': 'http://127.0.0.1:8082/',
+        'ELASTICSEARCH_AWS_ACCESS_KEY_ID': 'some-id',
+        'ELASTICSEARCH_AWS_SECRET_ACCESS_KEY': 'aws-secret',
+        'ELASTICSEARCH_HOST': '127.0.0.1',
+        'ELASTICSEARCH_PORT': '8082',
+        'ELASTICSEARCH_PROTOCOL': 'http',
+        'ELASTICSEARCH_REGION': 'us-east-2',
         'INTERNAL_API_SHARED_SECRET': 'some-secret'
     }
 
