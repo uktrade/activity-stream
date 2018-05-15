@@ -43,7 +43,7 @@ async def run_application():
 
     runner = web.AppRunner(app, access_log_format=access_log_format)
     await runner.setup()
-    site = web.TCPSite(runner, '127.0.0.1', PORT)
+    site = web.TCPSite(runner, '0.0.0.0', PORT)
     await site.start()
 
     async with aiohttp.ClientSession() as session:
