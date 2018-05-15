@@ -8,6 +8,7 @@ Activity Stream is a collector of various interactions between people and DIT.
 
 ## Running locally
 
+	PORT=8080 \
     FEED_ENDPOINT=http://some-endpoint/ \
     INTERNAL_API_SHARED_SECRET=some-secret \
     ELASTICSEARCH_AWS_ACCESS_KEY_ID=some-id \

@@ -172,6 +172,7 @@ async def run_es_application(es_bulk_request_callback):
 
 def mock_env():
     return {
+        'PORT': '8080',
         'FEED_ENDPOINT': 'http://localhost:8081/feed',
         'ELASTICSEARCH_AWS_ACCESS_KEY_ID': 'some-id',
         'ELASTICSEARCH_AWS_SECRET_ACCESS_KEY': 'aws-secret',
