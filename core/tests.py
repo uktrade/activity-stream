@@ -15,9 +15,12 @@ from core.app import run_application
 
 class TestApplication(unittest.TestCase):
 
-    def setUp_manual(self):
+    def setUp_manual(self, env):
         ''' Test setUp function that can be customised on a per-test basis '''
-        self.os_environ_patcher = patch.dict(os.environ, mock_env())
+        self.os_environ_patcher = patch.dict(os.environ, {
+            **mock_env(),
+            **env,
+        })
         self.os_environ_patcher.start()
         self.loop = asyncio.get_event_loop()
 
@@ -55,14 +58,14 @@ class TestApplication(unittest.TestCase):
         self.os_environ_patcher.stop()
 
     def test_application_accepts_http(self):
-        self.setUp_manual()
+        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.xml'})
 
         asyncio.ensure_future(run_application(), loop=self.loop)
         self.assertTrue(is_http_accepted())
 
     @freeze_time('2012-01-14 12:00:01')
     def test_feed_passed_to_elastic_search(self):
-        self.setUp_manual()
+        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.xml'})
 
         async def _test():
             asyncio.ensure_future(run_application())
@@ -109,7 +112,10 @@ class TestProcess(unittest.TestCase):
 
         self.feed_runner = loop.run_until_complete(run_feed_application(Mock()))
         self.es_runner = loop.run_until_complete(run_es_application(Mock()))
-        self.server = Popen([sys.executable, '-m', 'core.app'], env=mock_env())
+        self.server = Popen([sys.executable, '-m', 'core.app'], env={
+            **mock_env(),
+            **{'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.xml'}
+        })
 
     def tearDown(self):
         for task in asyncio.Task.all_tasks():
@@ -185,7 +191,6 @@ async def run_es_application(es_bulk_request_callback):
 def mock_env():
     return {
         'PORT': '8080',
-        'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.xml',
         'ELASTICSEARCH_AWS_ACCESS_KEY_ID': 'some-id',
         'ELASTICSEARCH_AWS_SECRET_ACCESS_KEY': 'aws-secret',
         'ELASTICSEARCH_HOST': '127.0.0.1',
