@@ -16,6 +16,9 @@ POLLING_INTERVAL = 5
 
 
 async def run_application():
+    app_logger = logging.getLogger(__name__)
+
+    app_logger.debug('Examining environment...')
     PORT = os.environ['PORT']
     FEED_ENDPOINT = os.environ['FEED_ENDPOINT']
     SHARED_SECRET = os.environ['INTERNAL_API_SHARED_SECRET']
@@ -33,10 +36,12 @@ async def run_application():
     )
     es_endpoint = os.environ['ELASTICSEARCH_PROTOCOL'] + '://' + \
         es_host + ':' + os.environ['ELASTICSEARCH_PORT'] + es_path
+    app_logger.debug('Examining environment: done')
 
     async def handle(request):
         return web.Response(text='')
 
+    app_logger.debug('Creating listening web application...')
     app = web.Application()
     app.add_routes([web.get('/', handle)])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
@@ -45,17 +50,29 @@ async def run_application():
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', PORT)
     await site.start()
+    app_logger.debug('Creating listening web application: done')
 
     async with aiohttp.ClientSession() as session:
         async for result in poll(session.get, feed_url):
+            app_logger.debug('Polling')
+
+            app_logger.debug('Fetching contents of feed...')
             feed_contents = await result.content.read()
+            app_logger.debug('Fetching contents of feed: done (%s)', feed_contents)
+
+            app_logger.debug('Converting feed to ES bulk ingest commands...')
             es_bulk_contents = es_bulk(feed_contents).encode('utf-8')
+            app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
+
+            app_logger.debug('POSTing bulk import to ES...')
             headers = {
                 'Content-Type': 'application/x-ndjson'
             }
             auth_headers = es_bulk_auth_header_getter(payload=es_bulk_contents)
-            await session.post(es_endpoint,
-                               data=es_bulk_contents, headers={**headers, **auth_headers})
+            es_result = await session.post(
+                es_endpoint, data=es_bulk_contents, headers={**headers, **auth_headers})
+            app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
+            app_logger.debug('Waiting to poll')
 
 
 async def poll(async_func, *args, **kwargs):
@@ -125,6 +142,10 @@ def setup_logging():
     aiohttp_log = logging.getLogger('aiohttp.access')
     aiohttp_log.setLevel(logging.DEBUG)
     aiohttp_log.addHandler(stdout_handler)
+
+    app_logger = logging.getLogger(__name__)
+    app_logger.setLevel(logging.DEBUG)
+    app_logger.addHandler(stdout_handler)
 
 
 if __name__ == '__main__':
