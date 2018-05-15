@@ -22,7 +22,7 @@ async def run_application():
     PORT = os.environ['PORT']
     FEED_ENDPOINT = os.environ['FEED_ENDPOINT']
     SHARED_SECRET = os.environ['INTERNAL_API_SHARED_SECRET']
-    feed_url = FEED_ENDPOINT + '?shared_secret=' + SHARED_SECRET
+    feed_params = {'shared_secret': SHARED_SECRET}
 
     es_host = os.environ['ELASTICSEARCH_HOST']
     es_path = '/_bulk'
@@ -53,7 +53,8 @@ async def run_application():
     app_logger.debug('Creating listening web application: done')
 
     async with aiohttp.ClientSession() as session:
-        async for result in poll(session.get, feed_url):
+        poll_iterator = poll(functools.partial(session.get, FEED_ENDPOINT, params=feed_params))
+        async for result in poll_iterator:
             app_logger.debug('Polling')
 
             app_logger.debug('Fetching contents of feed...')

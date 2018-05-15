@@ -29,8 +29,8 @@ class TestApplication(unittest.TestCase):
 
         self.feed_requested = asyncio.Future()
 
-        def feed_requested_callback():
-            self.feed_requested.set_result(None)
+        def feed_requested_callback(request):
+            self.feed_requested.set_result(request)
         self.feed_runner = self.loop.run_until_complete(
             run_feed_application(feed_requested_callback))
 
@@ -68,6 +68,8 @@ class TestApplication(unittest.TestCase):
             json.loads(line)
             for line in es_bulk_content.split(b'\n')[0:-1]
         ]
+
+        self.assertEqual(self.feed_requested.result().rel_url.query['shared_secret'], '?[!@£$%^%')
 
         self.assertEqual(
             es_bulk_headers['Authorization'],
@@ -143,7 +145,7 @@ async def _is_http_accepted():
 
 async def run_feed_application(feed_requested_callback):
     async def handle(request):
-        asyncio.get_event_loop().call_soon(feed_requested_callback)
+        asyncio.get_event_loop().call_soon(feed_requested_callback, request)
         return web.Response(text=mock_feed())
 
     app = web.Application()
@@ -180,7 +182,7 @@ def mock_env():
         'ELASTICSEARCH_PORT': '8082',
         'ELASTICSEARCH_PROTOCOL': 'http',
         'ELASTICSEARCH_REGION': 'us-east-2',
-        'INTERNAL_API_SHARED_SECRET': 'some-secret'
+        'INTERNAL_API_SHARED_SECRET': '?[!@£$%^%'
     }
 
 
