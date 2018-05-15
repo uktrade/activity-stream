@@ -61,8 +61,10 @@ async def run_application():
             feed_contents = await result.content.read()
             app_logger.debug('Fetching contents of feed: done (%s)', feed_contents)
 
+            feed = etree.XML(feed_contents)
+
             app_logger.debug('Converting feed to ES bulk ingest commands...')
-            es_bulk_contents = es_bulk(feed_contents).encode('utf-8')
+            es_bulk_contents = es_bulk(feed).encode('utf-8')
             app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
 
             app_logger.debug('POSTing bulk import to ES...')
@@ -82,8 +84,7 @@ async def poll(async_func, *args, **kwargs):
         await asyncio.sleep(POLLING_INTERVAL)
 
 
-def es_bulk(feed_xml):
-    feed = etree.XML(feed_xml)
+def es_bulk(feed):
     return '\n'.join(flatten([
         [json.dumps(contents['action_and_metadata']), json.dumps(contents['source'])]
         for es_bulk in feed.iter('{http://trade.gov.uk/activity-stream/v1}elastic_search_bulk')
