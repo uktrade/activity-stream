@@ -53,18 +53,7 @@ async def run_application():
     app_logger.debug('Creating listening web application: done')
 
     async with aiohttp.ClientSession() as session:
-        poll_iterator = poll(functools.partial(session.get, FEED_ENDPOINT, params=feed_params))
-        async for result in poll_iterator:
-            app_logger.debug('Polling')
-
-            app_logger.debug('Fetching contents of feed...')
-            feed_contents = await result.content.read()
-            app_logger.debug('Fetching contents of feed: done (%s)', feed_contents)
-
-            app_logger.debug('Parsing XML...')
-            feed = etree.XML(feed_contents)
-            app_logger.debug('Parsed')
-
+        async for feed in poll(app_logger, session, feed_params, FEED_ENDPOINT):
             app_logger.debug('Converting feed to ES bulk ingest commands...')
             es_bulk_contents = es_bulk(feed).encode('utf-8')
             app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
@@ -77,12 +66,25 @@ async def run_application():
             es_result = await session.post(
                 es_endpoint, data=es_bulk_contents, headers={**headers, **auth_headers})
             app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
-            app_logger.debug('Waiting to poll')
 
 
-async def poll(async_func, *args, **kwargs):
+async def poll(app_logger, session, feed_params, seed_url):
+    href = seed_url
     while True:
-        yield await async_func(*args, **kwargs)
+        app_logger.debug('Polling')
+        result = await session.get(href, params=feed_params)
+
+        app_logger.debug('Fetching contents of feed...')
+        feed_contents = await result.content.read()
+        app_logger.debug('Fetching contents of feed: done (%s)', feed_contents)
+
+        app_logger.debug('Parsing XML...')
+        feed = etree.XML(feed_contents)
+        app_logger.debug('Parsed')
+
+        yield feed
+
+        app_logger.debug('Waiting to poll')
         await asyncio.sleep(POLLING_INTERVAL)
 
 
