@@ -61,7 +61,9 @@ async def run_application():
             feed_contents = await result.content.read()
             app_logger.debug('Fetching contents of feed: done (%s)', feed_contents)
 
+            app_logger.debug('Parsing XML...')
             feed = etree.XML(feed_contents)
+            app_logger.debug('Parsed')
 
             app_logger.debug('Converting feed to ES bulk ingest commands...')
             es_bulk_contents = es_bulk(feed).encode('utf-8')
