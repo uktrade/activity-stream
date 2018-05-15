@@ -22,3 +22,5 @@ repos:
     - id: forbid-new-submodules
     - id: trailing-whitespace
     - id: pretty-format-json
+      args:
+        - --autofix
