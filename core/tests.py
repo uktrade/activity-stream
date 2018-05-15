@@ -149,6 +149,10 @@ async def _is_http_accepted():
 
 
 async def run_feed_application(feed_requested_callback):
+    def mock_feed():
+        with open('core/tests_fixture.xml', 'rb') as f:
+            return f.read().decode('utf-8')
+
     async def handle(request):
         asyncio.get_event_loop().call_soon(feed_requested_callback, request)
         return web.Response(text=mock_feed())
@@ -189,8 +193,3 @@ def mock_env():
         'ELASTICSEARCH_REGION': 'us-east-2',
         'INTERNAL_API_SHARED_SECRET': '?[!@£$%^%'
     }
-
-
-def mock_feed():
-    with open('core/tests_fixture.xml', 'rb') as f:
-        return f.read().decode('utf-8')
