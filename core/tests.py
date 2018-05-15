@@ -15,7 +15,8 @@ from core.app import run_application
 
 class TestApplication(unittest.TestCase):
 
-    def setUp(self):
+    def setUp_manual(self):
+        ''' Test setUp function that can be customised on a per-test basis '''
         self.os_environ_patcher = patch.dict(os.environ, mock_env())
         self.os_environ_patcher.start()
         self.loop = asyncio.get_event_loop()
@@ -54,11 +55,15 @@ class TestApplication(unittest.TestCase):
         self.os_environ_patcher.stop()
 
     def test_application_accepts_http(self):
+        self.setUp_manual()
+
         asyncio.ensure_future(run_application(), loop=self.loop)
         self.assertTrue(is_http_accepted())
 
     @freeze_time('2012-01-14 12:00:01')
     def test_feed_passed_to_elastic_search(self):
+        self.setUp_manual()
+
         async def _test():
             asyncio.ensure_future(run_application())
             return await self.es_bulk
