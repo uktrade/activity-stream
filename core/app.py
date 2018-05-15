@@ -84,8 +84,23 @@ async def poll(app_logger, session, feed_params, seed_url):
 
         yield feed
 
-        app_logger.debug('Waiting to poll')
-        await asyncio.sleep(POLLING_INTERVAL)
+        app_logger.debug('Finding next URL...')
+        href = next_href(feed)
+        app_logger.debug('Finding next URL: done (%s)', href)
+
+        if href:
+            app_logger.debug('Will immediatly poll (%s)', href)
+        else:
+            href = seed_url
+            app_logger.debug('Going back to seed')
+            app_logger.debug('Waiting to poll (%s)', href)
+            await asyncio.sleep(POLLING_INTERVAL)
+
+
+def next_href(feed):
+    next_link = feed.xpath('atom:link[@rel="next"]', namespaces={
+                           'atom': 'http://www.w3.org/2005/Atom'})
+    return next_link[0].attrib['href'] if len(next_link) else None
 
 
 def es_bulk(feed):

@@ -24,17 +24,20 @@ class TestApplication(unittest.TestCase):
         self.os_environ_patcher.start()
         self.loop = asyncio.get_event_loop()
 
-        self.es_bulk = asyncio.Future()
+        self.es_bulk = [asyncio.Future(), asyncio.Future()]
 
         def es_bulk_callback(result):
-            self.es_bulk.set_result(result)
+            first_not_done = next(future for future in self.es_bulk if not future.done())
+            first_not_done.set_result(result)
+
         self.es_runner = self.loop.run_until_complete(
             run_es_application(es_bulk_callback))
 
-        self.feed_requested = asyncio.Future()
+        self.feed_requested = [asyncio.Future(), asyncio.Future()]
 
         def feed_requested_callback(request):
-            self.feed_requested.set_result(request)
+            first_not_done = next(future for future in self.feed_requested if not future.done())
+            first_not_done.set_result(request)
         self.feed_runner = self.loop.run_until_complete(
             run_feed_application(feed_requested_callback))
 
@@ -69,7 +72,7 @@ class TestApplication(unittest.TestCase):
 
         async def _test():
             asyncio.ensure_future(run_application())
-            return await self.es_bulk
+            return await self.es_bulk[0]
 
         es_bulk_content, es_bulk_headers = self.loop.run_until_complete(_test())
         es_bulk_request_dicts = [
@@ -77,7 +80,8 @@ class TestApplication(unittest.TestCase):
             for line in es_bulk_content.split(b'\n')[0:-1]
         ]
 
-        self.assertEqual(self.feed_requested.result().rel_url.query['shared_secret'], '?[!@£$%^%')
+        self.assertEqual(self.feed_requested[0].result(
+        ).rel_url.query['shared_secret'], '?[!@£$%^%')
 
         self.assertEqual(
             es_bulk_headers['Authorization'],
@@ -103,6 +107,22 @@ class TestApplication(unittest.TestCase):
         self.assertEqual(es_bulk_request_dicts[3]['date'], '2018-03-23T17:06:53+00:00')
         self.assertEqual(es_bulk_request_dicts[3]['activity'], 'export-oportunity-enquiry-made')
         self.assertEqual(es_bulk_request_dicts[3]['company_house_number'], '82312')
+
+    def test_multipage_second_page_passed_to_elastic_search(self):
+        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_multipage_1.xml'})
+
+        async def _test():
+            asyncio.ensure_future(run_application())
+            return await self.es_bulk[1]
+
+        es_bulk_content, es_bulk_headers = self.loop.run_until_complete(_test())
+
+        es_bulk_request_dicts = [
+            json.loads(line)
+            for line in es_bulk_content.split(b'\n')[0:-1]
+        ]
+        self.assertEqual(es_bulk_request_dicts[0]['index']['_id'],
+                         'export-oportunity-enquiry-made-second-page-4986999')
 
 
 class TestProcess(unittest.TestCase):
