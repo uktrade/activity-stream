@@ -149,16 +149,17 @@ async def _is_http_accepted():
 
 
 async def run_feed_application(feed_requested_callback):
-    def mock_feed():
-        with open('core/tests_fixture.xml', 'rb') as f:
+    def mock_feed(path):
+        with open('core/' + path, 'rb') as f:
             return f.read().decode('utf-8')
 
     async def handle(request):
+        path = request.match_info['feed']
         asyncio.get_event_loop().call_soon(feed_requested_callback, request)
-        return web.Response(text=mock_feed())
+        return web.Response(text=mock_feed(path))
 
     app = web.Application()
-    app.add_routes([web.get('/feed', handle)])
+    app.add_routes([web.get('/{feed}', handle)])
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '127.0.0.1', 8081)
@@ -184,7 +185,7 @@ async def run_es_application(es_bulk_request_callback):
 def mock_env():
     return {
         'PORT': '8080',
-        'FEED_ENDPOINT': 'http://localhost:8081/feed',
+        'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.xml',
         'ELASTICSEARCH_AWS_ACCESS_KEY_ID': 'some-id',
         'ELASTICSEARCH_AWS_SECRET_ACCESS_KEY': 'aws-secret',
         'ELASTICSEARCH_HOST': '127.0.0.1',
