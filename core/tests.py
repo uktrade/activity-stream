@@ -67,7 +67,8 @@ class TestApplication(unittest.TestCase):
         self.assertTrue(is_http_accepted())
 
     @freeze_time('2012-01-14 12:00:01')
-    def test_feed_passed_to_elastic_search(self):
+    @patch('os.urandom', return_value=b'something-random')
+    def test_feed_passed_to_elastic_search(self, _):
         self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.xml'})
 
         async def _test():
@@ -81,7 +82,14 @@ class TestApplication(unittest.TestCase):
         ]
 
         self.assertEqual(self.feed_requested[0].result(
-        ).rel_url.query['shared_secret'], '?[!@£$%^%')
+        ).headers['Authorization'],
+            'Hawk '
+            'mac="TkV+IxaD2wp00lNY1adIVzGrmUEa8cSE7AcAoswXjzU=", '
+            'hash="B0weSUXsMcb5UhL41FZbrUJCAotzSI3HawE1NPLRUz8=", '
+            'id="feed-some-id", '
+            'ts="1326542401", '
+            'nonce="c29tZX"'
+        )
 
         self.assertEqual(
             es_bulk_headers['Authorization'],
@@ -217,5 +225,6 @@ def mock_env():
         'ELASTICSEARCH_PORT': '8082',
         'ELASTICSEARCH_PROTOCOL': 'http',
         'ELASTICSEARCH_REGION': 'us-east-2',
-        'INTERNAL_API_SHARED_SECRET': '?[!@£$%^%'
+        'FEED_ACCESS_KEY_ID': 'feed-some-id',
+        'FEED_SECRET_ACCESS_KEY': '?[!@$%^%',
     }

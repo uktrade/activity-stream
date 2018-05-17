@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import logging
+import mohawk
 import os
 import sys
 
@@ -20,9 +21,13 @@ async def run_application():
 
     app_logger.debug('Examining environment...')
     PORT = os.environ['PORT']
+
     FEED_ENDPOINT = os.environ['FEED_ENDPOINT']
-    SHARED_SECRET = os.environ['INTERNAL_API_SHARED_SECRET']
-    feed_params = {'shared_secret': SHARED_SECRET}
+    feed_auth_header_getter = functools.partial(
+        feed_auth_headers,
+        access_key=os.environ['FEED_ACCESS_KEY_ID'],
+        secret_key=os.environ['FEED_SECRET_ACCESS_KEY'],
+    )
 
     es_host = os.environ['ELASTICSEARCH_HOST']
     es_path = '/_bulk'
@@ -53,7 +58,7 @@ async def run_application():
     app_logger.debug('Creating listening web application: done')
 
     async with aiohttp.ClientSession() as session:
-        async for feed in poll(app_logger, session, feed_params, FEED_ENDPOINT):
+        async for feed in poll(app_logger, session, feed_auth_header_getter, FEED_ENDPOINT):
             app_logger.debug('Converting feed to ES bulk ingest commands...')
             es_bulk_contents = es_bulk(feed).encode('utf-8')
             app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
@@ -68,11 +73,11 @@ async def run_application():
             app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
 
 
-async def poll(app_logger, session, feed_params, seed_url):
+async def poll(app_logger, session, feed_auth_header_getter, seed_url):
     href = seed_url
     while True:
         app_logger.debug('Polling')
-        result = await session.get(href, params=feed_params)
+        result = await session.get(href, headers=feed_auth_header_getter(url=href))
 
         app_logger.debug('Fetching contents of feed...')
         feed_contents = await result.content.read()
@@ -109,6 +114,22 @@ def es_bulk(feed):
         for es_bulk in feed.iter('{http://trade.gov.uk/activity-stream/v1}elastic_search_bulk')
         for contents in [json.loads(es_bulk.text)]
     ])) + '\n'
+
+
+def feed_auth_headers(access_key, secret_key, url):
+    method = 'GET'
+    return {
+        'Authorization': mohawk.Sender({
+            'id': access_key,
+            'key': secret_key,
+            'algorithm': 'sha256'
+        },
+            url,
+            method,
+            content='',
+            content_type='',
+        ).request_header,
+    }
 
 
 def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
