@@ -110,7 +110,8 @@ def next_href(feed):
 
 def es_bulk(feed):
     return '\n'.join(flatten([
-        [json.dumps(contents['action_and_metadata']), json.dumps(contents['source'])]
+        [json.dumps(contents['action_and_metadata'], sort_keys=True),
+         json.dumps(contents['source'], sort_keys=True)]
         for es_bulk in feed.iter('{http://trade.gov.uk/activity-stream/v1}elastic_search_bulk')
         for contents in [json.loads(es_bulk.text)]
     ])) + '\n'
