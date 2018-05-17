@@ -11,7 +11,6 @@ import sys
 
 import aiohttp
 from aiohttp import web
-from lxml import etree
 
 POLLING_INTERVAL = 5
 
@@ -83,8 +82,8 @@ async def poll(app_logger, session, feed_auth_header_getter, seed_url):
         feed_contents = await result.content.read()
         app_logger.debug('Fetching contents of feed: done (%s)', feed_contents)
 
-        app_logger.debug('Parsing XML...')
-        feed = etree.XML(feed_contents)
+        app_logger.debug('Parsing JSON...')
+        feed = json.loads(feed_contents)
         app_logger.debug('Parsed')
 
         yield feed
@@ -103,17 +102,14 @@ async def poll(app_logger, session, feed_auth_header_getter, seed_url):
 
 
 def next_href(feed):
-    next_link = feed.xpath('atom:link[@rel="next"]', namespaces={
-                           'atom': 'http://www.w3.org/2005/Atom'})
-    return next_link[0].attrib['href'] if len(next_link) else None
+    return feed['next_url'] if 'next_url' in feed else None
 
 
 def es_bulk(feed):
     return '\n'.join(flatten([
-        [json.dumps(contents['action_and_metadata'], sort_keys=True),
-         json.dumps(contents['source'], sort_keys=True)]
-        for es_bulk in feed.iter('{http://trade.gov.uk/activity-stream/v1}elastic_search_bulk')
-        for contents in [json.loads(es_bulk.text)]
+        [json.dumps(item['action_and_metadata'], sort_keys=True),
+         json.dumps(item['source'], sort_keys=True)]
+        for item in feed['items']
     ])) + '\n'
 
 
