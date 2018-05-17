@@ -12,7 +12,8 @@ freezegun==0.3.10
 idna-ssl==1.0.1           # via aiohttp
 idna==2.6                 # via idna-ssl, yarl
 lxml==4.2.1
+mohawk==0.3.4
 multidict==4.3.1          # via aiohttp, yarl
 python-dateutil==2.7.3    # via freezegun
-six==1.11.0               # via freezegun, python-dateutil
+six==1.11.0               # via freezegun, mohawk, python-dateutil
 yarl==1.2.4               # via aiohttp
