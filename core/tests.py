@@ -61,7 +61,7 @@ class TestApplication(unittest.TestCase):
         self.os_environ_patcher.stop()
 
     def test_application_accepts_http(self):
-        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.xml'})
+        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'})
 
         asyncio.ensure_future(run_application(), loop=self.loop)
         self.assertTrue(is_http_accepted())
@@ -69,7 +69,7 @@ class TestApplication(unittest.TestCase):
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
     def test_feed_passed_to_elastic_search(self, _):
-        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.xml'})
+        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'})
 
         async def _test():
             asyncio.ensure_future(run_application())
@@ -84,7 +84,7 @@ class TestApplication(unittest.TestCase):
         self.assertEqual(self.feed_requested[0].result(
         ).headers['Authorization'],
             'Hawk '
-            'mac="TkV+IxaD2wp00lNY1adIVzGrmUEa8cSE7AcAoswXjzU=", '
+            'mac="FAeLIU1d3juU/59+yD2ZiHadFbxO46648ET3XojVo78=", '
             'hash="B0weSUXsMcb5UhL41FZbrUJCAotzSI3HawE1NPLRUz8=", '
             'id="feed-some-id", '
             'ts="1326542401", '
@@ -117,7 +117,8 @@ class TestApplication(unittest.TestCase):
         self.assertEqual(es_bulk_request_dicts[3]['company_house_number'], '82312')
 
     def test_multipage_second_page_passed_to_elastic_search(self):
-        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_multipage_1.xml'})
+        self.setUp_manual(
+            {'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_multipage_1.json'})
 
         async def _test():
             asyncio.ensure_future(run_application())
@@ -142,7 +143,7 @@ class TestProcess(unittest.TestCase):
         self.es_runner = loop.run_until_complete(run_es_application(Mock()))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
-            **{'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.xml'}
+            **{'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'}
         })
 
     def tearDown(self):

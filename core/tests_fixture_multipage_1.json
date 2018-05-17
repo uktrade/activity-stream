@@ -3,7 +3,7 @@
     <updated>2018-05-14T13:59:40+00:00</updated>
     <title>Export Opportunities Activity Stream</title>
     <id>dit-export-opportunities-activity-stream-production</id>
-    <link rel="next" href="http://localhost:8081/tests_fixture_multipage_2.xml"/>
+    <link rel="next" href="http://localhost:8081/tests_fixture_multipage_2.json"/>
     <entry>
         <id>dit-export-opportunities-activity-stream-enquiry-49863</id>
         <title>Export opportunity enquiry made</title>

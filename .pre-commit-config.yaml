@@ -12,6 +12,12 @@ repos:
     - id: check-ast
     - id: check-added-large-files
     - id: check-json
+      exclude: >
+        (?x)^(
+            core/tests_fixture.json|
+            core/tests_fixture_multipage_1.json|
+            core/tests_fixture_multipage_2.json
+        )$
     - id: check-merge-conflict
     - id: check-case-conflict
     - id: check-yaml
@@ -24,3 +30,9 @@ repos:
     - id: pretty-format-json
       args:
         - --autofix
+      exclude: >
+        (?x)^(
+            core/tests_fixture.json|
+            core/tests_fixture_multipage_1.json|
+            core/tests_fixture_multipage_2.json
+        )$
