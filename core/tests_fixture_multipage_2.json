@@ -7,6 +7,6 @@
         <id>dit-export-opportunities-activity-stream-enquiry-49869</id>
         <title>Export opportunity enquiry made</title>
         <updated>2013-04-12T12:48:13+00:00</updated>
-        <as:elastic_search_bulk>{"action_and_metadata":{"index":{"_index":"company_timeline","_type":"_doc","_id":"export-oportunity-enquiry-made-second-page-4986999"}},"source":{"date":"2013-04-12T12:48:13+00:00","activity":"export-oportunity-enquiry-made","company_house_number":"9999"}}</as:elastic_search_bulk>
+        <as:elastic_search_bulk>{"action_and_metadata":{"index":{"_id":"export-oportunity-enquiry-made-second-page-4986999","_index":"company_timeline","_type":"_doc"}},"source":{"date":"2013-04-12T12:48:13+00:00","activity":"export-oportunity-enquiry-made","company_house_number":"9999"}}</as:elastic_search_bulk>
     </entry>
 </feed>
