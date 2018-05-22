@@ -2,6 +2,14 @@
 
 Activity Stream is a collector of various interactions between people and DIT.
 
+## Services data is/will be collected from
+
+- https://opportunities.export.great.gov.uk/
+- https://find-a-buyer.export.great.gov.uk/
+- https://selling-online-overseas.export.great.gov.uk/
+- https://www.datahub.trade.gov.uk/
+- CMS Contact Form
+
 ## Running tests
 
     ./tests.sh
