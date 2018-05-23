@@ -57,19 +57,25 @@ async def run_application():
     app_logger.debug('Creating listening web application: done')
 
     async with aiohttp.ClientSession() as session:
-        async for feed in poll(app_logger, session, feed_auth_header_getter, FEED_ENDPOINT):
-            app_logger.debug('Converting feed to ES bulk ingest commands...')
-            es_bulk_contents = es_bulk(feed).encode('utf-8')
-            app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
+        await ingest_feed(app_logger, session, feed_auth_header_getter, FEED_ENDPOINT,
+                          es_bulk_auth_header_getter, es_endpoint)
 
-            app_logger.debug('POSTing bulk import to ES...')
-            headers = {
-                'Content-Type': 'application/x-ndjson'
-            }
-            auth_headers = es_bulk_auth_header_getter(payload=es_bulk_contents)
-            es_result = await session.post(
-                es_endpoint, data=es_bulk_contents, headers={**headers, **auth_headers})
-            app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
+
+async def ingest_feed(app_logger, session, feed_auth_header_getter, feed_endpoint,
+                      es_bulk_auth_header_getter, es_endpoint):
+    async for feed in poll(app_logger, session, feed_auth_header_getter, feed_endpoint):
+        app_logger.debug('Converting feed to ES bulk ingest commands...')
+        es_bulk_contents = es_bulk(feed).encode('utf-8')
+        app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
+
+        app_logger.debug('POSTing bulk import to ES...')
+        headers = {
+            'Content-Type': 'application/x-ndjson'
+        }
+        auth_headers = es_bulk_auth_header_getter(payload=es_bulk_contents)
+        es_result = await session.post(
+            es_endpoint, data=es_bulk_contents, headers={**headers, **auth_headers})
+        app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
 
 
 async def poll(app_logger, session, feed_auth_header_getter, seed_url):
