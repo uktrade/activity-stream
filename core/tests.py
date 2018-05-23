@@ -30,14 +30,14 @@ class TestApplication(unittest.TestCase):
             first_not_done = next(future for future in self.es_bulk if not future.done())
             first_not_done.set_result(result)
 
-        self.es_runner = self.loop.run_until_complete(
-            run_es_application(es_bulk_callback))
-
         self.feed_requested = [asyncio.Future(), asyncio.Future()]
 
         def feed_requested_callback(request):
             first_not_done = next(future for future in self.feed_requested if not future.done())
             first_not_done.set_result(request)
+
+        self.es_runner = self.loop.run_until_complete(
+            run_es_application(es_bulk_callback))
         self.feed_runner_1 = self.loop.run_until_complete(
             run_feed_application(feed_requested_callback, 8081))
 
