@@ -63,7 +63,7 @@ class TestApplication(unittest.TestCase):
     def test_application_accepts_http(self):
         es_bulk = [asyncio.Future()]
         self.setUp_manual(
-            {'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
             es_bulk,
         )
 
@@ -75,7 +75,7 @@ class TestApplication(unittest.TestCase):
     def test_feed_passed_to_elastic_search(self, _):
         es_bulk = [asyncio.Future()]
         self.setUp_manual(
-            {'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
             es_bulk,
         )
 
@@ -127,7 +127,7 @@ class TestApplication(unittest.TestCase):
     def test_multipage_second_page_passed_to_elastic_search(self):
         es_bulk = [asyncio.Future(), asyncio.Future()]
         self.setUp_manual(
-            {'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_multipage_1.json'},
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_multipage_1.json'},
             es_bulk,
         )
 
@@ -154,7 +154,7 @@ class TestProcess(unittest.TestCase):
         self.es_runner = loop.run_until_complete(run_es_application(Mock()))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
-            **{'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_1.json'}
+            **{'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'}
         })
 
     def tearDown(self):
