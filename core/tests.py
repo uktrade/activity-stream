@@ -54,9 +54,11 @@ class TestApplication(unittest.TestCase):
         for task in asyncio.Task.all_tasks():
             task.cancel()
         self.loop = asyncio.get_event_loop()
-        self.loop.run_until_complete(self.app_runner.cleanup())
-        self.loop.run_until_complete(self.feed_runner_1.cleanup())
-        self.loop.run_until_complete(self.es_runner.cleanup())
+        self.loop.run_until_complete(asyncio.gather(
+            self.app_runner.cleanup(),
+            self.feed_runner_1.cleanup(),
+            self.es_runner.cleanup(),
+        ))
         self.app_runner_patcher.stop()
         self.os_environ_patcher.stop()
 
