@@ -55,9 +55,9 @@ class TestApplication(unittest.TestCase):
             task.cancel()
         self.loop = asyncio.get_event_loop()
         self.loop.run_until_complete(self.app_runner.cleanup())
-        self.app_runner_patcher.stop()
         self.loop.run_until_complete(self.feed_runner_1.cleanup())
         self.loop.run_until_complete(self.es_runner.cleanup())
+        self.app_runner_patcher.stop()
         self.os_environ_patcher.stop()
 
     def test_application_accepts_http(self):
