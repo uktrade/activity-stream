@@ -57,8 +57,11 @@ async def run_application():
     app_logger.debug('Creating listening web application: done')
 
     async with aiohttp.ClientSession() as session:
-        await ingest_feed(app_logger, session, feed_auth_header_getter, FEED_ENDPOINT,
-                          es_bulk_auth_header_getter, es_endpoint)
+        feeds = [
+            ingest_feed(app_logger, session, feed_auth_header_getter, FEED_ENDPOINT,
+                        es_bulk_auth_header_getter, es_endpoint)
+        ]
+        await asyncio.gather(*feeds)
 
 
 async def ingest_feed(app_logger, session, feed_auth_header_getter, feed_endpoint,
