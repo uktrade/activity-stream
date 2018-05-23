@@ -36,10 +36,10 @@ class TestApplication(unittest.TestCase):
             first_not_done = next(future for future in self.feed_requested if not future.done())
             first_not_done.set_result(request)
 
-        self.es_runner = self.loop.run_until_complete(
-            run_es_application(es_bulk_callback))
-        self.feed_runner_1 = self.loop.run_until_complete(
-            run_feed_application(feed_requested_callback, 8081))
+        self.es_runner, self.feed_runner_1 = self.loop.run_until_complete(asyncio.gather(
+            run_es_application(es_bulk_callback),
+            run_feed_application(feed_requested_callback, 8081),
+        ))
 
         original_app_runner = aiohttp.web.AppRunner
 
