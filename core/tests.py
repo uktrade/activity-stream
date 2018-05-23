@@ -39,7 +39,7 @@ class TestApplication(unittest.TestCase):
             first_not_done = next(future for future in self.feed_requested if not future.done())
             first_not_done.set_result(request)
         self.feed_runner = self.loop.run_until_complete(
-            run_feed_application(feed_requested_callback))
+            run_feed_application(feed_requested_callback, 8081))
 
         original_app_runner = aiohttp.web.AppRunner
 
@@ -139,7 +139,7 @@ class TestProcess(unittest.TestCase):
     def setUp(self):
         loop = asyncio.get_event_loop()
 
-        self.feed_runner = loop.run_until_complete(run_feed_application(Mock()))
+        self.feed_runner = loop.run_until_complete(run_feed_application(Mock(), 8081))
         self.es_runner = loop.run_until_complete(run_es_application(Mock()))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
@@ -183,7 +183,7 @@ async def _is_http_accepted():
     return False
 
 
-async def run_feed_application(feed_requested_callback):
+async def run_feed_application(feed_requested_callback, port):
     def mock_feed(path):
         with open('core/' + path, 'rb') as f:
             return f.read().decode('utf-8')
@@ -197,7 +197,7 @@ async def run_feed_application(feed_requested_callback):
     app.add_routes([web.get('/{feed}', handle)])
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '127.0.0.1', 8081)
+    site = web.TCPSite(runner, '127.0.0.1', port)
     await site.start()
     return runner
 
