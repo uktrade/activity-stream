@@ -63,7 +63,7 @@ class TestApplication(unittest.TestCase):
     def test_application_accepts_http(self):
         es_bulk = [asyncio.Future()]
         self.setUp_manual(
-            {'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'},
+            {'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_1.json'},
             es_bulk,
         )
 
@@ -75,7 +75,7 @@ class TestApplication(unittest.TestCase):
     def test_feed_passed_to_elastic_search(self, _):
         es_bulk = [asyncio.Future()]
         self.setUp_manual(
-            {'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'},
+            {'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_1.json'},
             es_bulk,
         )
 
@@ -92,7 +92,7 @@ class TestApplication(unittest.TestCase):
         self.assertEqual(self.feed_requested[0].result(
         ).headers['Authorization'],
             'Hawk '
-            'mac="FAeLIU1d3juU/59+yD2ZiHadFbxO46648ET3XojVo78=", '
+            'mac="yK3tQ9t/2/lJjCzyQ8pLoEU6M8RXzVt/yWQRPmSCy7Q=", '
             'hash="B0weSUXsMcb5UhL41FZbrUJCAotzSI3HawE1NPLRUz8=", '
             'id="feed-some-id", '
             'ts="1326542401", '
@@ -154,7 +154,7 @@ class TestProcess(unittest.TestCase):
         self.es_runner = loop.run_until_complete(run_es_application(Mock()))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
-            **{'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'}
+            **{'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_1.json'}
         })
 
     def tearDown(self):
