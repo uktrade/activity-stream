@@ -38,7 +38,7 @@ class TestApplication(unittest.TestCase):
         def feed_requested_callback(request):
             first_not_done = next(future for future in self.feed_requested if not future.done())
             first_not_done.set_result(request)
-        self.feed_runner = self.loop.run_until_complete(
+        self.feed_runner_1 = self.loop.run_until_complete(
             run_feed_application(feed_requested_callback, 8081))
 
         original_app_runner = aiohttp.web.AppRunner
@@ -56,7 +56,7 @@ class TestApplication(unittest.TestCase):
         self.loop = asyncio.get_event_loop()
         self.loop.run_until_complete(self.app_runner.cleanup())
         self.app_runner_patcher.stop()
-        self.loop.run_until_complete(self.feed_runner.cleanup())
+        self.loop.run_until_complete(self.feed_runner_1.cleanup())
         self.loop.run_until_complete(self.es_runner.cleanup())
         self.os_environ_patcher.stop()
 
@@ -139,7 +139,7 @@ class TestProcess(unittest.TestCase):
     def setUp(self):
         loop = asyncio.get_event_loop()
 
-        self.feed_runner = loop.run_until_complete(run_feed_application(Mock(), 8081))
+        self.feed_runner_1 = loop.run_until_complete(run_feed_application(Mock(), 8081))
         self.es_runner = loop.run_until_complete(run_es_application(Mock()))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
@@ -151,7 +151,7 @@ class TestProcess(unittest.TestCase):
             task.cancel()
         self.server.kill()
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.feed_runner.cleanup())
+        loop.run_until_complete(self.feed_runner_1.cleanup())
         loop.run_until_complete(self.es_runner.cleanup())
 
     def test_server_accepts_http(self):
