@@ -34,10 +34,12 @@ class TestApplication(unittest.TestCase):
             first_not_done = next(future for future in self.feed_requested if not future.done())
             first_not_done.set_result(request)
 
-        self.es_runner, self.feed_runner_1 = self.loop.run_until_complete(asyncio.gather(
-            run_es_application(es_bulk_callback),
-            run_feed_application(feed_requested_callback, 8081),
-        ))
+        self.es_runner, self.feed_runner_1, self.feed_runner_2 = \
+            self.loop.run_until_complete(asyncio.gather(
+                run_es_application(es_bulk_callback),
+                run_feed_application(feed_requested_callback, 8081),
+                run_feed_application(feed_requested_callback, 8083),
+            ))
 
         original_app_runner = aiohttp.web.AppRunner
 
@@ -55,6 +57,7 @@ class TestApplication(unittest.TestCase):
         self.loop.run_until_complete(asyncio.gather(
             self.app_runner.cleanup(),
             self.feed_runner_1.cleanup(),
+            self.feed_runner_2.cleanup(),
             self.es_runner.cleanup(),
         ))
         self.app_runner_patcher.stop()
@@ -143,6 +146,37 @@ class TestApplication(unittest.TestCase):
         ]
         self.assertEqual(es_bulk_request_dicts[0]['index']['_id'],
                          'export-oportunity-enquiry-made-second-page-4986999')
+
+    def test_two_feeds_both_pages_passed_to_elastic_search(self):
+        es_bulk = [asyncio.Future(), asyncio.Future()]
+        self.setUp_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json,'
+                               'http://localhost:8083/tests_fixture_2.json'},
+            es_bulk,
+        )
+
+        async def _test():
+            asyncio.ensure_future(run_application())
+            return await asyncio.gather(es_bulk[0], es_bulk[1])
+
+        es_1, es_2 = self.loop.run_until_complete(_test())
+        es_bulk_content_1, es_bulk_headers_1 = es_1
+        es_bulk_content_2, es_bulk_headers_2 = es_2
+
+        es_bulk_request_dicts_1 = [
+            json.loads(line)
+            for line in es_bulk_content_1.split(b'\n')[0:-1]
+        ]
+        es_bulk_request_dicts_2 = [
+            json.loads(line)
+            for line in es_bulk_content_2.split(b'\n')[0:-1]
+        ]
+        ids = [
+            es_bulk_request_dicts_1[0]['index']['_id'],
+            es_bulk_request_dicts_2[0]['index']['_id'],
+        ]
+        self.assertIn('export-oportunity-enquiry-made-49863', ids)
+        self.assertIn('export-oportunity-enquiry-made-42863', ids)
 
 
 class TestProcess(unittest.TestCase):

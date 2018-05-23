@@ -21,7 +21,7 @@ async def run_application():
     app_logger.debug('Examining environment...')
     PORT = os.environ['PORT']
 
-    FEED_ENDPOINTS = os.environ['FEED_ENDPOINTS']
+    feed_endpoints = os.environ['FEED_ENDPOINTS'].split(',')
     feed_auth_header_getter = functools.partial(
         feed_auth_headers,
         access_key=os.environ['FEED_ACCESS_KEY_ID'],
@@ -58,8 +58,9 @@ async def run_application():
 
     async with aiohttp.ClientSession() as session:
         feeds = [
-            ingest_feed(app_logger, session, feed_auth_header_getter, FEED_ENDPOINTS,
+            ingest_feed(app_logger, session, feed_auth_header_getter, feed_endpoint,
                         es_bulk_auth_header_getter, es_endpoint)
+            for feed_endpoint in feed_endpoints
         ]
         await asyncio.gather(*feeds)
 
