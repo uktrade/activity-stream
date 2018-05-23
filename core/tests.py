@@ -15,7 +15,7 @@ from core.app import run_application
 
 class TestApplication(unittest.TestCase):
 
-    def setUp_manual(self, env):
+    def setUp_manual(self, env, es_bulk):
         ''' Test setUp function that can be customised on a per-test basis '''
         self.os_environ_patcher = patch.dict(os.environ, {
             **mock_env(),
@@ -24,10 +24,8 @@ class TestApplication(unittest.TestCase):
         self.os_environ_patcher.start()
         self.loop = asyncio.get_event_loop()
 
-        self.es_bulk = [asyncio.Future(), asyncio.Future()]
-
         def es_bulk_callback(result):
-            first_not_done = next(future for future in self.es_bulk if not future.done())
+            first_not_done = next(future for future in es_bulk if not future.done())
             first_not_done.set_result(result)
 
         self.feed_requested = [asyncio.Future(), asyncio.Future()]
@@ -63,7 +61,11 @@ class TestApplication(unittest.TestCase):
         self.os_environ_patcher.stop()
 
     def test_application_accepts_http(self):
-        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'})
+        es_bulk = [asyncio.Future()]
+        self.setUp_manual(
+            {'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'},
+            es_bulk,
+        )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
         self.assertTrue(is_http_accepted())
@@ -71,11 +73,15 @@ class TestApplication(unittest.TestCase):
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
     def test_feed_passed_to_elastic_search(self, _):
-        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'})
+        es_bulk = [asyncio.Future()]
+        self.setUp_manual(
+            {'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'},
+            es_bulk,
+        )
 
         async def _test():
             asyncio.ensure_future(run_application())
-            return await self.es_bulk[0]
+            return await es_bulk[0]
 
         es_bulk_content, es_bulk_headers = self.loop.run_until_complete(_test())
         es_bulk_request_dicts = [
@@ -119,12 +125,15 @@ class TestApplication(unittest.TestCase):
         self.assertEqual(es_bulk_request_dicts[3]['company_house_number'], '82312')
 
     def test_multipage_second_page_passed_to_elastic_search(self):
+        es_bulk = [asyncio.Future(), asyncio.Future()]
         self.setUp_manual(
-            {'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_multipage_1.json'})
+            {'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_multipage_1.json'},
+            es_bulk,
+        )
 
         async def _test():
             asyncio.ensure_future(run_application())
-            return await self.es_bulk[1]
+            return await es_bulk[1]
 
         es_bulk_content, es_bulk_headers = self.loop.run_until_complete(_test())
 
