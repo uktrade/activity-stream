@@ -61,14 +61,15 @@ class TestApplication(unittest.TestCase):
         self.os_environ_patcher.stop()
 
     def test_application_accepts_http(self):
-        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.xml'})
+        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'})
 
         asyncio.ensure_future(run_application(), loop=self.loop)
         self.assertTrue(is_http_accepted())
 
     @freeze_time('2012-01-14 12:00:01')
-    def test_feed_passed_to_elastic_search(self):
-        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.xml'})
+    @patch('os.urandom', return_value=b'something-random')
+    def test_feed_passed_to_elastic_search(self, _):
+        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'})
 
         async def _test():
             asyncio.ensure_future(run_application())
@@ -81,14 +82,21 @@ class TestApplication(unittest.TestCase):
         ]
 
         self.assertEqual(self.feed_requested[0].result(
-        ).rel_url.query['shared_secret'], '?[!@£$%^%')
+        ).headers['Authorization'],
+            'Hawk '
+            'mac="FAeLIU1d3juU/59+yD2ZiHadFbxO46648ET3XojVo78=", '
+            'hash="B0weSUXsMcb5UhL41FZbrUJCAotzSI3HawE1NPLRUz8=", '
+            'id="feed-some-id", '
+            'ts="1326542401", '
+            'nonce="c29tZX"'
+        )
 
         self.assertEqual(
             es_bulk_headers['Authorization'],
             'AWS4-HMAC-SHA256 '
             'Credential=some-id/20120114/us-east-2/es/aws4_request, '
             'SignedHeaders=content-type;host;x-amz-date, '
-            'Signature=2491bc4f0759767e13154defae392ab2fa45833393424a5d3d34370bc7842255')
+            'Signature=544dff75ed37c19a96124d849cd09bd1488c061dc1666fedf93d5bc20609d78b')
         self.assertEqual(es_bulk_content.decode('utf-8')[-1], '\n')
         self.assertEqual(es_bulk_headers['Content-Type'], 'application/x-ndjson')
 
@@ -109,7 +117,8 @@ class TestApplication(unittest.TestCase):
         self.assertEqual(es_bulk_request_dicts[3]['company_house_number'], '82312')
 
     def test_multipage_second_page_passed_to_elastic_search(self):
-        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_multipage_1.xml'})
+        self.setUp_manual(
+            {'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_multipage_1.json'})
 
         async def _test():
             asyncio.ensure_future(run_application())
@@ -134,7 +143,7 @@ class TestProcess(unittest.TestCase):
         self.es_runner = loop.run_until_complete(run_es_application(Mock()))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
-            **{'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.xml'}
+            **{'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'}
         })
 
     def tearDown(self):
@@ -217,5 +226,6 @@ def mock_env():
         'ELASTICSEARCH_PORT': '8082',
         'ELASTICSEARCH_PROTOCOL': 'http',
         'ELASTICSEARCH_REGION': 'us-east-2',
-        'INTERNAL_API_SHARED_SECRET': '?[!@£$%^%'
+        'FEED_ACCESS_KEY_ID': 'feed-some-id',
+        'FEED_SECRET_ACCESS_KEY': '?[!@$%^%',
     }

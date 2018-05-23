@@ -2,6 +2,14 @@
 
 Activity Stream is a collector of various interactions between people and DIT.
 
+## Services data is/will be collected from
+
+- https://opportunities.export.great.gov.uk/
+- https://find-a-buyer.export.great.gov.uk/
+- https://selling-online-overseas.export.great.gov.uk/
+- https://www.datahub.trade.gov.uk/
+- CMS Contact Form
+
 ## Running tests
 
     ./tests.sh
@@ -10,7 +18,8 @@ Activity Stream is a collector of various interactions between people and DIT.
 
 	PORT=8080 \
     FEED_ENDPOINT=http://some-endpoint/ \
-    INTERNAL_API_SHARED_SECRET=some-secret \
+    FEED_ACCESS_KEY_ID=feed-some-id \
+    FEED_SECRET_ACCESS_KEY=feed-some-secret \
     ELASTICSEARCH_AWS_ACCESS_KEY_ID=some-id \
     ELASTICSEARCH_AWS_SECRET_ACCESS_KEY=aws-secret \
     ELASTICSEARCH_HOST=127.0.0.1 \
