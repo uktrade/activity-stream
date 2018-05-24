@@ -41,4 +41,3 @@ repos:
         - --disable=too-many-instance-attributes
         - --disable=too-many-locals
         - --disable=unused-argument
-        - --disable=unused-variable
