@@ -15,7 +15,7 @@ from core.app import run_application
 
 class TestApplication(unittest.TestCase):
 
-    def setUp_manual(self, env):
+    def setUp_manual(self, env, es_bulk):
         ''' Test setUp function that can be customised on a per-test basis '''
         self.os_environ_patcher = patch.dict(os.environ, {
             **mock_env(),
@@ -24,22 +24,22 @@ class TestApplication(unittest.TestCase):
         self.os_environ_patcher.start()
         self.loop = asyncio.get_event_loop()
 
-        self.es_bulk = [asyncio.Future(), asyncio.Future()]
-
         def es_bulk_callback(result):
-            first_not_done = next(future for future in self.es_bulk if not future.done())
+            first_not_done = next(future for future in es_bulk if not future.done())
             first_not_done.set_result(result)
-
-        self.es_runner = self.loop.run_until_complete(
-            run_es_application(es_bulk_callback))
 
         self.feed_requested = [asyncio.Future(), asyncio.Future()]
 
         def feed_requested_callback(request):
             first_not_done = next(future for future in self.feed_requested if not future.done())
             first_not_done.set_result(request)
-        self.feed_runner = self.loop.run_until_complete(
-            run_feed_application(feed_requested_callback))
+
+        self.es_runner, self.feed_runner_1, self.feed_runner_2 = \
+            self.loop.run_until_complete(asyncio.gather(
+                run_es_application(es_bulk_callback),
+                run_feed_application(feed_requested_callback, 8081),
+                run_feed_application(feed_requested_callback, 8083),
+            ))
 
         original_app_runner = aiohttp.web.AppRunner
 
@@ -54,14 +54,21 @@ class TestApplication(unittest.TestCase):
         for task in asyncio.Task.all_tasks():
             task.cancel()
         self.loop = asyncio.get_event_loop()
-        self.loop.run_until_complete(self.app_runner.cleanup())
+        self.loop.run_until_complete(asyncio.gather(
+            self.app_runner.cleanup(),
+            self.feed_runner_1.cleanup(),
+            self.feed_runner_2.cleanup(),
+            self.es_runner.cleanup(),
+        ))
         self.app_runner_patcher.stop()
-        self.loop.run_until_complete(self.feed_runner.cleanup())
-        self.loop.run_until_complete(self.es_runner.cleanup())
         self.os_environ_patcher.stop()
 
     def test_application_accepts_http(self):
-        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'})
+        es_bulk = [asyncio.Future()]
+        self.setUp_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            es_bulk,
+        )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
         self.assertTrue(is_http_accepted())
@@ -69,11 +76,15 @@ class TestApplication(unittest.TestCase):
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
     def test_feed_passed_to_elastic_search(self, _):
-        self.setUp_manual({'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'})
+        es_bulk = [asyncio.Future()]
+        self.setUp_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            es_bulk,
+        )
 
         async def _test():
             asyncio.ensure_future(run_application())
-            return await self.es_bulk[0]
+            return await es_bulk[0]
 
         es_bulk_content, es_bulk_headers = self.loop.run_until_complete(_test())
         es_bulk_request_dicts = [
@@ -84,7 +95,7 @@ class TestApplication(unittest.TestCase):
         self.assertEqual(self.feed_requested[0].result(
         ).headers['Authorization'],
             'Hawk '
-            'mac="FAeLIU1d3juU/59+yD2ZiHadFbxO46648ET3XojVo78=", '
+            'mac="yK3tQ9t/2/lJjCzyQ8pLoEU6M8RXzVt/yWQRPmSCy7Q=", '
             'hash="B0weSUXsMcb5UhL41FZbrUJCAotzSI3HawE1NPLRUz8=", '
             'id="feed-some-id", '
             'ts="1326542401", '
@@ -117,12 +128,15 @@ class TestApplication(unittest.TestCase):
         self.assertEqual(es_bulk_request_dicts[3]['company_house_number'], '82312')
 
     def test_multipage_second_page_passed_to_elastic_search(self):
+        es_bulk = [asyncio.Future(), asyncio.Future()]
         self.setUp_manual(
-            {'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture_multipage_1.json'})
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_multipage_1.json'},
+            es_bulk,
+        )
 
         async def _test():
             asyncio.ensure_future(run_application())
-            return await self.es_bulk[1]
+            return await es_bulk[1]
 
         es_bulk_content, es_bulk_headers = self.loop.run_until_complete(_test())
 
@@ -133,17 +147,48 @@ class TestApplication(unittest.TestCase):
         self.assertEqual(es_bulk_request_dicts[0]['index']['_id'],
                          'export-oportunity-enquiry-made-second-page-4986999')
 
+    def test_two_feeds_both_pages_passed_to_elastic_search(self):
+        es_bulk = [asyncio.Future(), asyncio.Future()]
+        self.setUp_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json,'
+                               'http://localhost:8083/tests_fixture_2.json'},
+            es_bulk,
+        )
+
+        async def _test():
+            asyncio.ensure_future(run_application())
+            return await asyncio.gather(es_bulk[0], es_bulk[1])
+
+        es_1, es_2 = self.loop.run_until_complete(_test())
+        es_bulk_content_1, es_bulk_headers_1 = es_1
+        es_bulk_content_2, es_bulk_headers_2 = es_2
+
+        es_bulk_request_dicts_1 = [
+            json.loads(line)
+            for line in es_bulk_content_1.split(b'\n')[0:-1]
+        ]
+        es_bulk_request_dicts_2 = [
+            json.loads(line)
+            for line in es_bulk_content_2.split(b'\n')[0:-1]
+        ]
+        ids = [
+            es_bulk_request_dicts_1[0]['index']['_id'],
+            es_bulk_request_dicts_2[0]['index']['_id'],
+        ]
+        self.assertIn('export-oportunity-enquiry-made-49863', ids)
+        self.assertIn('export-oportunity-enquiry-made-42863', ids)
+
 
 class TestProcess(unittest.TestCase):
 
     def setUp(self):
         loop = asyncio.get_event_loop()
 
-        self.feed_runner = loop.run_until_complete(run_feed_application(Mock()))
+        self.feed_runner_1 = loop.run_until_complete(run_feed_application(Mock(), 8081))
         self.es_runner = loop.run_until_complete(run_es_application(Mock()))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
-            **{'FEED_ENDPOINT': 'http://localhost:8081/tests_fixture.json'}
+            **{'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'}
         })
 
     def tearDown(self):
@@ -151,7 +196,7 @@ class TestProcess(unittest.TestCase):
             task.cancel()
         self.server.kill()
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.feed_runner.cleanup())
+        loop.run_until_complete(self.feed_runner_1.cleanup())
         loop.run_until_complete(self.es_runner.cleanup())
 
     def test_server_accepts_http(self):
@@ -183,7 +228,7 @@ async def _is_http_accepted():
     return False
 
 
-async def run_feed_application(feed_requested_callback):
+async def run_feed_application(feed_requested_callback, port):
     def mock_feed(path):
         with open('core/' + path, 'rb') as f:
             return f.read().decode('utf-8')
@@ -197,7 +242,7 @@ async def run_feed_application(feed_requested_callback):
     app.add_routes([web.get('/{feed}', handle)])
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '127.0.0.1', 8081)
+    site = web.TCPSite(runner, '127.0.0.1', port)
     await site.start()
     return runner
 

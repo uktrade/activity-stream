@@ -1,0 +1,32 @@
+{
+  "items": [
+    {
+      "action_and_metadata": {
+        "index": {
+          "_id": "export-oportunity-enquiry-made-42863",
+          "_index": "company_timeline",
+          "_type": "_doc"
+        }
+      },
+      "source": {
+        "activity": "export-oportunity-enquiry-made",
+        "company_house_number": "123432",
+        "date": "2011-04-12T12:48:13+00:00"
+      }
+    },
+    {
+      "action_and_metadata": {
+        "index": {
+          "_id": "export-oportunity-enquiry-made-42862",
+          "_index": "company_timeline",
+          "_type": "_doc"
+        }
+      },
+      "source": {
+        "activity": "export-oportunity-enquiry-made",
+        "company_house_number": "22312",
+        "date": "2011-03-23T17:06:53+00:00"
+      }
+    }
+  ]
+}
