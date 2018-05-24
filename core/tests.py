@@ -1,5 +1,4 @@
 import asyncio
-from freezegun import freeze_time
 import json
 import os
 from subprocess import Popen
@@ -9,6 +8,7 @@ from unittest.mock import Mock, patch
 
 import aiohttp
 from aiohttp import web
+from freezegun import freeze_time
 
 from core.app import run_application
 
@@ -93,14 +93,14 @@ class TestApplication(unittest.TestCase):
         ]
 
         self.assertEqual(self.feed_requested[0].result(
-        ).headers['Authorization'],
+        ).headers['Authorization'], (
             'Hawk '
             'mac="yK3tQ9t/2/lJjCzyQ8pLoEU6M8RXzVt/yWQRPmSCy7Q=", '
             'hash="B0weSUXsMcb5UhL41FZbrUJCAotzSI3HawE1NPLRUz8=", '
             'id="feed-some-id", '
             'ts="1326542401", '
             'nonce="c29tZX"'
-        )
+        ))
 
         self.assertEqual(
             es_bulk_headers['Authorization'],
@@ -138,7 +138,7 @@ class TestApplication(unittest.TestCase):
             asyncio.ensure_future(run_application())
             return await es_bulk[1]
 
-        es_bulk_content, es_bulk_headers = self.loop.run_until_complete(_test())
+        es_bulk_content, _ = self.loop.run_until_complete(_test())
 
         es_bulk_request_dicts = [
             json.loads(line)
@@ -160,8 +160,8 @@ class TestApplication(unittest.TestCase):
             return await asyncio.gather(es_bulk[0], es_bulk[1])
 
         es_1, es_2 = self.loop.run_until_complete(_test())
-        es_bulk_content_1, es_bulk_headers_1 = es_1
-        es_bulk_content_2, es_bulk_headers_2 = es_2
+        es_bulk_content_1, _ = es_1
+        es_bulk_content_2, _ = es_2
 
         es_bulk_request_dicts_1 = [
             json.loads(line)

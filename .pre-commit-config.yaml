@@ -24,3 +24,18 @@ repos:
     - id: pretty-format-json
       args:
         - --autofix
+# We run pylint from local env, to ensure modules can be found
+- repo: local
+  hooks:
+    - id: pylint
+      name: pylint
+      entry: python -m pylint.__main__
+      language: system
+      types: [python]
+      args:
+        - --disable=attribute-defined-outside-init
+        - --disable=invalid-name
+        - --disable=missing-docstring
+        - --disable=too-many-arguments
+        - --disable=too-many-instance-attributes
+        - --disable=too-many-locals

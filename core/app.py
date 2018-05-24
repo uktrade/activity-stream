@@ -5,12 +5,12 @@ import hashlib
 import hmac
 import json
 import logging
-import mohawk
 import os
 import sys
 
 import aiohttp
 from aiohttp import web
+import mohawk
 
 POLLING_INTERVAL = 5
 
@@ -42,7 +42,7 @@ async def run_application():
         es_host + ':' + os.environ['ELASTICSEARCH_PORT'] + es_path
     app_logger.debug('Examining environment: done')
 
-    async def handle(request):
+    async def handle(_):
         return web.Response(text='')
 
     app_logger.debug('Creating listening web application...')
@@ -130,12 +130,7 @@ def feed_auth_headers(access_key, secret_key, url):
             'id': access_key,
             'key': secret_key,
             'algorithm': 'sha256'
-        },
-            url,
-            method,
-            content_type='',
-            content=''
-        ).request_header,
+        }, url, method, content_type='', content='').request_header,
     }
 
 
