@@ -93,14 +93,14 @@ class TestApplication(unittest.TestCase):
         ]
 
         self.assertEqual(self.feed_requested[0].result(
-        ).headers['Authorization'],
+        ).headers['Authorization'], (
             'Hawk '
             'mac="yK3tQ9t/2/lJjCzyQ8pLoEU6M8RXzVt/yWQRPmSCy7Q=", '
             'hash="B0weSUXsMcb5UhL41FZbrUJCAotzSI3HawE1NPLRUz8=", '
             'id="feed-some-id", '
             'ts="1326542401", '
             'nonce="c29tZX"'
-        )
+        ))
 
         self.assertEqual(
             es_bulk_headers['Authorization'],

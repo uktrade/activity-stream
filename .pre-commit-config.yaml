@@ -34,7 +34,6 @@ repos:
       types: [python]
       args:
         - --disable=attribute-defined-outside-init
-        - --disable=bad-continuation
         - --disable=invalid-name
         - --disable=missing-docstring
         - --disable=too-many-arguments

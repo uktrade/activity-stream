@@ -130,12 +130,7 @@ def feed_auth_headers(access_key, secret_key, url):
             'id': access_key,
             'key': secret_key,
             'algorithm': 'sha256'
-        },
-            url,
-            method,
-            content_type='',
-            content=''
-        ).request_header,
+        }, url, method, content_type='', content='').request_header,
     }
 
 
