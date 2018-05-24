@@ -5,12 +5,12 @@ import hashlib
 import hmac
 import json
 import logging
-import mohawk
 import os
 import sys
 
 import aiohttp
 from aiohttp import web
+import mohawk
 
 POLLING_INTERVAL = 5
 

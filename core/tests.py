@@ -1,5 +1,4 @@
 import asyncio
-from freezegun import freeze_time
 import json
 import os
 from subprocess import Popen
@@ -9,6 +8,7 @@ from unittest.mock import Mock, patch
 
 import aiohttp
 from aiohttp import web
+from freezegun import freeze_time
 
 from core.app import run_application
 

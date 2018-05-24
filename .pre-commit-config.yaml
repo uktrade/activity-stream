@@ -42,4 +42,3 @@ repos:
         - --disable=too-many-locals
         - --disable=unused-argument
         - --disable=unused-variable
-        - --disable=wrong-import-order
