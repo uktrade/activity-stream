@@ -42,7 +42,7 @@ async def run_application():
         es_host + ':' + os.environ['ELASTICSEARCH_PORT'] + es_path
     app_logger.debug('Examining environment: done')
 
-    async def handle(request):
+    async def handle(_):
         return web.Response(text='')
 
     app_logger.debug('Creating listening web application...')
