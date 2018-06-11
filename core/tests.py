@@ -180,6 +180,51 @@ class TestApplication(unittest.TestCase):
         self.assertIn('export-oportunity-enquiry-made-49863', ids)
         self.assertIn('export-oportunity-enquiry-made-42863', ids)
 
+    def test_single_feed_broken_sleeps_60_seconds_then_retries(self):
+        es_bulk = [asyncio.Future(), asyncio.Future()]
+
+        sent_broken = False
+
+        def mock_feed_broken_then_fixed(path):
+            nonlocal sent_broken
+
+            feed_contents_maybe_broken = (
+                mock_feed(path) +
+                ('something-invalid' if not sent_broken else '')
+            )
+            sent_broken = True
+            return feed_contents_maybe_broken
+
+        self.setUp_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed_broken_then_fixed,
+            es_bulk,
+        )
+
+        original_sleep = asyncio.sleep
+
+        async def fast_sleep(_):
+            await original_sleep(0)
+
+        async def _test():
+            with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
+                asyncio.ensure_future(run_application())
+                mock_sleep.assert_not_called()
+                result = await es_bulk[0]
+                mock_sleep.assert_called_once_with(60)
+                return result
+
+        es_bulk_content, _ = self.loop.run_until_complete(_test())
+
+        es_bulk_request_dicts = [
+            json.loads(line)
+            for line in es_bulk_content.split(b'\n')[0:-1]
+        ]
+        self.assertIn(
+            'export-oportunity-enquiry-made-49863',
+            es_bulk_request_dicts[0]['index']['_id'],
+        )
+
 
 class TestProcess(unittest.TestCase):
 
