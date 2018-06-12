@@ -176,14 +176,15 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
                f'{canonical_headers}\n{signed_headers}\n{payload_hash}'
 
     credential_scope = f'{datestamp}/{region}/{service}/aws4_request'
-    string_to_sign = \
-        f'{algorithm}\n{amzdate}\n{credential_scope}\n' + \
-        hashlib.sha256(canonical_request().encode('utf-8')).hexdigest()
-
-    def sign(key, msg):
-        return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
 
     def signature():
+        def sign(key, msg):
+            return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
+
+        string_to_sign = \
+            f'{algorithm}\n{amzdate}\n{credential_scope}\n' + \
+            hashlib.sha256(canonical_request().encode('utf-8')).hexdigest()
+
         date_key = sign(('AWS4' + secret_key).encode('utf-8'), datestamp)
         region_key = sign(date_key, region)
         service_key = sign(region_key, service)
