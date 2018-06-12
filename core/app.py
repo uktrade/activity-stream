@@ -183,13 +183,13 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
     def sign(key, msg):
         return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
 
-    def signature_key(key):
-        date_key = sign(('AWS4' + key).encode('utf-8'), datestamp)
+    def signature_key():
+        date_key = sign(('AWS4' + secret_key).encode('utf-8'), datestamp)
         region_key = sign(date_key, region)
         service_key = sign(region_key, service)
         return sign(service_key, 'aws4_request')
 
-    signing_key = signature_key(secret_key)
+    signing_key = signature_key()
     signature = hmac.new(signing_key, string_to_sign.encode('utf-8'), hashlib.sha256).hexdigest()
     authorization_header = \
         f'{algorithm} Credential={access_key}/{credential_scope}, ' + \
