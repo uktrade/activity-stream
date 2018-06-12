@@ -72,6 +72,28 @@ class TestApplication(unittest.TestCase):
         asyncio.ensure_future(run_application(), loop=self.loop)
         self.assertTrue(is_http_accepted_eventually())
 
+    def test_get_returns_object(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+
+        # Slightly odd, but this waits for the application to accept http,
+        # but we don't need its return value
+        is_http_accepted_eventually()
+
+        async def get_text():
+            async with aiohttp.ClientSession() as session:
+                result = await session.get('http://127.0.0.1:8080', timeout=1)
+            return await result.text()
+
+        text = self.loop.run_until_complete(get_text())
+        self.assertEqual(text, '{}')
+
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
     def test_single_page(self, _):

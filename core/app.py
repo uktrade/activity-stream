@@ -58,7 +58,7 @@ async def create_incoming_application(port):
         return await handler(request)
 
     async def handle(_):
-        return web.Response(text='')
+        return web.json_response({})
 
     app_logger.debug('Creating listening web application...')
     app = web.Application(middlewares=[authenticate])
