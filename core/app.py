@@ -53,11 +53,15 @@ async def run_application():
 async def create_incoming_application(port):
     app_logger = logging.getLogger(__name__)
 
+    @web.middleware
+    async def authenticate(request, handler):
+        return await handler(request)
+
     async def handle(_):
         return web.Response(text='')
 
     app_logger.debug('Creating listening web application...')
-    app = web.Application()
+    app = web.Application(middlewares=[authenticate])
     app.add_routes([web.get('/', handle)])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 
