@@ -15,6 +15,8 @@ import mohawk
 POLLING_INTERVAL = 5
 EXCEPTION_INTERVAL = 60
 
+NOT_PROVIDED = 'Authentication credentials were not provided.'
+
 
 async def run_application():
     app_logger = logging.getLogger(__name__)
@@ -55,6 +57,11 @@ async def create_incoming_application(port):
 
     @web.middleware
     async def authenticate(request, handler):
+        if 'Authorization' not in request.headers:
+            return web.json_response({
+                'details': NOT_PROVIDED,
+            }, status=401)
+
         return await handler(request)
 
     async def handle(_):

@@ -72,6 +72,21 @@ class TestApplication(unittest.TestCase):
         asyncio.ensure_future(run_application(), loop=self.loop)
         self.assertTrue(is_http_accepted_eventually())
 
+    def test_no_auth_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        text, status = self.loop.run_until_complete(get_text_no_auth())
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Authentication credentials were not provided."}')
+
     def test_get_returns_object(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
@@ -86,7 +101,8 @@ class TestApplication(unittest.TestCase):
         # but we don't need its return value
         is_http_accepted_eventually()
 
-        text = self.loop.run_until_complete(get_text())
+        text, status = self.loop.run_until_complete(get_text())
+        self.assertEqual(status, 200)
         self.assertEqual(text, '{}')
 
     @freeze_time('2012-01-14 12:00:01')
@@ -329,8 +345,17 @@ async def run_es_application(es_bulk_request_callback):
 
 async def get_text():
     async with aiohttp.ClientSession() as session:
-        result = await session.get('http://127.0.0.1:8080', timeout=1)
-    return await result.text()
+        result = await session.get('http://127.0.0.1:8080', headers={
+            'Authorization': ''
+        }, timeout=1)
+    return (await result.text(), result.status)
+
+
+async def get_text_no_auth():
+    async with aiohttp.ClientSession() as session:
+        result = await session.get('http://127.0.0.1:8080', headers={
+        }, timeout=1)
+    return (await result.text(), result.status)
 
 
 def mock_env():
@@ -344,4 +369,6 @@ def mock_env():
         'ELASTICSEARCH_REGION': 'us-east-2',
         'FEED_ACCESS_KEY_ID': 'feed-some-id',
         'FEED_SECRET_ACCESS_KEY': '?[!@$%^%',
+        'INCOMING_ACCESS_KEY_ID': 'incoming-some-id',
+        'INCOMING_SECRET_KEY': 'incoming-some-secret',
     }
