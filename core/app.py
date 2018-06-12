@@ -157,12 +157,11 @@ def feed_auth_headers(access_key, secret_key, url):
 def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
     service = 'es'
     method = 'POST'
+    signed_headers = 'content-type;host;x-amz-date'
 
     now = datetime.datetime.utcnow()
     amzdate = now.strftime('%Y%m%dT%H%M%SZ')
     datestamp = now.strftime('%Y%m%d')
-
-    signed_headers = 'content-type;host;x-amz-date'
 
     def sign(key, msg):
         return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
