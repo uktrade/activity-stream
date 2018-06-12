@@ -11,11 +11,15 @@ import sys
 import aiohttp
 from aiohttp import web
 import mohawk
+from mohawk.exc import HawkFail
 
 POLLING_INTERVAL = 5
 EXCEPTION_INTERVAL = 60
 
 NOT_PROVIDED = 'Authentication credentials were not provided.'
+INCORRECT = 'Incorrect authentication credentials.'
+MISSING_CONTENT_TYPE = 'Content-Type header was not set. ' + \
+                       'It must be set for authentication, even if as the empty string.'
 
 
 async def run_application():
@@ -31,6 +35,9 @@ async def run_application():
         secret_key=os.environ['FEED_SECRET_ACCESS_KEY'],
     )
 
+    incoming_access_key_id = os.environ['INCOMING_ACCESS_KEY_ID']
+    incoming_secret_key = os.environ['INCOMING_SECRET_KEY']
+
     es_host = os.environ['ELASTICSEARCH_HOST']
     es_path = '/_bulk'
     es_bulk_auth_header_getter = functools.partial(
@@ -45,15 +52,40 @@ async def run_application():
         es_host + ':' + os.environ['ELASTICSEARCH_PORT'] + es_path
     app_logger.debug('Examining environment: done')
 
-    await create_incoming_application(port)
+    await create_incoming_application(port, incoming_access_key_id, incoming_secret_key)
     await create_outgoing_application(
         feed_auth_header_getter, feed_endpoints,
         es_bulk_auth_header_getter, es_endpoint,
     )
 
 
-async def create_incoming_application(port):
+async def create_incoming_application(port, access_key_id, secret_key):
     app_logger = logging.getLogger(__name__)
+
+    def lookup_credentials(passed_access_key_id):
+        if passed_access_key_id != access_key_id:
+            raise HawkFail(f'No Hawk ID of {passed_access_key_id}')
+
+        return {
+            'id': access_key_id,
+            'key': secret_key,
+            'algorithm': 'sha256',
+        }
+
+    def seen_nonce(_, __, ___):
+        # Baby steps
+        return False
+
+    async def raise_if_not_authentic(request):
+        mohawk.Receiver(
+            lookup_credentials,
+            request.headers['Authorization'],
+            str(request.url),
+            request.method,
+            content=await request.content.read(),
+            content_type=request.headers['Content-Type'],
+            seen_nonce=seen_nonce,
+        )
 
     @web.middleware
     async def authenticate(request, handler):
@@ -62,10 +94,23 @@ async def create_incoming_application(port):
                 'details': NOT_PROVIDED,
             }, status=401)
 
+        if 'Content-Type' not in request.headers:
+            return web.json_response({
+                'details': MISSING_CONTENT_TYPE,
+            }, status=401)
+
+        try:
+            await raise_if_not_authentic(request)
+        except HawkFail as exception:
+            app_logger.warning('Failed authentication %s', exception)
+            return web.json_response({
+                'details': INCORRECT,
+            }, status=401)
+
         return await handler(request)
 
     async def handle(_):
-        return web.json_response({})
+        return web.json_response({'secret': 'to-be-hidden'})
 
     app_logger.debug('Creating listening web application...')
     app = web.Application(middlewares=[authenticate])

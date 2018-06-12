@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import json
 import os
 from subprocess import Popen
@@ -9,6 +10,7 @@ from unittest.mock import Mock, patch
 import aiohttp
 from aiohttp import web
 from freezegun import freeze_time
+import mohawk
 
 from core.app import run_application
 
@@ -83,9 +85,144 @@ class TestApplication(unittest.TestCase):
         asyncio.ensure_future(run_application(), loop=self.loop)
         is_http_accepted_eventually()
 
-        text, status = self.loop.run_until_complete(post_text_no_auth())
+        url = 'http://127.0.0.1:8080/'
+        text, status = self.loop.run_until_complete(post_text_no_auth(url))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Authentication credentials were not provided."}')
+
+    def test_bad_id_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id-incorrect', 'incoming-some-secret', url, 'POST', '', '',
+        )
+        text, status = self.loop.run_until_complete(post_text(url, auth))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_bad_secret_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id', 'incoming-some-secret-incorrect', url, 'POST', '', '',
+        )
+        text, status = self.loop.run_until_complete(post_text(url, auth))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_bad_method_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id', 'incoming-some-secret', url, 'GET', '', '',
+        )
+        text, status = self.loop.run_until_complete(post_text(url, auth))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_bad_content_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id', 'incoming-some-secret', url, 'POST', 'content', '',
+        )
+        text, status = self.loop.run_until_complete(post_text(url, auth))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_bad_content_type_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id', 'incoming-some-secret', url, 'POST', '', 'some-type',
+        )
+        text, status = self.loop.run_until_complete(post_text(url, auth))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_no_content_type_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id', 'incoming-some-secret', url, 'POST', '', 'some-type',
+        )
+        _, status = self.loop.run_until_complete(post_text_no_content_type(url, auth))
+        self.assertEqual(status, 401)
+
+    def test_time_skew_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        past = datetime.datetime.now() + datetime.timedelta(seconds=-61)
+        with freeze_time(past):
+            auth = auth_header(
+                'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
+            )
+        text, status = self.loop.run_until_complete(post_text(url, auth))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
     def test_post_returns_object(self):
         es_bulk = [asyncio.Future()]
@@ -96,14 +233,15 @@ class TestApplication(unittest.TestCase):
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
-
-        # Slightly odd, but this waits for the application to accept http,
-        # but we don't need its return value
         is_http_accepted_eventually()
 
-        text, status = self.loop.run_until_complete(post_text())
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
+        )
+        text, status = self.loop.run_until_complete(post_text(url, auth))
         self.assertEqual(status, 200)
-        self.assertEqual(text, '{}')
+        self.assertEqual(text, '{"secret": "to-be-hidden"}')
 
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
@@ -343,18 +481,38 @@ async def run_es_application(es_bulk_request_callback):
     return runner
 
 
-async def post_text():
+def auth_header(key_id, secret_key, url, method, content, content_type):
+    return mohawk.Sender({
+        'id': key_id,
+        'key': secret_key,
+        'algorithm': 'sha256',
+    }, url, method, content=content, content_type=content_type).request_header
+
+
+async def post_text(url, auth):
     async with aiohttp.ClientSession() as session:
-        result = await session.post('http://127.0.0.1:8080', headers={
-            'Authorization': ''
+        result = await session.post(url, headers={
+            'Authorization': auth,
+            'Content-Type': '',
         }, timeout=1)
     return (await result.text(), result.status)
 
 
-async def post_text_no_auth():
+async def post_text_no_auth(url):
     async with aiohttp.ClientSession() as session:
-        result = await session.post('http://127.0.0.1:8080', headers={
+        result = await session.post(url, headers={
+            'Content-Type': '',
         }, timeout=1)
+
+    return (await result.text(), result.status)
+
+
+async def post_text_no_content_type(url, auth):
+    async with aiohttp.ClientSession() as session:
+        result = await session.post(url, headers={
+            'Authorization': auth,
+        }, timeout=1)
+
     return (await result.text(), result.status)
 
 
