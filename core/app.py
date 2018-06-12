@@ -190,13 +190,12 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
         request_key = sign(service_key, 'aws4_request')
         return sign(request_key, string_to_sign).hex()
 
-    authorization_header = \
-        f'{algorithm} Credential={access_key}/{credential_scope}, ' + \
-        f'SignedHeaders={signed_headers}, Signature=' + signature()
-
     return {
         'x-amz-date': amzdate,
-        'Authorization': authorization_header,
+        'Authorization': (
+            f'{algorithm} Credential={access_key}/{credential_scope}, ' +
+            f'SignedHeaders={signed_headers}, Signature=' + signature()
+        ),
     }
 
 
