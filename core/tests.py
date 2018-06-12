@@ -226,11 +226,12 @@ async def _is_http_accepted():
     return False
 
 
-async def run_feed_application(feed_requested_callback, port):
-    def mock_feed(path):
-        with open('core/' + path, 'rb') as f:
-            return f.read().decode('utf-8')
+def mock_feed(path):
+    with open('core/' + path, 'rb') as f:
+        return f.read().decode('utf-8')
 
+
+async def run_feed_application(feed_requested_callback, port):
     async def handle(request):
         path = request.match_info['feed']
         asyncio.get_event_loop().call_soon(feed_requested_callback, request)
