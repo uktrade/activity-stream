@@ -15,7 +15,7 @@ from core.app import run_application
 
 class TestApplication(unittest.TestCase):
 
-    def setUp_manual(self, env, es_bulk):
+    def setUp_manual(self, env, feed, es_bulk):
         ''' Test setUp function that can be customised on a per-test basis '''
         self.os_environ_patcher = patch.dict(os.environ, {
             **mock_env(),
@@ -37,7 +37,7 @@ class TestApplication(unittest.TestCase):
         self.es_runner, self.feed_runner_1 = \
             self.loop.run_until_complete(asyncio.gather(
                 run_es_application(es_bulk_callback),
-                run_feed_application(feed_requested_callback, 8081),
+                run_feed_application(feed, feed_requested_callback, 8081),
             ))
 
         original_app_runner = aiohttp.web.AppRunner
@@ -65,6 +65,7 @@ class TestApplication(unittest.TestCase):
         es_bulk = [asyncio.Future()]
         self.setUp_manual(
             {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
             es_bulk,
         )
 
@@ -77,6 +78,7 @@ class TestApplication(unittest.TestCase):
         es_bulk = [asyncio.Future()]
         self.setUp_manual(
             {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
             es_bulk,
         )
 
@@ -129,6 +131,7 @@ class TestApplication(unittest.TestCase):
         es_bulk = [asyncio.Future(), asyncio.Future()]
         self.setUp_manual(
             {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_multipage_1.json'},
+            mock_feed,
             es_bulk,
         )
 
@@ -150,6 +153,7 @@ class TestApplication(unittest.TestCase):
         self.setUp_manual(
             {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json,'
                                'http://localhost:8081/tests_fixture_2.json'},
+            mock_feed,
             es_bulk,
         )
 
@@ -182,7 +186,7 @@ class TestProcess(unittest.TestCase):
     def setUp(self):
         loop = asyncio.get_event_loop()
 
-        self.feed_runner_1 = loop.run_until_complete(run_feed_application(Mock(), 8081))
+        self.feed_runner_1 = loop.run_until_complete(run_feed_application(mock_feed, Mock(), 8081))
         self.es_runner = loop.run_until_complete(run_es_application(Mock()))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
@@ -231,11 +235,11 @@ def mock_feed(path):
         return f.read().decode('utf-8')
 
 
-async def run_feed_application(feed_requested_callback, port):
+async def run_feed_application(feed, feed_requested_callback, port):
     async def handle(request):
         path = request.match_info['feed']
         asyncio.get_event_loop().call_soon(feed_requested_callback, request)
-        return web.Response(text=mock_feed(path))
+        return web.Response(text=feed(path))
 
     app = web.Application()
     app.add_routes([web.get('/{feed}', handle)])
