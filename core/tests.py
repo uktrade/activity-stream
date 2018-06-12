@@ -34,11 +34,10 @@ class TestApplication(unittest.TestCase):
             first_not_done = next(future for future in self.feed_requested if not future.done())
             first_not_done.set_result(request)
 
-        self.es_runner, self.feed_runner_1, self.feed_runner_2 = \
+        self.es_runner, self.feed_runner_1 = \
             self.loop.run_until_complete(asyncio.gather(
                 run_es_application(es_bulk_callback),
                 run_feed_application(feed_requested_callback, 8081),
-                run_feed_application(feed_requested_callback, 8083),
             ))
 
         original_app_runner = aiohttp.web.AppRunner
@@ -57,7 +56,6 @@ class TestApplication(unittest.TestCase):
         self.loop.run_until_complete(asyncio.gather(
             self.app_runner.cleanup(),
             self.feed_runner_1.cleanup(),
-            self.feed_runner_2.cleanup(),
             self.es_runner.cleanup(),
         ))
         self.app_runner_patcher.stop()
@@ -151,7 +149,7 @@ class TestApplication(unittest.TestCase):
         es_bulk = [asyncio.Future(), asyncio.Future()]
         self.setUp_manual(
             {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json,'
-                               'http://localhost:8083/tests_fixture_2.json'},
+                               'http://localhost:8081/tests_fixture_2.json'},
             es_bulk,
         )
 
