@@ -59,9 +59,9 @@ async def run_application():
 
     async with aiohttp.ClientSession() as session:
         feeds = [
-            repeat_even_on_exception(app_logger, functools.partial(
+            repeat_even_on_exception(functools.partial(
                 ingest_feed,
-                app_logger, session, feed_auth_header_getter, feed_endpoint,
+                session, feed_auth_header_getter, feed_endpoint,
                 es_bulk_auth_header_getter, es_endpoint
             ))
             for feed_endpoint in feed_endpoints
@@ -69,7 +69,9 @@ async def run_application():
         await asyncio.gather(*feeds)
 
 
-async def repeat_even_on_exception(app_logger, never_ending_coroutine):
+async def repeat_even_on_exception(never_ending_coroutine):
+    app_logger = logging.getLogger(__name__)
+
     while True:
         try:
             await never_ending_coroutine()
@@ -85,9 +87,11 @@ async def repeat_even_on_exception(app_logger, never_ending_coroutine):
             await asyncio.sleep(EXCEPTION_INTERVAL)
 
 
-async def ingest_feed(app_logger, session, feed_auth_header_getter, feed_endpoint,
+async def ingest_feed(session, feed_auth_header_getter, feed_endpoint,
                       es_bulk_auth_header_getter, es_endpoint):
-    async for feed in poll(app_logger, session, feed_auth_header_getter, feed_endpoint):
+    app_logger = logging.getLogger(__name__)
+
+    async for feed in poll(session, feed_auth_header_getter, feed_endpoint):
         app_logger.debug('Converting feed to ES bulk ingest commands...')
         es_bulk_contents = es_bulk(feed).encode('utf-8')
         app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
@@ -102,7 +106,9 @@ async def ingest_feed(app_logger, session, feed_auth_header_getter, feed_endpoin
         app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
 
 
-async def poll(app_logger, session, feed_auth_header_getter, seed_url):
+async def poll(session, feed_auth_header_getter, seed_url):
+    app_logger = logging.getLogger(__name__)
+
     href = seed_url
     while True:
         app_logger.debug('Polling')
