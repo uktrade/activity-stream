@@ -70,7 +70,7 @@ class TestApplication(unittest.TestCase):
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
-        self.assertTrue(is_http_accepted())
+        self.assertTrue(is_http_accepted_eventually())
 
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
@@ -247,16 +247,16 @@ class TestProcess(unittest.TestCase):
         loop.run_until_complete(self.es_runner.cleanup())
 
     def test_server_accepts_http(self):
-        self.assertTrue(is_http_accepted())
+        self.assertTrue(is_http_accepted_eventually())
 
 
-def is_http_accepted():
+def is_http_accepted_eventually():
     loop = asyncio.get_event_loop()
-    connected_future = asyncio.ensure_future(_is_http_accepted(), loop=loop)
+    connected_future = asyncio.ensure_future(_is_http_accepted_eventually(), loop=loop)
     return loop.run_until_complete(connected_future)
 
 
-async def _is_http_accepted():
+async def _is_http_accepted_eventually():
     def is_connection_error(exception):
         return 'Cannot connect to host' in str(exception)
 
