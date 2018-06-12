@@ -83,11 +83,11 @@ class TestApplication(unittest.TestCase):
         asyncio.ensure_future(run_application(), loop=self.loop)
         is_http_accepted_eventually()
 
-        text, status = self.loop.run_until_complete(get_text_no_auth())
+        text, status = self.loop.run_until_complete(post_text_no_auth())
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Authentication credentials were not provided."}')
 
-    def test_get_returns_object(self):
+    def test_post_returns_object(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
             {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
@@ -101,7 +101,7 @@ class TestApplication(unittest.TestCase):
         # but we don't need its return value
         is_http_accepted_eventually()
 
-        text, status = self.loop.run_until_complete(get_text())
+        text, status = self.loop.run_until_complete(post_text())
         self.assertEqual(status, 200)
         self.assertEqual(text, '{}')
 
@@ -343,17 +343,17 @@ async def run_es_application(es_bulk_request_callback):
     return runner
 
 
-async def get_text():
+async def post_text():
     async with aiohttp.ClientSession() as session:
-        result = await session.get('http://127.0.0.1:8080', headers={
+        result = await session.post('http://127.0.0.1:8080', headers={
             'Authorization': ''
         }, timeout=1)
     return (await result.text(), result.status)
 
 
-async def get_text_no_auth():
+async def post_text_no_auth():
     async with aiohttp.ClientSession() as session:
-        result = await session.get('http://127.0.0.1:8080', headers={
+        result = await session.post('http://127.0.0.1:8080', headers={
         }, timeout=1)
     return (await result.text(), result.status)
 
