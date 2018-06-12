@@ -43,6 +43,16 @@ async def run_application():
         es_host + ':' + os.environ['ELASTICSEARCH_PORT'] + es_path
     app_logger.debug('Examining environment: done')
 
+    await create_incoming_application(port)
+    await create_outgoing_application(
+        feed_auth_header_getter, feed_endpoints,
+        es_bulk_auth_header_getter, es_endpoint,
+    )
+
+
+async def create_incoming_application(port):
+    app_logger = logging.getLogger(__name__)
+
     async def handle(_):
         return web.Response(text='')
 
@@ -57,6 +67,9 @@ async def run_application():
     await site.start()
     app_logger.debug('Creating listening web application: done')
 
+
+async def create_outgoing_application(feed_auth_header_getter, feed_endpoints,
+                                      es_bulk_auth_header_getter, es_endpoint):
     async with aiohttp.ClientSession() as session:
         feeds = [
             repeat_even_on_exception(functools.partial(
