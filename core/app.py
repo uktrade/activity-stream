@@ -165,8 +165,7 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
         kDate = sign(('AWS4' + key).encode('utf-8'), dateStamp)
         kRegion = sign(kDate, regionName)
         kService = sign(kRegion, serviceName)
-        kSigning = sign(kService, 'aws4_request')
-        return kSigning
+        return sign(kService, 'aws4_request')
 
     t = datetime.datetime.utcnow()
     amzdate = t.strftime('%Y%m%dT%H%M%SZ')
