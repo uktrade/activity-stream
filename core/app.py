@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import sys
+import time
 
 import aiohttp
 from aiohttp import web
@@ -15,6 +16,7 @@ from mohawk.exc import HawkFail
 
 POLLING_INTERVAL = 5
 EXCEPTION_INTERVAL = 60
+NONCE_EXPIRE = 120
 
 NOT_PROVIDED = 'Authentication credentials were not provided.'
 INCORRECT = 'Incorrect authentication credentials.'
@@ -72,9 +74,16 @@ async def create_incoming_application(port, access_key_id, secret_key):
             'algorithm': 'sha256',
         }
 
-    def seen_nonce(_, __, ___):
-        # Baby steps
-        return False
+    # This would need to be stored externally if this was ever to be load balanced,
+    # otherwise replay attacks could succeed by hitting another instance
+    seen_nonces = ExpiringSet(NONCE_EXPIRE)
+
+    def seen_nonce(access_key_id, nonce, _):
+        nonce_tuple = (access_key_id, nonce)
+        seen = nonce_tuple in seen_nonces
+        if not seen:
+            seen_nonces.add(nonce_tuple)
+        return seen
 
     async def raise_if_not_authentic(request):
         mohawk.Receiver(
@@ -281,6 +290,31 @@ def flatten(list_to_flatten):
         for sublist in list_to_flatten
         for item in sublist
     ]
+
+
+class ExpiringSet:
+
+    def __init__(self, seconds):
+        self._seconds = seconds
+        self._expiries = {}
+
+    def _remove_old_keys(self, now):
+        now = int(time.time())
+        self._expiries = {
+            key: expires
+            for key, expires in self._expiries.items()
+            if expires > now
+        }
+
+    def add(self, item):
+        now = int(time.time())
+        self._remove_old_keys(now)
+        self._expiries[item] = now + self._seconds
+
+    def __contains__(self, item):
+        now = int(time.time())
+        self._remove_old_keys(now)
+        return item in self._expiries
 
 
 def setup_logging():

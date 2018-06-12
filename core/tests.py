@@ -224,6 +224,60 @@ class TestApplication(unittest.TestCase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
+    def test_repeat_auth_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
+        )
+        _, status_1 = self.loop.run_until_complete(post_text(url, auth))
+        self.assertEqual(status_1, 200)
+
+        text_2, status_2 = self.loop.run_until_complete(post_text(url, auth))
+        self.assertEqual(status_2, 401)
+        self.assertEqual(text_2, '{"details": "Incorrect authentication credentials."}')
+
+    def test_nonces_cleared(self):
+        ''' Makes duplicate requests, but with the code patched so the nonce expiry time
+            is shorter then the allowed Hawk skew. The second request succeeding gives
+            evidence that the cache of nonces was cleared.
+        '''
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        now = datetime.datetime.now()
+        past = now + datetime.timedelta(seconds=-45)
+
+        with patch('core.app.NONCE_EXPIRE', 30):
+            asyncio.ensure_future(run_application(), loop=self.loop)
+            is_http_accepted_eventually()
+
+            url = 'http://127.0.0.1:8080/'
+
+            with freeze_time(past):
+                auth = auth_header(
+                    'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
+                )
+                _, status_1 = self.loop.run_until_complete(post_text(url, auth))
+            self.assertEqual(status_1, 200)
+
+            with freeze_time(now):
+                _, status_2 = self.loop.run_until_complete(post_text(url, auth))
+            self.assertEqual(status_2, 200)
+
     def test_post_returns_object(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
