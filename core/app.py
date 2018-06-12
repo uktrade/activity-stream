@@ -158,6 +158,12 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
     service = 'es'
     method = 'POST'
 
+    now = datetime.datetime.utcnow()
+    amzdate = now.strftime('%Y%m%dT%H%M%SZ')
+    datestamp = now.strftime('%Y%m%d')
+
+    signed_headers = 'content-type;host;x-amz-date'
+
     def sign(key, msg):
         return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
 
@@ -167,23 +173,20 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
         service_key = sign(region_key, serviceName)
         return sign(service_key, 'aws4_request')
 
-    now = datetime.datetime.utcnow()
-    amzdate = now.strftime('%Y%m%dT%H%M%SZ')
-    datestamp = now.strftime('%Y%m%d')
-    canonical_uri = path
-    canonical_querystring = ''
-    canonical_headers = 'content-type:application/x-ndjson\n' + \
-        'host:' + host + '\n' + 'x-amz-date:' + amzdate + '\n'
-    signed_headers = 'content-type;host;x-amz-date'
-    payload_hash = hashlib.sha256(payload).hexdigest()
+    def canonical_request():
+        canonical_uri = path
+        canonical_querystring = ''
+        canonical_headers = 'content-type:application/x-ndjson\n' + \
+            'host:' + host + '\n' + 'x-amz-date:' + amzdate + '\n'
+        payload_hash = hashlib.sha256(payload).hexdigest()
 
-    canonical_request = method + '\n' + canonical_uri + '\n' + canonical_querystring + \
-        '\n' + canonical_headers + '\n' + signed_headers + '\n' + payload_hash
+        return method + '\n' + canonical_uri + '\n' + canonical_querystring + \
+            '\n' + canonical_headers + '\n' + signed_headers + '\n' + payload_hash
 
     algorithm = 'AWS4-HMAC-SHA256'
     credential_scope = datestamp + '/' + region + '/' + service + '/' + 'aws4_request'
     string_to_sign = algorithm + '\n' + amzdate + '\n' + credential_scope + \
-        '\n' + hashlib.sha256(canonical_request.encode('utf-8')).hexdigest()
+        '\n' + hashlib.sha256(canonical_request().encode('utf-8')).hexdigest()
     signing_key = signature_key(secret_key, datestamp, region, service)
     signature = hmac.new(signing_key, (string_to_sign).encode('utf-8'), hashlib.sha256).hexdigest()
     authorization_header = (algorithm + ' ' + 'Credential=' + access_key + '/' + credential_scope +
