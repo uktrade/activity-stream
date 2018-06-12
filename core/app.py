@@ -167,9 +167,9 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
         service_key = sign(region_key, serviceName)
         return sign(service_key, 'aws4_request')
 
-    t = datetime.datetime.utcnow()
-    amzdate = t.strftime('%Y%m%dT%H%M%SZ')
-    datestamp = t.strftime('%Y%m%d')
+    now = datetime.datetime.utcnow()
+    amzdate = now.strftime('%Y%m%dT%H%M%SZ')
+    datestamp = now.strftime('%Y%m%d')
     canonical_uri = path
     canonical_querystring = ''
     canonical_headers = 'content-type:application/x-ndjson\n' + \
