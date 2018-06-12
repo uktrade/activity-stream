@@ -162,10 +162,10 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
         return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
 
     def signature_key(key, dateStamp, regionName, serviceName):
-        kDate = sign(('AWS4' + key).encode('utf-8'), dateStamp)
-        kRegion = sign(kDate, regionName)
-        kService = sign(kRegion, serviceName)
-        return sign(kService, 'aws4_request')
+        date_key = sign(('AWS4' + key).encode('utf-8'), dateStamp)
+        region_key = sign(date_key, regionName)
+        service_key = sign(region_key, serviceName)
+        return sign(service_key, 'aws4_request')
 
     t = datetime.datetime.utcnow()
     amzdate = t.strftime('%Y%m%dT%H%M%SZ')
