@@ -13,6 +13,7 @@ from aiohttp import web
 import mohawk
 
 POLLING_INTERVAL = 5
+EXCEPTION_INTERVAL = 60
 
 
 async def run_application():
@@ -58,11 +59,30 @@ async def run_application():
 
     async with aiohttp.ClientSession() as session:
         feeds = [
-            ingest_feed(app_logger, session, feed_auth_header_getter, feed_endpoint,
-                        es_bulk_auth_header_getter, es_endpoint)
+            repeat_forever_even_on_exception(app_logger, functools.partial(
+                ingest_feed,
+                app_logger, session, feed_auth_header_getter, feed_endpoint,
+                es_bulk_auth_header_getter, es_endpoint
+            ))
             for feed_endpoint in feed_endpoints
         ]
         await asyncio.gather(*feeds)
+
+
+async def repeat_forever_even_on_exception(app_logger, never_ending_coroutine):
+    while True:
+        try:
+            await never_ending_coroutine()
+        except BaseException as e:
+            app_logger.warning('Polling feed raised exception: %s', e)
+        else:
+            app_logger.warning(
+                'Polling feed finished without exception. '
+                'This is not expected: it should run forever.'
+            )
+        finally:
+            app_logger.warning('Waiting %s seconds until restarting the feed', EXCEPTION_INTERVAL)
+            await asyncio.sleep(EXCEPTION_INTERVAL)
 
 
 async def ingest_feed(app_logger, session, feed_auth_header_getter, feed_endpoint,
