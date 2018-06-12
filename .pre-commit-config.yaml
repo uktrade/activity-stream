@@ -38,4 +38,3 @@ repos:
         - --disable=missing-docstring
         - --disable=too-many-arguments
         - --disable=too-many-instance-attributes
-        - --disable=too-many-locals

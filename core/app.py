@@ -164,20 +164,20 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
     amzdate = now.strftime('%Y%m%dT%H%M%SZ')
     datestamp = now.strftime('%Y%m%d')
 
-    def canonical_request():
-        canonical_uri = path
-        canonical_querystring = ''
-        canonical_headers = \
-            f'content-type:application/x-ndjson\n' + \
-            f'host:{host}\nx-amz-date:{amzdate}\n'
-        payload_hash = hashlib.sha256(payload).hexdigest()
-
-        return f'{method}\n{canonical_uri}\n{canonical_querystring}\n' + \
-               f'{canonical_headers}\n{signed_headers}\n{payload_hash}'
-
     credential_scope = f'{datestamp}/{region}/{service}/aws4_request'
 
     def signature():
+        def canonical_request():
+            canonical_uri = path
+            canonical_querystring = ''
+            canonical_headers = \
+                f'content-type:application/x-ndjson\n' + \
+                f'host:{host}\nx-amz-date:{amzdate}\n'
+            payload_hash = hashlib.sha256(payload).hexdigest()
+
+            return f'{method}\n{canonical_uri}\n{canonical_querystring}\n' + \
+                   f'{canonical_headers}\n{signed_headers}\n{payload_hash}'
+
         def sign(key, msg):
             return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
 
