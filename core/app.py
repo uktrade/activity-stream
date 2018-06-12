@@ -175,22 +175,24 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
     def canonical_request():
         canonical_uri = path
         canonical_querystring = ''
-        canonical_headers = 'content-type:application/x-ndjson\n' + \
-            'host:' + host + '\n' + 'x-amz-date:' + amzdate + '\n'
+        canonical_headers = \
+            f'content-type:application/x-ndjson\n' + \
+            f'host:{host}\nx-amz-date:{amzdate}\n'
         payload_hash = hashlib.sha256(payload).hexdigest()
 
-        return method + '\n' + canonical_uri + '\n' + canonical_querystring + \
-            '\n' + canonical_headers + '\n' + signed_headers + '\n' + payload_hash
+        return f'{method}\n{canonical_uri}\n{canonical_querystring}\n' + \
+               f'{canonical_headers}\n{signed_headers}\n{payload_hash}'
 
     algorithm = 'AWS4-HMAC-SHA256'
-    credential_scope = datestamp + '/' + region + '/' + service + '/' + 'aws4_request'
-    string_to_sign = algorithm + '\n' + amzdate + '\n' + credential_scope + \
-        '\n' + hashlib.sha256(canonical_request().encode('utf-8')).hexdigest()
+    credential_scope = f'{datestamp}/{region}/{service}/aws4_request'
+    string_to_sign = \
+        f'{algorithm}\n{amzdate}\n{credential_scope}\n' + \
+        hashlib.sha256(canonical_request().encode('utf-8')).hexdigest()
     signing_key = signature_key(secret_key)
     signature = hmac.new(signing_key, string_to_sign.encode('utf-8'), hashlib.sha256).hexdigest()
-    authorization_header = (algorithm + ' ' + 'Credential=' + access_key + '/' + credential_scope +
-                            ', ' + 'SignedHeaders=' + signed_headers +
-                            ', ' + 'Signature=' + signature)
+    authorization_header = \
+        f'{algorithm} Credential={access_key}/{credential_scope}, ' + \
+        f'SignedHeaders={signed_headers}, Signature={signature}'
 
     return {
         'x-amz-date': amzdate,
