@@ -158,6 +158,7 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
     service = 'es'
     method = 'POST'
     signed_headers = 'content-type;host;x-amz-date'
+    algorithm = 'AWS4-HMAC-SHA256'
 
     now = datetime.datetime.utcnow()
     amzdate = now.strftime('%Y%m%dT%H%M%SZ')
@@ -183,7 +184,6 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
         return f'{method}\n{canonical_uri}\n{canonical_querystring}\n' + \
                f'{canonical_headers}\n{signed_headers}\n{payload_hash}'
 
-    algorithm = 'AWS4-HMAC-SHA256'
     credential_scope = f'{datestamp}/{region}/{service}/aws4_request'
     string_to_sign = \
         f'{algorithm}\n{amzdate}\n{credential_scope}\n' + \
