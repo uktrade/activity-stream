@@ -20,7 +20,7 @@ async def run_application():
     app_logger = logging.getLogger(__name__)
 
     app_logger.debug('Examining environment...')
-    PORT = os.environ['PORT']
+    port = os.environ['PORT']
 
     feed_endpoints = os.environ['FEED_ENDPOINTS'].split(',')
     feed_auth_header_getter = functools.partial(
@@ -53,13 +53,13 @@ async def run_application():
 
     runner = web.AppRunner(app, access_log_format=access_log_format)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', PORT)
+    site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
     app_logger.debug('Creating listening web application: done')
 
     async with aiohttp.ClientSession() as session:
         feeds = [
-            repeat_forever_even_on_exception(app_logger, functools.partial(
+            repeat_even_on_exception(app_logger, functools.partial(
                 ingest_feed,
                 app_logger, session, feed_auth_header_getter, feed_endpoint,
                 es_bulk_auth_header_getter, es_endpoint
@@ -69,12 +69,12 @@ async def run_application():
         await asyncio.gather(*feeds)
 
 
-async def repeat_forever_even_on_exception(app_logger, never_ending_coroutine):
+async def repeat_even_on_exception(app_logger, never_ending_coroutine):
     while True:
         try:
             await never_ending_coroutine()
-        except BaseException as e:
-            app_logger.warning('Polling feed raised exception: %s', e)
+        except BaseException as exception:
+            app_logger.warning('Polling feed raised exception: %s', exception)
         else:
             app_logger.warning(
                 'Polling feed finished without exception. '
@@ -200,8 +200,12 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
     }
 
 
-def flatten(l):
-    return [item for sublist in l for item in sublist]
+def flatten(list_to_flatten):
+    return [
+        item
+        for sublist in list_to_flatten
+        for item in sublist
+    ]
 
 
 def setup_logging():
@@ -218,6 +222,6 @@ def setup_logging():
 if __name__ == '__main__':
     setup_logging()
 
-    loop = asyncio.get_event_loop()
-    asyncio.ensure_future(run_application(), loop=loop)
-    loop.run_forever()
+    LOOP = asyncio.get_event_loop()
+    asyncio.ensure_future(run_application(), loop=LOOP)
+    LOOP.run_forever()

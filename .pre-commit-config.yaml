@@ -33,8 +33,8 @@ repos:
       language: system
       types: [python]
       args:
+        - --include-naming-hint=yes
         - --disable=attribute-defined-outside-init
-        - --disable=invalid-name
         - --disable=missing-docstring
         - --disable=too-many-arguments
         - --disable=too-many-instance-attributes

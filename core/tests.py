@@ -15,7 +15,7 @@ from core.app import run_application
 
 class TestApplication(unittest.TestCase):
 
-    def setUp_manual(self, env, feed, es_bulk):
+    def setup_manual(self, env, feed, es_bulk):
         ''' Test setUp function that can be customised on a per-test basis '''
         self.os_environ_patcher = patch.dict(os.environ, {
             **mock_env(),
@@ -63,7 +63,7 @@ class TestApplication(unittest.TestCase):
 
     def test_application_accepts_http(self):
         es_bulk = [asyncio.Future()]
-        self.setUp_manual(
+        self.setup_manual(
             {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
@@ -74,9 +74,9 @@ class TestApplication(unittest.TestCase):
 
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
-    def test_feed_passed_to_elastic_search(self, _):
+    def test_single_page(self, _):
         es_bulk = [asyncio.Future()]
-        self.setUp_manual(
+        self.setup_manual(
             {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
@@ -127,9 +127,9 @@ class TestApplication(unittest.TestCase):
         self.assertEqual(es_bulk_request_dicts[3]['activity'], 'export-oportunity-enquiry-made')
         self.assertEqual(es_bulk_request_dicts[3]['company_house_number'], '82312')
 
-    def test_multipage_second_page_passed_to_elastic_search(self):
+    def test_multipage(self):
         es_bulk = [asyncio.Future(), asyncio.Future()]
-        self.setUp_manual(
+        self.setup_manual(
             {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_multipage_1.json'},
             mock_feed,
             es_bulk,
@@ -148,9 +148,9 @@ class TestApplication(unittest.TestCase):
         self.assertEqual(es_bulk_request_dicts[0]['index']['_id'],
                          'export-oportunity-enquiry-made-second-page-4986999')
 
-    def test_two_feeds_both_pages_passed_to_elastic_search(self):
+    def test_two_feeds(self):
         es_bulk = [asyncio.Future(), asyncio.Future()]
-        self.setUp_manual(
+        self.setup_manual(
             {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json,'
                                'http://localhost:8081/tests_fixture_2.json'},
             mock_feed,
@@ -180,7 +180,7 @@ class TestApplication(unittest.TestCase):
         self.assertIn('export-oportunity-enquiry-made-49863', ids)
         self.assertIn('export-oportunity-enquiry-made-42863', ids)
 
-    def test_single_feed_broken_sleeps_60_seconds_then_retries(self):
+    def test_on_bad_json_retries(self):
         es_bulk = [asyncio.Future(), asyncio.Future()]
 
         sent_broken = False
@@ -195,7 +195,7 @@ class TestApplication(unittest.TestCase):
             sent_broken = True
             return feed_contents_maybe_broken
 
-        self.setUp_manual(
+        self.setup_manual(
             {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed_broken_then_fixed,
             es_bulk,
@@ -257,8 +257,8 @@ def is_http_accepted():
 
 
 async def _is_http_accepted():
-    def is_connection_error(e):
-        return 'Cannot connect to host' in str(e)
+    def is_connection_error(exception):
+        return 'Cannot connect to host' in str(exception)
 
     attempts = 0
     while attempts < 20:
@@ -266,18 +266,18 @@ async def _is_http_accepted():
             async with aiohttp.ClientSession() as session:
                 await session.get('http://127.0.0.1:8080', timeout=1)
             return True
-        except aiohttp.client_exceptions.ClientConnectorError as e:
+        except aiohttp.client_exceptions.ClientConnectorError as exception:
             attempts += 1
             await asyncio.sleep(0.2)
-            if not is_connection_error(e):
+            if not is_connection_error(exception):
                 return True
 
     return False
 
 
 def mock_feed(path):
-    with open('core/' + path, 'rb') as f:
-        return f.read().decode('utf-8')
+    with open('core/' + path, 'rb') as file:
+        return file.read().decode('utf-8')
 
 
 async def run_feed_application(feed, feed_requested_callback, port):
