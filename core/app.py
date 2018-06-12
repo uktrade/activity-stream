@@ -188,7 +188,7 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
     string_to_sign = algorithm + '\n' + amzdate + '\n' + credential_scope + \
         '\n' + hashlib.sha256(canonical_request().encode('utf-8')).hexdigest()
     signing_key = signature_key(secret_key)
-    signature = hmac.new(signing_key, (string_to_sign).encode('utf-8'), hashlib.sha256).hexdigest()
+    signature = hmac.new(signing_key, string_to_sign.encode('utf-8'), hashlib.sha256).hexdigest()
     authorization_header = (algorithm + ' ' + 'Credential=' + access_key + '/' + credential_scope +
                             ', ' + 'SignedHeaders=' + signed_headers +
                             ', ' + 'Signature=' + signature)
