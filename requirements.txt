@@ -9,6 +9,7 @@ astroid==1.6.4            # via pylint
 async-timeout==3.0.0      # via aiohttp
 attrs==18.1.0             # via aiohttp
 chardet==3.0.4            # via aiohttp
+coverage==4.5.1
 freezegun==0.3.10
 idna-ssl==1.0.1           # via aiohttp
 idna==2.6                 # via idna-ssl, yarl
