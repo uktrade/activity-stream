@@ -86,11 +86,6 @@ class TestApplication(unittest.TestCase):
         # but we don't need its return value
         is_http_accepted_eventually()
 
-        async def get_text():
-            async with aiohttp.ClientSession() as session:
-                result = await session.get('http://127.0.0.1:8080', timeout=1)
-            return await result.text()
-
         text = self.loop.run_until_complete(get_text())
         self.assertEqual(text, '{}')
 
@@ -330,6 +325,12 @@ async def run_es_application(es_bulk_request_callback):
     site = web.TCPSite(runner, '127.0.0.1', 8082)
     await site.start()
     return runner
+
+
+async def get_text():
+    async with aiohttp.ClientSession() as session:
+        result = await session.get('http://127.0.0.1:8080', timeout=1)
+    return await result.text()
 
 
 def mock_env():
