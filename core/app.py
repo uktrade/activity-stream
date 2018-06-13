@@ -39,6 +39,7 @@ async def run_application():
 
     incoming_access_key_id = os.environ['INCOMING_ACCESS_KEY_ID']
     incoming_secret_key = os.environ['INCOMING_SECRET_KEY']
+    ip_whitelist = os.environ['INCOMING_IP_WHITELIST'].split(',')
 
     es_host = os.environ['ELASTICSEARCH_HOST']
     es_path = '/_bulk'
@@ -54,14 +55,16 @@ async def run_application():
         es_host + ':' + os.environ['ELASTICSEARCH_PORT'] + es_path
     app_logger.debug('Examining environment: done')
 
-    await create_incoming_application(port, incoming_access_key_id, incoming_secret_key)
+    await create_incoming_application(
+        port, ip_whitelist, incoming_access_key_id, incoming_secret_key,
+    )
     await create_outgoing_application(
         feed_auth_header_getter, feed_endpoints,
         es_bulk_auth_header_getter, es_endpoint,
     )
 
 
-async def create_incoming_application(port, access_key_id, secret_key):
+async def create_incoming_application(port, ip_whitelist, access_key_id, secret_key):
     app_logger = logging.getLogger(__name__)
 
     def lookup_credentials(passed_access_key_id):
@@ -98,6 +101,25 @@ async def create_incoming_application(port, access_key_id, secret_key):
 
     @web.middleware
     async def authenticate(request, handler):
+        if 'X-Forwarded-For' not in request.headers:
+            app_logger.warning(
+                'Failed authentication: no X-Forwarded-For header passed'
+            )
+            return web.json_response({
+                'details': INCORRECT,
+            }, status=401)
+
+        remote_address = request.headers['X-Forwarded-For'].split(',')[0].strip()
+
+        if remote_address not in ip_whitelist:
+            app_logger.warning(
+                'Failed authentication: the X-Forwarded-For header did not '
+                'start with an IP in the whitelist'
+            )
+            return web.json_response({
+                'details': INCORRECT,
+            }, status=401)
+
         if 'Authorization' not in request.headers:
             return web.json_response({
                 'details': NOT_PROVIDED,

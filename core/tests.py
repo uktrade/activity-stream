@@ -92,7 +92,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/'
-        text, status = self.loop.run_until_complete(post_text_no_auth(url))
+        text, status = self.loop.run_until_complete(post_text_no_auth(url, '1.2.3.4'))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Authentication credentials were not provided."}')
 
@@ -111,7 +111,8 @@ class TestAuthentication(TestBase):
         auth = auth_header(
             'incoming-some-id-incorrect', 'incoming-some-secret', url, 'POST', '', '',
         )
-        text, status = self.loop.run_until_complete(post_text(url, auth))
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -130,7 +131,8 @@ class TestAuthentication(TestBase):
         auth = auth_header(
             'incoming-some-id', 'incoming-some-secret-incorrect', url, 'POST', '', '',
         )
-        text, status = self.loop.run_until_complete(post_text(url, auth))
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -149,7 +151,8 @@ class TestAuthentication(TestBase):
         auth = auth_header(
             'incoming-some-id', 'incoming-some-secret', url, 'GET', '', '',
         )
-        text, status = self.loop.run_until_complete(post_text(url, auth))
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -168,7 +171,8 @@ class TestAuthentication(TestBase):
         auth = auth_header(
             'incoming-some-id', 'incoming-some-secret', url, 'POST', 'content', '',
         )
-        text, status = self.loop.run_until_complete(post_text(url, auth))
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -187,7 +191,8 @@ class TestAuthentication(TestBase):
         auth = auth_header(
             'incoming-some-id', 'incoming-some-secret', url, 'POST', '', 'some-type',
         )
-        text, status = self.loop.run_until_complete(post_text(url, auth))
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -206,7 +211,9 @@ class TestAuthentication(TestBase):
         auth = auth_header(
             'incoming-some-id', 'incoming-some-secret', url, 'POST', '', 'some-type',
         )
-        _, status = self.loop.run_until_complete(post_text_no_content_type(url, auth))
+        x_forwarded_for = '1.2.3.4'
+        _, status = self.loop.run_until_complete(
+            post_text_no_content_type(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
 
     def test_time_skew_then_401(self):
@@ -226,7 +233,8 @@ class TestAuthentication(TestBase):
             auth = auth_header(
                 'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
             )
-        text, status = self.loop.run_until_complete(post_text(url, auth))
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -245,10 +253,11 @@ class TestAuthentication(TestBase):
         auth = auth_header(
             'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
         )
-        _, status_1 = self.loop.run_until_complete(post_text(url, auth))
+        x_forwarded_for = '1.2.3.4'
+        _, status_1 = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
         self.assertEqual(status_1, 200)
 
-        text_2, status_2 = self.loop.run_until_complete(post_text(url, auth))
+        text_2, status_2 = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
         self.assertEqual(status_2, 401)
         self.assertEqual(text_2, '{"details": "Incorrect authentication credentials."}')
 
@@ -272,17 +281,79 @@ class TestAuthentication(TestBase):
             is_http_accepted_eventually()
 
             url = 'http://127.0.0.1:8080/'
+            x_forwarded_for = '1.2.3.4'
 
             with freeze_time(past):
                 auth = auth_header(
                     'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
                 )
-                _, status_1 = self.loop.run_until_complete(post_text(url, auth))
+                _, status_1 = self.loop.run_until_complete(
+                    post_text(url, auth, x_forwarded_for))
             self.assertEqual(status_1, 200)
 
             with freeze_time(now):
-                _, status_2 = self.loop.run_until_complete(post_text(url, auth))
+                _, status_2 = self.loop.run_until_complete(
+                    post_text(url, auth, x_forwarded_for))
             self.assertEqual(status_2, 200)
+
+    def test_no_x_forwarded_for_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
+        )
+        text, status = self.loop.run_until_complete(post_text_no_x_forwarded_for(url, auth))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_bad_x_forwarded_for_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
+        )
+        x_forwarded_for = '3.4.5.6'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_at_end_x_forwarded_for_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
+        )
+        x_forwarded_for = '3.4.5.6,1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
     def test_post_returns_object(self):
         es_bulk = [asyncio.Future()]
@@ -299,7 +370,8 @@ class TestAuthentication(TestBase):
         auth = auth_header(
             'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
         )
-        text, status = self.loop.run_until_complete(post_text(url, auth))
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
         self.assertEqual(status, 200)
         self.assertEqual(text, '{"secret": "to-be-hidden"}')
 
@@ -552,28 +624,40 @@ def auth_header(key_id, secret_key, url, method, content, content_type):
     }, url, method, content=content, content_type=content_type).request_header
 
 
-async def post_text(url, auth):
+async def post_text(url, auth, x_forwarded_for):
     async with aiohttp.ClientSession() as session:
         result = await session.post(url, headers={
             'Authorization': auth,
             'Content-Type': '',
+            'X-Forwarded-For': x_forwarded_for,
         }, timeout=1)
     return (await result.text(), result.status)
 
 
-async def post_text_no_auth(url):
+async def post_text_no_auth(url, x_forwarded_for):
     async with aiohttp.ClientSession() as session:
         result = await session.post(url, headers={
             'Content-Type': '',
+            'X-Forwarded-For': x_forwarded_for,
         }, timeout=1)
-
     return (await result.text(), result.status)
 
 
-async def post_text_no_content_type(url, auth):
+async def post_text_no_x_forwarded_for(url, auth):
+    async with aiohttp.ClientSession() as session:
+        headers = {
+            'Authorization': auth,
+            'Content-Type': '',
+        }
+        result = await session.post(url, headers=headers, timeout=1)
+    return (await result.text(), result.status)
+
+
+async def post_text_no_content_type(url, auth, x_forwarded_for):
     async with aiohttp.ClientSession() as session:
         result = await session.post(url, headers={
             'Authorization': auth,
+            'X-Forwarded-For': x_forwarded_for,
         }, timeout=1)
 
     return (await result.text(), result.status)
@@ -592,4 +676,5 @@ def mock_env():
         'FEED_SECRET_ACCESS_KEY': '?[!@$%^%',
         'INCOMING_ACCESS_KEY_ID': 'incoming-some-id',
         'INCOMING_SECRET_KEY': 'incoming-some-secret',
+        'INCOMING_IP_WHITELIST': '1.2.3.4,2.3.4.5',
     }
