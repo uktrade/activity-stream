@@ -109,7 +109,7 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/'
         auth = auth_header(
-            'incoming-some-id-incorrect', 'incoming-some-secret', url, 'POST', '', '',
+            'incoming-some-id-incorrect', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '1.2.3.4'
         text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
@@ -129,7 +129,7 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/'
         auth = auth_header(
-            'incoming-some-id', 'incoming-some-secret-incorrect', url, 'POST', '', '',
+            'incoming-some-id-1', 'incoming-some-secret-2', url, 'POST', '', '',
         )
         x_forwarded_for = '1.2.3.4'
         text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
@@ -149,7 +149,7 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/'
         auth = auth_header(
-            'incoming-some-id', 'incoming-some-secret', url, 'GET', '', '',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', '',
         )
         x_forwarded_for = '1.2.3.4'
         text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
@@ -169,7 +169,7 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/'
         auth = auth_header(
-            'incoming-some-id', 'incoming-some-secret', url, 'POST', 'content', '',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', 'content', '',
         )
         x_forwarded_for = '1.2.3.4'
         text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
@@ -189,7 +189,7 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/'
         auth = auth_header(
-            'incoming-some-id', 'incoming-some-secret', url, 'POST', '', 'some-type',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', 'some-type',
         )
         x_forwarded_for = '1.2.3.4'
         text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
@@ -209,7 +209,7 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/'
         auth = auth_header(
-            'incoming-some-id', 'incoming-some-secret', url, 'POST', '', 'some-type',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', 'some-type',
         )
         x_forwarded_for = '1.2.3.4'
         _, status = self.loop.run_until_complete(
@@ -231,7 +231,7 @@ class TestAuthentication(TestBase):
         past = datetime.datetime.now() + datetime.timedelta(seconds=-61)
         with freeze_time(past):
             auth = auth_header(
-                'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
+                'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
             )
         x_forwarded_for = '1.2.3.4'
         text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
@@ -251,7 +251,7 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/'
         auth = auth_header(
-            'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '1.2.3.4'
         _, status_1 = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
@@ -285,7 +285,7 @@ class TestAuthentication(TestBase):
 
             with freeze_time(past):
                 auth = auth_header(
-                    'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
+                    'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
                 )
                 _, status_1 = self.loop.run_until_complete(
                     post_text(url, auth, x_forwarded_for))
@@ -309,7 +309,7 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/'
         auth = auth_header(
-            'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         text, status = self.loop.run_until_complete(post_text_no_x_forwarded_for(url, auth))
         self.assertEqual(status, 401)
@@ -328,7 +328,7 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/'
         auth = auth_header(
-            'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '3.4.5.6'
         text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
@@ -348,12 +348,32 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/'
         auth = auth_header(
-            'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '3.4.5.6,1.2.3.4'
         text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_second_id_returns_object(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id-2', 'incoming-some-secret-2', url, 'POST', '', '',
+        )
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 200)
+        self.assertEqual(text, '{"secret": "to-be-hidden"}')
 
     def test_post_returns_object(self):
         es_bulk = [asyncio.Future()]
@@ -368,7 +388,7 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/'
         auth = auth_header(
-            'incoming-some-id', 'incoming-some-secret', url, 'POST', '', '',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '1.2.3.4'
         text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
@@ -674,7 +694,9 @@ def mock_env():
         'ELASTICSEARCH_REGION': 'us-east-2',
         'FEED_ACCESS_KEY_ID': 'feed-some-id',
         'FEED_SECRET_ACCESS_KEY': '?[!@$%^%',
-        'INCOMING_ACCESS_KEY_ID': 'incoming-some-id',
-        'INCOMING_SECRET_KEY': 'incoming-some-secret',
+        'INCOMING_ACCESS_KEY_PAIRS': (
+            'incoming-some-id-1:incoming-some-secret-1,' +
+            'incoming-some-id-2:incoming-some-secret-2'
+        ),
         'INCOMING_IP_WHITELIST': '1.2.3.4,2.3.4.5',
     }

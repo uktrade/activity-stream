@@ -37,8 +37,11 @@ async def run_application():
         secret_key=os.environ['FEED_SECRET_ACCESS_KEY'],
     )
 
-    incoming_access_key_id = os.environ['INCOMING_ACCESS_KEY_ID']
-    incoming_secret_key = os.environ['INCOMING_SECRET_KEY']
+    incoming_key_pairs = {
+        key_id: secret_key
+        for key_pair in os.environ['INCOMING_ACCESS_KEY_PAIRS'].split(',')
+        for key_id, secret_key in [key_pair.split(':')]
+    }
     ip_whitelist = os.environ['INCOMING_IP_WHITELIST'].split(',')
 
     es_host = os.environ['ELASTICSEARCH_HOST']
@@ -56,7 +59,7 @@ async def run_application():
     app_logger.debug('Examining environment: done')
 
     await create_incoming_application(
-        port, ip_whitelist, incoming_access_key_id, incoming_secret_key,
+        port, ip_whitelist, incoming_key_pairs,
     )
     await create_outgoing_application(
         feed_auth_header_getter, feed_endpoints,
@@ -64,16 +67,16 @@ async def run_application():
     )
 
 
-async def create_incoming_application(port, ip_whitelist, access_key_id, secret_key):
+async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
     app_logger = logging.getLogger(__name__)
 
     def lookup_credentials(passed_access_key_id):
-        if passed_access_key_id != access_key_id:
+        if passed_access_key_id not in incoming_key_pairs:
             raise HawkFail(f'No Hawk ID of {passed_access_key_id}')
 
         return {
-            'id': access_key_id,
-            'key': secret_key,
+            'id': passed_access_key_id,
+            'key': incoming_key_pairs[passed_access_key_id],
             'algorithm': 'sha256',
         }
 
