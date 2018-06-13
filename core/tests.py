@@ -15,7 +15,7 @@ import mohawk
 from core.app import run_application
 
 
-class TestApplication(unittest.TestCase):
+class TestBase(unittest.TestCase):
 
     def setup_manual(self, env, feed, es_bulk):
         ''' Test setUp function that can be customised on a per-test basis '''
@@ -63,6 +63,9 @@ class TestApplication(unittest.TestCase):
         self.app_runner_patcher.stop()
         self.os_environ_patcher.stop()
 
+
+class TestConnection(TestBase):
+
     def test_application_accepts_http(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
@@ -73,6 +76,9 @@ class TestApplication(unittest.TestCase):
 
         asyncio.ensure_future(run_application(), loop=self.loop)
         self.assertTrue(is_http_accepted_eventually())
+
+
+class TestAuthentication(TestBase):
 
     def test_no_auth_then_401(self):
         es_bulk = [asyncio.Future()]
@@ -296,6 +302,9 @@ class TestApplication(unittest.TestCase):
         text, status = self.loop.run_until_complete(post_text(url, auth))
         self.assertEqual(status, 200)
         self.assertEqual(text, '{"secret": "to-be-hidden"}')
+
+
+class TestApplication(TestBase):
 
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
