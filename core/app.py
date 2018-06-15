@@ -39,12 +39,9 @@ async def run_application():
 
     feed_endpoints = [{
         'seed': feed['SEED'],
+        'access_key_id': feed['ACCESS_KEY_ID'],
+        'secret_access_key': feed['SECRET_ACCESS_KEY'],
     } for feed in env['FEEDS']]
-    feed_auth_header_getter = functools.partial(
-        feed_auth_headers,
-        access_key=env['FEED_ACCESS_KEY_ID'],
-        secret_key=env['FEED_SECRET_ACCESS_KEY'],
-    )
 
     incoming_key_pairs = {
         key_pair['KEY_ID']: key_pair['SECRET_KEY']
@@ -70,7 +67,7 @@ async def run_application():
         port, ip_whitelist, incoming_key_pairs,
     )
     await create_outgoing_application(
-        feed_auth_header_getter, feed_endpoints,
+        feed_endpoints,
         es_bulk_auth_header_getter, es_endpoint,
     )
 
@@ -166,13 +163,13 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
     app_logger.debug('Creating listening web application: done')
 
 
-async def create_outgoing_application(feed_auth_header_getter, feed_endpoints,
+async def create_outgoing_application(feed_endpoints,
                                       es_bulk_auth_header_getter, es_endpoint):
     async with aiohttp.ClientSession() as session:
         feeds = [
             repeat_even_on_exception(functools.partial(
                 ingest_feed,
-                session, feed_auth_header_getter, feed_endpoint,
+                session, feed_endpoint,
                 es_bulk_auth_header_getter, es_endpoint
             ))
             for feed_endpoint in feed_endpoints
@@ -198,11 +195,11 @@ async def repeat_even_on_exception(never_ending_coroutine):
             await asyncio.sleep(EXCEPTION_INTERVAL)
 
 
-async def ingest_feed(session, feed_auth_header_getter, feed_endpoint,
+async def ingest_feed(session, feed_endpoint,
                       es_bulk_auth_header_getter, es_endpoint):
     app_logger = logging.getLogger(__name__)
 
-    async for feed in poll(session, feed_auth_header_getter, feed_endpoint):
+    async for feed in poll(session, feed_endpoint):
         app_logger.debug('Converting feed to ES bulk ingest commands...')
         es_bulk_contents = es_bulk(feed).encode('utf-8')
         app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
@@ -217,26 +214,30 @@ async def ingest_feed(session, feed_auth_header_getter, feed_endpoint,
         app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
 
 
-async def poll(session, feed_auth_header_getter, feed):
+async def poll(session, feed):
     app_logger = logging.getLogger(__name__)
 
     href = feed['seed']
     while True:
         app_logger.debug('Polling')
-        result = await session.get(href, headers=feed_auth_header_getter(url=href))
+        result = await session.get(href, headers=feed_auth_headers(
+            access_key=feed['access_key_id'],
+            secret_key=feed['secret_access_key'],
+            url=href,
+        ))
 
         app_logger.debug('Fetching contents of feed...')
         feed_contents = await result.content.read()
         app_logger.debug('Fetching contents of feed: done (%s)', feed_contents)
 
         app_logger.debug('Parsing JSON...')
-        feed = json.loads(feed_contents)
+        feed_parsed = json.loads(feed_contents)
         app_logger.debug('Parsed')
 
-        yield feed
+        yield feed_parsed
 
         app_logger.debug('Finding next URL...')
-        href = next_href(feed)
+        href = next_href(feed_parsed)
         app_logger.debug('Finding next URL: done (%s)', href)
 
         if href:
