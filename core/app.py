@@ -45,9 +45,8 @@ async def run_application():
     )
 
     incoming_key_pairs = {
-        key_id: secret_key
-        for key_pair in env['INCOMING_ACCESS_KEY_PAIRS'].split(',')
-        for key_id, secret_key in [key_pair.split(':')]
+        key_pair['KEY_ID']: key_pair['SECRET_KEY']
+        for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']
     }
     ip_whitelist = env['INCOMING_IP_WHITELIST'].split(',')
 
