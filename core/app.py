@@ -37,7 +37,9 @@ async def run_application():
 
     port = env['PORT']
 
-    feed_endpoints = env['FEED_ENDPOINTS']
+    feed_endpoints = [{
+        'url': feed['URL'],
+    } for feed in env['FEED_ENDPOINTS']]
     feed_auth_header_getter = functools.partial(
         feed_auth_headers,
         access_key=env['FEED_ACCESS_KEY_ID'],
@@ -215,10 +217,10 @@ async def ingest_feed(session, feed_auth_header_getter, feed_endpoint,
         app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
 
 
-async def poll(session, feed_auth_header_getter, seed_url):
+async def poll(session, feed_auth_header_getter, seed):
     app_logger = logging.getLogger(__name__)
 
-    href = seed_url
+    href = seed['url']
     while True:
         app_logger.debug('Polling')
         result = await session.get(href, headers=feed_auth_header_getter(url=href))
@@ -240,7 +242,7 @@ async def poll(session, feed_auth_header_getter, seed_url):
         if href:
             app_logger.debug('Will immediatly poll (%s)', href)
         else:
-            href = seed_url
+            href = seed['URL']
             app_logger.debug('Going back to seed')
             app_logger.debug('Waiting to poll (%s)', href)
             await asyncio.sleep(POLLING_INTERVAL)
