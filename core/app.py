@@ -7,14 +7,17 @@ import json
 import logging
 import os
 import sys
-import time
 
 import aiohttp
 from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
 
-from .utils import normalise_environment
+from .utils import (
+    ExpiringSet,
+    flatten,
+    normalise_environment,
+)
 
 POLLING_INTERVAL = 5
 EXCEPTION_INTERVAL = 60
@@ -311,39 +314,6 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
             f'SignedHeaders={signed_headers}, Signature=' + signature()
         ),
     }
-
-
-def flatten(list_to_flatten):
-    return [
-        item
-        for sublist in list_to_flatten
-        for item in sublist
-    ]
-
-
-class ExpiringSet:
-
-    def __init__(self, seconds):
-        self._seconds = seconds
-        self._expiries = {}
-
-    def _remove_old_keys(self, now):
-        now = int(time.time())
-        self._expiries = {
-            key: expires
-            for key, expires in self._expiries.items()
-            if expires > now
-        }
-
-    def add(self, item):
-        now = int(time.time())
-        self._remove_old_keys(now)
-        self._expiries[item] = now + self._seconds
-
-    def __contains__(self, item):
-        now = int(time.time())
-        self._remove_old_keys(now)
-        return item in self._expiries
 
 
 def setup_logging():

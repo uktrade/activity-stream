@@ -1,4 +1,38 @@
 import itertools
+import time
+
+
+class ExpiringSet:
+
+    def __init__(self, seconds):
+        self._seconds = seconds
+        self._expiries = {}
+
+    def _remove_old_keys(self, now):
+        now = int(time.time())
+        self._expiries = {
+            key: expires
+            for key, expires in self._expiries.items()
+            if expires > now
+        }
+
+    def add(self, item):
+        now = int(time.time())
+        self._remove_old_keys(now)
+        self._expiries[item] = now + self._seconds
+
+    def __contains__(self, item):
+        now = int(time.time())
+        self._remove_old_keys(now)
+        return item in self._expiries
+
+
+def flatten(list_to_flatten):
+    return [
+        item
+        for sublist in list_to_flatten
+        for item in sublist
+    ]
 
 
 def normalise_environment(key_values):
