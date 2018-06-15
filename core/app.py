@@ -39,7 +39,7 @@ async def run_application():
 
     feed_endpoints = [{
         'url': feed['URL'],
-    } for feed in env['FEED_ENDPOINTS']]
+    } for feed in env['FEEDS']]
     feed_auth_header_getter = functools.partial(
         feed_auth_headers,
         access_key=env['FEED_ACCESS_KEY_ID'],
