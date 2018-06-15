@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import json
 import os
 from subprocess import Popen
@@ -9,13 +10,14 @@ from unittest.mock import Mock, patch
 import aiohttp
 from aiohttp import web
 from freezegun import freeze_time
+import mohawk
 
 from core.app import run_application
 
 
-class TestApplication(unittest.TestCase):
+class TestBase(unittest.TestCase):
 
-    def setUp_manual(self, env, feed, es_bulk):
+    def setup_manual(self, env, feed, es_bulk):
         ''' Test setUp function that can be customised on a per-test basis '''
         self.os_environ_patcher = patch.dict(os.environ, {
             **mock_env(),
@@ -61,23 +63,347 @@ class TestApplication(unittest.TestCase):
         self.app_runner_patcher.stop()
         self.os_environ_patcher.stop()
 
+
+class TestConnection(TestBase):
+
     def test_application_accepts_http(self):
         es_bulk = [asyncio.Future()]
-        self.setUp_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
-        self.assertTrue(is_http_accepted())
+        self.assertTrue(is_http_accepted_eventually())
+
+
+class TestAuthentication(TestBase):
+
+    def test_no_auth_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        text, status = self.loop.run_until_complete(post_text_no_auth(url, '1.2.3.4'))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Authentication credentials were not provided."}')
+
+    def test_bad_id_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id-incorrect', 'incoming-some-secret-1', url, 'POST', '', '',
+        )
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_bad_secret_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-2', url, 'POST', '', '',
+        )
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_bad_method_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', '',
+        )
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_bad_content_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', 'content', '',
+        )
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_bad_content_type_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', 'some-type',
+        )
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_no_content_type_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', 'some-type',
+        )
+        x_forwarded_for = '1.2.3.4'
+        _, status = self.loop.run_until_complete(
+            post_text_no_content_type(url, auth, x_forwarded_for))
+        self.assertEqual(status, 401)
+
+    def test_time_skew_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        past = datetime.datetime.now() + datetime.timedelta(seconds=-61)
+        with freeze_time(past):
+            auth = auth_header(
+                'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
+            )
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_repeat_auth_then_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
+        )
+        x_forwarded_for = '1.2.3.4'
+        _, status_1 = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status_1, 200)
+
+        text_2, status_2 = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status_2, 401)
+        self.assertEqual(text_2, '{"details": "Incorrect authentication credentials."}')
+
+    def test_nonces_cleared(self):
+        ''' Makes duplicate requests, but with the code patched so the nonce expiry time
+            is shorter then the allowed Hawk skew. The second request succeeding gives
+            evidence that the cache of nonces was cleared.
+        '''
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        now = datetime.datetime.now()
+        past = now + datetime.timedelta(seconds=-45)
+
+        with patch('core.app.NONCE_EXPIRE', 30):
+            asyncio.ensure_future(run_application(), loop=self.loop)
+            is_http_accepted_eventually()
+
+            url = 'http://127.0.0.1:8080/'
+            x_forwarded_for = '1.2.3.4'
+
+            with freeze_time(past):
+                auth = auth_header(
+                    'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
+                )
+                _, status_1 = self.loop.run_until_complete(
+                    post_text(url, auth, x_forwarded_for))
+            self.assertEqual(status_1, 200)
+
+            with freeze_time(now):
+                _, status_2 = self.loop.run_until_complete(
+                    post_text(url, auth, x_forwarded_for))
+            self.assertEqual(status_2, 200)
+
+    def test_no_x_forwarded_for_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
+        )
+        text, status = self.loop.run_until_complete(post_text_no_x_forwarded_for(url, auth))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_bad_x_forwarded_for_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
+        )
+        x_forwarded_for = '3.4.5.6'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_at_end_x_forwarded_for_401(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
+        )
+        x_forwarded_for = '3.4.5.6,1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    def test_second_id_returns_object(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id-2', 'incoming-some-secret-2', url, 'POST', '', '',
+        )
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 200)
+        self.assertEqual(text, '{"secret": "to-be-hidden"}')
+
+    def test_post_returns_object(self):
+        es_bulk = [asyncio.Future()]
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            mock_feed,
+            es_bulk,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/'
+        auth = auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
+        )
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 200)
+        self.assertEqual(text, '{"secret": "to-be-hidden"}')
+
+
+class TestApplication(TestBase):
 
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
-    def test_feed_passed_to_elastic_search(self, _):
+    def test_single_page(self, _):
         es_bulk = [asyncio.Future()]
-        self.setUp_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -127,10 +453,10 @@ class TestApplication(unittest.TestCase):
         self.assertEqual(es_bulk_request_dicts[3]['activity'], 'export-oportunity-enquiry-made')
         self.assertEqual(es_bulk_request_dicts[3]['company_house_number'], '82312')
 
-    def test_multipage_second_page_passed_to_elastic_search(self):
+    def test_multipage(self):
         es_bulk = [asyncio.Future(), asyncio.Future()]
-        self.setUp_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_multipage_1.json'},
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_multipage_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -148,11 +474,15 @@ class TestApplication(unittest.TestCase):
         self.assertEqual(es_bulk_request_dicts[0]['index']['_id'],
                          'export-oportunity-enquiry-made-second-page-4986999')
 
-    def test_two_feeds_both_pages_passed_to_elastic_search(self):
+    def test_two_feeds(self):
         es_bulk = [asyncio.Future(), asyncio.Future()]
-        self.setUp_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json,'
-                               'http://localhost:8081/tests_fixture_2.json'},
+        self.setup_manual(
+            {
+                'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json',
+                'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_2.json',
+                'FEEDS__2__ACCESS_KEY_ID': 'feed-some-id',
+                'FEEDS__2__SECRET_ACCESS_KEY': '?[!@$%^%',
+            },
             mock_feed,
             es_bulk,
         )
@@ -180,7 +510,7 @@ class TestApplication(unittest.TestCase):
         self.assertIn('export-oportunity-enquiry-made-49863', ids)
         self.assertIn('export-oportunity-enquiry-made-42863', ids)
 
-    def test_single_feed_broken_sleeps_60_seconds_then_retries(self):
+    def test_on_bad_json_retries(self):
         es_bulk = [asyncio.Future(), asyncio.Future()]
 
         sent_broken = False
@@ -195,8 +525,8 @@ class TestApplication(unittest.TestCase):
             sent_broken = True
             return feed_contents_maybe_broken
 
-        self.setUp_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed_broken_then_fixed,
             es_bulk,
         )
@@ -235,7 +565,7 @@ class TestProcess(unittest.TestCase):
         self.es_runner = loop.run_until_complete(run_es_application(Mock()))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
-            **{'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'}
+            **{'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'}
         })
 
     def tearDown(self):
@@ -247,18 +577,18 @@ class TestProcess(unittest.TestCase):
         loop.run_until_complete(self.es_runner.cleanup())
 
     def test_server_accepts_http(self):
-        self.assertTrue(is_http_accepted())
+        self.assertTrue(is_http_accepted_eventually())
 
 
-def is_http_accepted():
+def is_http_accepted_eventually():
     loop = asyncio.get_event_loop()
-    connected_future = asyncio.ensure_future(_is_http_accepted(), loop=loop)
+    connected_future = asyncio.ensure_future(_is_http_accepted_eventually(), loop=loop)
     return loop.run_until_complete(connected_future)
 
 
-async def _is_http_accepted():
-    def is_connection_error(e):
-        return 'Cannot connect to host' in str(e)
+async def _is_http_accepted_eventually():
+    def is_connection_error(exception):
+        return 'Cannot connect to host' in str(exception)
 
     attempts = 0
     while attempts < 20:
@@ -266,18 +596,18 @@ async def _is_http_accepted():
             async with aiohttp.ClientSession() as session:
                 await session.get('http://127.0.0.1:8080', timeout=1)
             return True
-        except aiohttp.client_exceptions.ClientConnectorError as e:
+        except aiohttp.client_exceptions.ClientConnectorError as exception:
             attempts += 1
             await asyncio.sleep(0.2)
-            if not is_connection_error(e):
+            if not is_connection_error(exception):
                 return True
 
     return False
 
 
 def mock_feed(path):
-    with open('core/' + path, 'rb') as f:
-        return f.read().decode('utf-8')
+    with open('core/' + path, 'rb') as file:
+        return file.read().decode('utf-8')
 
 
 async def run_feed_application(feed, feed_requested_callback, port):
@@ -310,6 +640,53 @@ async def run_es_application(es_bulk_request_callback):
     return runner
 
 
+def auth_header(key_id, secret_key, url, method, content, content_type):
+    return mohawk.Sender({
+        'id': key_id,
+        'key': secret_key,
+        'algorithm': 'sha256',
+    }, url, method, content=content, content_type=content_type).request_header
+
+
+async def post_text(url, auth, x_forwarded_for):
+    async with aiohttp.ClientSession() as session:
+        result = await session.post(url, headers={
+            'Authorization': auth,
+            'Content-Type': '',
+            'X-Forwarded-For': x_forwarded_for,
+        }, timeout=1)
+    return (await result.text(), result.status)
+
+
+async def post_text_no_auth(url, x_forwarded_for):
+    async with aiohttp.ClientSession() as session:
+        result = await session.post(url, headers={
+            'Content-Type': '',
+            'X-Forwarded-For': x_forwarded_for,
+        }, timeout=1)
+    return (await result.text(), result.status)
+
+
+async def post_text_no_x_forwarded_for(url, auth):
+    async with aiohttp.ClientSession() as session:
+        headers = {
+            'Authorization': auth,
+            'Content-Type': '',
+        }
+        result = await session.post(url, headers=headers, timeout=1)
+    return (await result.text(), result.status)
+
+
+async def post_text_no_content_type(url, auth, x_forwarded_for):
+    async with aiohttp.ClientSession() as session:
+        result = await session.post(url, headers={
+            'Authorization': auth,
+            'X-Forwarded-For': x_forwarded_for,
+        }, timeout=1)
+
+    return (await result.text(), result.status)
+
+
 def mock_env():
     return {
         'PORT': '8080',
@@ -319,6 +696,12 @@ def mock_env():
         'ELASTICSEARCH_PORT': '8082',
         'ELASTICSEARCH_PROTOCOL': 'http',
         'ELASTICSEARCH_REGION': 'us-east-2',
-        'FEED_ACCESS_KEY_ID': 'feed-some-id',
-        'FEED_SECRET_ACCESS_KEY': '?[!@$%^%',
+        'FEEDS__1__ACCESS_KEY_ID': 'feed-some-id',
+        'FEEDS__1__SECRET_ACCESS_KEY': '?[!@$%^%',
+        'INCOMING_ACCESS_KEY_PAIRS__1__KEY_ID': 'incoming-some-id-1',
+        'INCOMING_ACCESS_KEY_PAIRS__1__SECRET_KEY': 'incoming-some-secret-1',
+        'INCOMING_ACCESS_KEY_PAIRS__2__KEY_ID': 'incoming-some-id-2',
+        'INCOMING_ACCESS_KEY_PAIRS__2__SECRET_KEY': 'incoming-some-secret-2',
+        'INCOMING_IP_WHITELIST__1': '1.2.3.4',
+        'INCOMING_IP_WHITELIST__2': '2.3.4.5',
     }

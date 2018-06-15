@@ -11,57 +11,165 @@ import sys
 import aiohttp
 from aiohttp import web
 import mohawk
+from mohawk.exc import HawkFail
+
+from .utils import (
+    ExpiringSet,
+    flatten,
+    normalise_environment,
+)
 
 POLLING_INTERVAL = 5
 EXCEPTION_INTERVAL = 60
+NONCE_EXPIRE = 120
+
+NOT_PROVIDED = 'Authentication credentials were not provided.'
+INCORRECT = 'Incorrect authentication credentials.'
+MISSING_CONTENT_TYPE = 'Content-Type header was not set. ' + \
+                       'It must be set for authentication, even if as the empty string.'
 
 
 async def run_application():
     app_logger = logging.getLogger(__name__)
 
     app_logger.debug('Examining environment...')
-    PORT = os.environ['PORT']
+    env = normalise_environment(os.environ)
 
-    feed_endpoints = os.environ['FEED_ENDPOINTS'].split(',')
-    feed_auth_header_getter = functools.partial(
-        feed_auth_headers,
-        access_key=os.environ['FEED_ACCESS_KEY_ID'],
-        secret_key=os.environ['FEED_SECRET_ACCESS_KEY'],
-    )
+    port = env['PORT']
 
-    es_host = os.environ['ELASTICSEARCH_HOST']
+    feed_endpoints = [{
+        'seed': feed['SEED'],
+        'access_key_id': feed['ACCESS_KEY_ID'],
+        'secret_access_key': feed['SECRET_ACCESS_KEY'],
+    } for feed in env['FEEDS']]
+
+    incoming_key_pairs = {
+        key_pair['KEY_ID']: key_pair['SECRET_KEY']
+        for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']
+    }
+    ip_whitelist = env['INCOMING_IP_WHITELIST']
+
+    es_host = env['ELASTICSEARCH_HOST']
     es_path = '/_bulk'
     es_bulk_auth_header_getter = functools.partial(
         es_bulk_auth_headers,
-        access_key=os.environ['ELASTICSEARCH_AWS_ACCESS_KEY_ID'],
-        secret_key=os.environ['ELASTICSEARCH_AWS_SECRET_ACCESS_KEY'],
-        region=os.environ['ELASTICSEARCH_REGION'],
+        access_key=env['ELASTICSEARCH_AWS_ACCESS_KEY_ID'],
+        secret_key=env['ELASTICSEARCH_AWS_SECRET_ACCESS_KEY'],
+        region=env['ELASTICSEARCH_REGION'],
         host=es_host,
         path=es_path,
     )
-    es_endpoint = os.environ['ELASTICSEARCH_PROTOCOL'] + '://' + \
-        es_host + ':' + os.environ['ELASTICSEARCH_PORT'] + es_path
+    es_endpoint = env['ELASTICSEARCH_PROTOCOL'] + '://' + \
+        es_host + ':' + env['ELASTICSEARCH_PORT'] + es_path
     app_logger.debug('Examining environment: done')
 
+    await create_incoming_application(
+        port, ip_whitelist, incoming_key_pairs,
+    )
+    await create_outgoing_application(
+        feed_endpoints,
+        es_bulk_auth_header_getter, es_endpoint,
+    )
+
+
+async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
+    app_logger = logging.getLogger(__name__)
+
+    def lookup_credentials(passed_access_key_id):
+        if passed_access_key_id not in incoming_key_pairs:
+            raise HawkFail(f'No Hawk ID of {passed_access_key_id}')
+
+        return {
+            'id': passed_access_key_id,
+            'key': incoming_key_pairs[passed_access_key_id],
+            'algorithm': 'sha256',
+        }
+
+    # This would need to be stored externally if this was ever to be load balanced,
+    # otherwise replay attacks could succeed by hitting another instance
+    seen_nonces = ExpiringSet(NONCE_EXPIRE)
+
+    def seen_nonce(access_key_id, nonce, _):
+        nonce_tuple = (access_key_id, nonce)
+        seen = nonce_tuple in seen_nonces
+        if not seen:
+            seen_nonces.add(nonce_tuple)
+        return seen
+
+    async def raise_if_not_authentic(request):
+        mohawk.Receiver(
+            lookup_credentials,
+            request.headers['Authorization'],
+            str(request.url),
+            request.method,
+            content=await request.content.read(),
+            content_type=request.headers['Content-Type'],
+            seen_nonce=seen_nonce,
+        )
+
+    @web.middleware
+    async def authenticate(request, handler):
+        if 'X-Forwarded-For' not in request.headers:
+            app_logger.warning(
+                'Failed authentication: no X-Forwarded-For header passed'
+            )
+            return web.json_response({
+                'details': INCORRECT,
+            }, status=401)
+
+        remote_address = request.headers['X-Forwarded-For'].split(',')[0].strip()
+
+        if remote_address not in ip_whitelist:
+            app_logger.warning(
+                'Failed authentication: the X-Forwarded-For header did not '
+                'start with an IP in the whitelist'
+            )
+            return web.json_response({
+                'details': INCORRECT,
+            }, status=401)
+
+        if 'Authorization' not in request.headers:
+            return web.json_response({
+                'details': NOT_PROVIDED,
+            }, status=401)
+
+        if 'Content-Type' not in request.headers:
+            return web.json_response({
+                'details': MISSING_CONTENT_TYPE,
+            }, status=401)
+
+        try:
+            await raise_if_not_authentic(request)
+        except HawkFail as exception:
+            app_logger.warning('Failed authentication %s', exception)
+            return web.json_response({
+                'details': INCORRECT,
+            }, status=401)
+
+        return await handler(request)
+
     async def handle(_):
-        return web.Response(text='')
+        return web.json_response({'secret': 'to-be-hidden'})
 
     app_logger.debug('Creating listening web application...')
-    app = web.Application()
-    app.add_routes([web.get('/', handle)])
+    app = web.Application(middlewares=[authenticate])
+    app.add_routes([web.post('/', handle)])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 
     runner = web.AppRunner(app, access_log_format=access_log_format)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', PORT)
+    site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
     app_logger.debug('Creating listening web application: done')
 
+
+async def create_outgoing_application(feed_endpoints,
+                                      es_bulk_auth_header_getter, es_endpoint):
     async with aiohttp.ClientSession() as session:
         feeds = [
-            repeat_forever_even_on_exception(app_logger, functools.partial(
+            repeat_even_on_exception(functools.partial(
                 ingest_feed,
-                app_logger, session, feed_auth_header_getter, feed_endpoint,
+                session, feed_endpoint,
                 es_bulk_auth_header_getter, es_endpoint
             ))
             for feed_endpoint in feed_endpoints
@@ -69,12 +177,14 @@ async def run_application():
         await asyncio.gather(*feeds)
 
 
-async def repeat_forever_even_on_exception(app_logger, never_ending_coroutine):
+async def repeat_even_on_exception(never_ending_coroutine):
+    app_logger = logging.getLogger(__name__)
+
     while True:
         try:
             await never_ending_coroutine()
-        except BaseException as e:
-            app_logger.warning('Polling feed raised exception: %s', e)
+        except BaseException as exception:
+            app_logger.warning('Polling feed raised exception: %s', exception)
         else:
             app_logger.warning(
                 'Polling feed finished without exception. '
@@ -85,9 +195,11 @@ async def repeat_forever_even_on_exception(app_logger, never_ending_coroutine):
             await asyncio.sleep(EXCEPTION_INTERVAL)
 
 
-async def ingest_feed(app_logger, session, feed_auth_header_getter, feed_endpoint,
+async def ingest_feed(session, feed_endpoint,
                       es_bulk_auth_header_getter, es_endpoint):
-    async for feed in poll(app_logger, session, feed_auth_header_getter, feed_endpoint):
+    app_logger = logging.getLogger(__name__)
+
+    async for feed in poll(session, feed_endpoint):
         app_logger.debug('Converting feed to ES bulk ingest commands...')
         es_bulk_contents = es_bulk(feed).encode('utf-8')
         app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
@@ -102,30 +214,36 @@ async def ingest_feed(app_logger, session, feed_auth_header_getter, feed_endpoin
         app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
 
 
-async def poll(app_logger, session, feed_auth_header_getter, seed_url):
-    href = seed_url
+async def poll(session, feed):
+    app_logger = logging.getLogger(__name__)
+
+    href = feed['seed']
     while True:
         app_logger.debug('Polling')
-        result = await session.get(href, headers=feed_auth_header_getter(url=href))
+        result = await session.get(href, headers=feed_auth_headers(
+            access_key=feed['access_key_id'],
+            secret_key=feed['secret_access_key'],
+            url=href,
+        ))
 
         app_logger.debug('Fetching contents of feed...')
         feed_contents = await result.content.read()
         app_logger.debug('Fetching contents of feed: done (%s)', feed_contents)
 
         app_logger.debug('Parsing JSON...')
-        feed = json.loads(feed_contents)
+        feed_parsed = json.loads(feed_contents)
         app_logger.debug('Parsed')
 
-        yield feed
+        yield feed_parsed
 
         app_logger.debug('Finding next URL...')
-        href = next_href(feed)
+        href = next_href(feed_parsed)
         app_logger.debug('Finding next URL: done (%s)', href)
 
         if href:
             app_logger.debug('Will immediatly poll (%s)', href)
         else:
-            href = seed_url
+            href = feed['seed']
             app_logger.debug('Going back to seed')
             app_logger.debug('Waiting to poll (%s)', href)
             await asyncio.sleep(POLLING_INTERVAL)
@@ -157,48 +275,47 @@ def feed_auth_headers(access_key, secret_key, url):
 def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
     service = 'es'
     method = 'POST'
-
-    def sign(key, msg):
-        return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
-
-    def getSignatureKey(key, dateStamp, regionName, serviceName):
-        kDate = sign(('AWS4' + key).encode('utf-8'), dateStamp)
-        kRegion = sign(kDate, regionName)
-        kService = sign(kRegion, serviceName)
-        kSigning = sign(kService, 'aws4_request')
-        return kSigning
-
-    t = datetime.datetime.utcnow()
-    amzdate = t.strftime('%Y%m%dT%H%M%SZ')
-    datestamp = t.strftime('%Y%m%d')
-    canonical_uri = path
-    canonical_querystring = ''
-    canonical_headers = 'content-type:application/x-ndjson\n' + \
-        'host:' + host + '\n' + 'x-amz-date:' + amzdate + '\n'
     signed_headers = 'content-type;host;x-amz-date'
-    payload_hash = hashlib.sha256(payload).hexdigest()
-
-    canonical_request = method + '\n' + canonical_uri + '\n' + canonical_querystring + \
-        '\n' + canonical_headers + '\n' + signed_headers + '\n' + payload_hash
-
     algorithm = 'AWS4-HMAC-SHA256'
-    credential_scope = datestamp + '/' + region + '/' + service + '/' + 'aws4_request'
-    string_to_sign = algorithm + '\n' + amzdate + '\n' + credential_scope + \
-        '\n' + hashlib.sha256(canonical_request.encode('utf-8')).hexdigest()
-    signing_key = getSignatureKey(secret_key, datestamp, region, service)
-    signature = hmac.new(signing_key, (string_to_sign).encode('utf-8'), hashlib.sha256).hexdigest()
-    authorization_header = (algorithm + ' ' + 'Credential=' + access_key + '/' + credential_scope +
-                            ', ' + 'SignedHeaders=' + signed_headers +
-                            ', ' + 'Signature=' + signature)
+
+    now = datetime.datetime.utcnow()
+    amzdate = now.strftime('%Y%m%dT%H%M%SZ')
+    datestamp = now.strftime('%Y%m%d')
+
+    credential_scope = f'{datestamp}/{region}/{service}/aws4_request'
+
+    def signature():
+        def canonical_request():
+            canonical_uri = path
+            canonical_querystring = ''
+            canonical_headers = \
+                f'content-type:application/x-ndjson\n' + \
+                f'host:{host}\nx-amz-date:{amzdate}\n'
+            payload_hash = hashlib.sha256(payload).hexdigest()
+
+            return f'{method}\n{canonical_uri}\n{canonical_querystring}\n' + \
+                   f'{canonical_headers}\n{signed_headers}\n{payload_hash}'
+
+        def sign(key, msg):
+            return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
+
+        string_to_sign = \
+            f'{algorithm}\n{amzdate}\n{credential_scope}\n' + \
+            hashlib.sha256(canonical_request().encode('utf-8')).hexdigest()
+
+        date_key = sign(('AWS4' + secret_key).encode('utf-8'), datestamp)
+        region_key = sign(date_key, region)
+        service_key = sign(region_key, service)
+        request_key = sign(service_key, 'aws4_request')
+        return sign(request_key, string_to_sign).hex()
 
     return {
         'x-amz-date': amzdate,
-        'Authorization': authorization_header,
+        'Authorization': (
+            f'{algorithm} Credential={access_key}/{credential_scope}, ' +
+            f'SignedHeaders={signed_headers}, Signature=' + signature()
+        ),
     }
-
-
-def flatten(l):
-    return [item for sublist in l for item in sublist]
 
 
 def setup_logging():
@@ -215,6 +332,6 @@ def setup_logging():
 if __name__ == '__main__':
     setup_logging()
 
-    loop = asyncio.get_event_loop()
-    asyncio.ensure_future(run_application(), loop=loop)
-    loop.run_forever()
+    LOOP = asyncio.get_event_loop()
+    asyncio.ensure_future(run_application(), loop=LOOP)
+    LOOP.run_forever()

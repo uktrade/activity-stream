@@ -14,17 +14,21 @@ jobs:
           paths:
             - /root/cache/pip
             - /root/cache/pre-commit
+            - ./cc-test-reporter
       - run:
           name: Install dependencies
           command: |
             pip install --cache-dir /root/cache/pip -r requirements.txt
             pip install --cache-dir /root/cache/pip pre-commit==1.8.2
             pre-commit install --install-hooks
+            curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+            chmod +x ./cc-test-reporter
       - save_cache:
           key: v1-dependencies-{{ checksum "requirements.txt" }}-{{ checksum ".pre-commit-config.yaml" }}
           paths:
             - /root/cache/pip
             - /root/cache/pre-commit
+            - ./cc-test-reporter
       - run:
           name: Run linting
           command: pre-commit run --all-files
@@ -32,4 +36,7 @@ jobs:
           name: Run tests
           command: |
             set -xu
+            ./cc-test-reporter before-build
             ./tests.sh
+            coverage xml
+            ./cc-test-reporter after-build --exit-code $?

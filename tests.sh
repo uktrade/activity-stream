@@ -1,3 +1,3 @@
 #!/bin/bash -xe
 
-python -m unittest
+coverage run -m unittest
