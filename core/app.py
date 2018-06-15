@@ -48,7 +48,7 @@ async def run_application():
         key_pair['KEY_ID']: key_pair['SECRET_KEY']
         for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']
     }
-    ip_whitelist = env['INCOMING_IP_WHITELIST'].split(',')
+    ip_whitelist = env['INCOMING_IP_WHITELIST']
 
     es_host = env['ELASTICSEARCH_HOST']
     es_path = '/_bulk'

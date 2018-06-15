@@ -698,5 +698,6 @@ def mock_env():
         'INCOMING_ACCESS_KEY_PAIRS__1__SECRET_KEY': 'incoming-some-secret-1',
         'INCOMING_ACCESS_KEY_PAIRS__2__KEY_ID': 'incoming-some-id-2',
         'INCOMING_ACCESS_KEY_PAIRS__2__SECRET_KEY': 'incoming-some-secret-2',
-        'INCOMING_IP_WHITELIST': '1.2.3.4,2.3.4.5',
+        'INCOMING_IP_WHITELIST__1': '1.2.3.4',
+        'INCOMING_IP_WHITELIST__2': '2.3.4.5',
     }
