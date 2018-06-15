@@ -37,7 +37,7 @@ async def run_application():
 
     port = env['PORT']
 
-    feed_endpoints = env['FEED_ENDPOINTS'].split(',')
+    feed_endpoints = env['FEED_ENDPOINTS']
     feed_auth_header_getter = functools.partial(
         feed_auth_headers,
         access_key=env['FEED_ACCESS_KEY_ID'],

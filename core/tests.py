@@ -69,7 +69,7 @@ class TestConnection(TestBase):
     def test_application_accepts_http(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -83,7 +83,7 @@ class TestAuthentication(TestBase):
     def test_no_auth_then_401(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -99,7 +99,7 @@ class TestAuthentication(TestBase):
     def test_bad_id_then_401(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -119,7 +119,7 @@ class TestAuthentication(TestBase):
     def test_bad_secret_then_401(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -139,7 +139,7 @@ class TestAuthentication(TestBase):
     def test_bad_method_then_401(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -159,7 +159,7 @@ class TestAuthentication(TestBase):
     def test_bad_content_then_401(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -179,7 +179,7 @@ class TestAuthentication(TestBase):
     def test_bad_content_type_then_401(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -199,7 +199,7 @@ class TestAuthentication(TestBase):
     def test_no_content_type_then_401(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -219,7 +219,7 @@ class TestAuthentication(TestBase):
     def test_time_skew_then_401(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -241,7 +241,7 @@ class TestAuthentication(TestBase):
     def test_repeat_auth_then_401(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -268,7 +268,7 @@ class TestAuthentication(TestBase):
         '''
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -299,7 +299,7 @@ class TestAuthentication(TestBase):
     def test_no_x_forwarded_for_401(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -318,7 +318,7 @@ class TestAuthentication(TestBase):
     def test_bad_x_forwarded_for_401(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -338,7 +338,7 @@ class TestAuthentication(TestBase):
     def test_at_end_x_forwarded_for_401(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -358,7 +358,7 @@ class TestAuthentication(TestBase):
     def test_second_id_returns_object(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -378,7 +378,7 @@ class TestAuthentication(TestBase):
     def test_post_returns_object(self):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -403,7 +403,7 @@ class TestApplication(TestBase):
     def test_single_page(self, _):
         es_bulk = [asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -456,7 +456,7 @@ class TestApplication(TestBase):
     def test_multipage(self):
         es_bulk = [asyncio.Future(), asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_multipage_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_multipage_1.json'},
             mock_feed,
             es_bulk,
         )
@@ -477,8 +477,10 @@ class TestApplication(TestBase):
     def test_two_feeds(self):
         es_bulk = [asyncio.Future(), asyncio.Future()]
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json,'
-                               'http://localhost:8081/tests_fixture_2.json'},
+            {
+                'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json',
+                'FEED_ENDPOINTS__2': 'http://localhost:8081/tests_fixture_2.json',
+            },
             mock_feed,
             es_bulk,
         )
@@ -522,7 +524,7 @@ class TestApplication(TestBase):
             return feed_contents_maybe_broken
 
         self.setup_manual(
-            {'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'},
+            {'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'},
             mock_feed_broken_then_fixed,
             es_bulk,
         )
@@ -561,7 +563,7 @@ class TestProcess(unittest.TestCase):
         self.es_runner = loop.run_until_complete(run_es_application(Mock()))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
-            **{'FEED_ENDPOINTS': 'http://localhost:8081/tests_fixture_1.json'}
+            **{'FEED_ENDPOINTS__1': 'http://localhost:8081/tests_fixture_1.json'}
         })
 
     def tearDown(self):
