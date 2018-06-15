@@ -14,6 +14,8 @@ from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
 
+from .utils import normalise_environment
+
 POLLING_INTERVAL = 5
 EXCEPTION_INTERVAL = 60
 NONCE_EXPIRE = 120
@@ -28,34 +30,36 @@ async def run_application():
     app_logger = logging.getLogger(__name__)
 
     app_logger.debug('Examining environment...')
-    port = os.environ['PORT']
+    env = normalise_environment(os.environ)
 
-    feed_endpoints = os.environ['FEED_ENDPOINTS'].split(',')
+    port = env['PORT']
+
+    feed_endpoints = env['FEED_ENDPOINTS'].split(',')
     feed_auth_header_getter = functools.partial(
         feed_auth_headers,
-        access_key=os.environ['FEED_ACCESS_KEY_ID'],
-        secret_key=os.environ['FEED_SECRET_ACCESS_KEY'],
+        access_key=env['FEED_ACCESS_KEY_ID'],
+        secret_key=env['FEED_SECRET_ACCESS_KEY'],
     )
 
     incoming_key_pairs = {
         key_id: secret_key
-        for key_pair in os.environ['INCOMING_ACCESS_KEY_PAIRS'].split(',')
+        for key_pair in env['INCOMING_ACCESS_KEY_PAIRS'].split(',')
         for key_id, secret_key in [key_pair.split(':')]
     }
-    ip_whitelist = os.environ['INCOMING_IP_WHITELIST'].split(',')
+    ip_whitelist = env['INCOMING_IP_WHITELIST'].split(',')
 
-    es_host = os.environ['ELASTICSEARCH_HOST']
+    es_host = env['ELASTICSEARCH_HOST']
     es_path = '/_bulk'
     es_bulk_auth_header_getter = functools.partial(
         es_bulk_auth_headers,
-        access_key=os.environ['ELASTICSEARCH_AWS_ACCESS_KEY_ID'],
-        secret_key=os.environ['ELASTICSEARCH_AWS_SECRET_ACCESS_KEY'],
-        region=os.environ['ELASTICSEARCH_REGION'],
+        access_key=env['ELASTICSEARCH_AWS_ACCESS_KEY_ID'],
+        secret_key=env['ELASTICSEARCH_AWS_SECRET_ACCESS_KEY'],
+        region=env['ELASTICSEARCH_REGION'],
         host=es_host,
         path=es_path,
     )
-    es_endpoint = os.environ['ELASTICSEARCH_PROTOCOL'] + '://' + \
-        es_host + ':' + os.environ['ELASTICSEARCH_PORT'] + es_path
+    es_endpoint = env['ELASTICSEARCH_PROTOCOL'] + '://' + \
+        es_host + ':' + env['ELASTICSEARCH_PORT'] + es_path
     app_logger.debug('Examining environment: done')
 
     await create_incoming_application(
