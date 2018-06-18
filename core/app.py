@@ -38,11 +38,17 @@ async def run_application():
 
     port = env['PORT']
 
-    feed_endpoints = [{
-        'seed': feed['SEED'],
-        'access_key_id': feed['ACCESS_KEY_ID'],
-        'secret_access_key': feed['SECRET_ACCESS_KEY'],
-    } for feed in env['FEEDS']]
+    def parse_feed_config(feed_config):
+        by_feed_type = {
+            'es_raw': lambda: {
+                'seed': feed_config['SEED'],
+                'access_key_id': feed_config['ACCESS_KEY_ID'],
+                'secret_access_key': feed_config['SECRET_ACCESS_KEY'],
+            },
+        }
+        return by_feed_type['es_raw']()
+
+    feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
     incoming_key_pairs = {
         key_pair['KEY_ID']: key_pair['SECRET_KEY']
