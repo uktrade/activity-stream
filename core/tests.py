@@ -691,12 +691,12 @@ async def post_text_no_content_type(url, auth, x_forwarded_for):
 def mock_env():
     return {
         'PORT': '8080',
-        'ELASTICSEARCH_AWS_ACCESS_KEY_ID': 'some-id',
-        'ELASTICSEARCH_AWS_SECRET_ACCESS_KEY': 'aws-secret',
-        'ELASTICSEARCH_HOST': '127.0.0.1',
-        'ELASTICSEARCH_PORT': '8082',
-        'ELASTICSEARCH_PROTOCOL': 'http',
-        'ELASTICSEARCH_REGION': 'us-east-2',
+        'ELASTICSEARCH__AWS_ACCESS_KEY_ID': 'some-id',
+        'ELASTICSEARCH__AWS_SECRET_ACCESS_KEY': 'aws-secret',
+        'ELASTICSEARCH__HOST': '127.0.0.1',
+        'ELASTICSEARCH__PORT': '8082',
+        'ELASTICSEARCH__PROTOCOL': 'http',
+        'ELASTICSEARCH__REGION': 'us-east-2',
         'FEEDS__1__ACCESS_KEY_ID': 'feed-some-id',
         'FEEDS__1__SECRET_ACCESS_KEY': '?[!@$%^%',
         'INCOMING_ACCESS_KEY_PAIRS__1__KEY_ID': 'incoming-some-id-1',

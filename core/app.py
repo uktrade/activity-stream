@@ -50,17 +50,17 @@ async def run_application():
     }
     ip_whitelist = env['INCOMING_IP_WHITELIST']
 
-    es_host = env['ELASTICSEARCH_HOST']
+    es_host = env['ELASTICSEARCH']['HOST']
     es_path = '/_bulk'
     es_endpoint = {
         'host': es_host,
         'path': es_path,
-        'access_key_id': env['ELASTICSEARCH_AWS_ACCESS_KEY_ID'],
-        'secret_key': env['ELASTICSEARCH_AWS_SECRET_ACCESS_KEY'],
-        'region': env['ELASTICSEARCH_REGION'],
+        'access_key_id': env['ELASTICSEARCH']['AWS_ACCESS_KEY_ID'],
+        'secret_key': env['ELASTICSEARCH']['AWS_SECRET_ACCESS_KEY'],
+        'region': env['ELASTICSEARCH']['REGION'],
         'url': (
-            env['ELASTICSEARCH_PROTOCOL'] + '://' +
-            es_host + ':' + env['ELASTICSEARCH_PORT'] + es_path
+            env['ELASTICSEARCH']['PROTOCOL'] + '://' +
+            es_host + ':' + env['ELASTICSEARCH']['PORT'] + es_path
         ),
     }
 
