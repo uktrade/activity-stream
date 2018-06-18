@@ -52,24 +52,25 @@ async def run_application():
 
     es_host = env['ELASTICSEARCH_HOST']
     es_path = '/_bulk'
-    es_bulk_auth_header_getter = functools.partial(
-        es_bulk_auth_headers,
-        access_key=env['ELASTICSEARCH_AWS_ACCESS_KEY_ID'],
-        secret_key=env['ELASTICSEARCH_AWS_SECRET_ACCESS_KEY'],
-        region=env['ELASTICSEARCH_REGION'],
-        host=es_host,
-        path=es_path,
-    )
-    es_endpoint = env['ELASTICSEARCH_PROTOCOL'] + '://' + \
-        es_host + ':' + env['ELASTICSEARCH_PORT'] + es_path
+    es_endpoint = {
+        'host': es_host,
+        'path': es_path,
+        'access_key_id': env['ELASTICSEARCH_AWS_ACCESS_KEY_ID'],
+        'secret_key': env['ELASTICSEARCH_AWS_SECRET_ACCESS_KEY'],
+        'region': env['ELASTICSEARCH_REGION'],
+        'url': (
+            env['ELASTICSEARCH_PROTOCOL'] + '://' +
+            es_host + ':' + env['ELASTICSEARCH_PORT'] + es_path
+        ),
+    }
+
     app_logger.debug('Examining environment: done')
 
     await create_incoming_application(
         port, ip_whitelist, incoming_key_pairs,
     )
     await create_outgoing_application(
-        feed_endpoints,
-        es_bulk_auth_header_getter, es_endpoint,
+        feed_endpoints, es_endpoint,
     )
 
 
@@ -164,14 +165,13 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
     app_logger.debug('Creating listening web application: done')
 
 
-async def create_outgoing_application(feed_endpoints,
-                                      es_bulk_auth_header_getter, es_endpoint):
+async def create_outgoing_application(feed_endpoints, es_endpoint):
     async with aiohttp.ClientSession() as session:
         feeds = [
             repeat_even_on_exception(functools.partial(
                 ingest_feed,
                 session, feed_endpoint,
-                es_bulk_auth_header_getter, es_endpoint
+                es_endpoint,
             ))
             for feed_endpoint in feed_endpoints
         ]
@@ -196,8 +196,7 @@ async def repeat_even_on_exception(never_ending_coroutine):
             await asyncio.sleep(EXCEPTION_INTERVAL)
 
 
-async def ingest_feed(session, feed_endpoint,
-                      es_bulk_auth_header_getter, es_endpoint):
+async def ingest_feed(session, feed_endpoint, es_endpoint):
     app_logger = logging.getLogger(__name__)
 
     async for feed in poll(session, feed_endpoint):
@@ -209,9 +208,16 @@ async def ingest_feed(session, feed_endpoint,
         headers = {
             'Content-Type': 'application/x-ndjson'
         }
-        auth_headers = es_bulk_auth_header_getter(payload=es_bulk_contents)
+        auth_headers = es_bulk_auth_headers(
+            access_key=es_endpoint['access_key_id'],
+            secret_key=es_endpoint['secret_key'],
+            region=es_endpoint['region'],
+            host=es_endpoint['host'],
+            path=es_endpoint['path'],
+            payload=es_bulk_contents,
+        )
         es_result = await session.post(
-            es_endpoint, data=es_bulk_contents, headers={**headers, **auth_headers})
+            es_endpoint['url'], data=es_bulk_contents, headers={**headers, **auth_headers})
         app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
 
 
