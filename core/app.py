@@ -239,7 +239,7 @@ async def poll(session, feed):
         feed_parsed = json.loads(feed_contents)
         app_logger.debug('Parsed')
 
-        yield feed_parsed
+        yield feed.convert_to_bulk_es(feed_parsed)
 
         app_logger.debug('Finding next URL...')
         href = feed.next_href(feed_parsed)
@@ -258,7 +258,7 @@ def es_bulk(feed):
     return '\n'.join(flatten([
         [json.dumps(item['action_and_metadata'], sort_keys=True),
          json.dumps(item['source'], sort_keys=True)]
-        for item in feed['items']
+        for item in feed
     ])) + '\n'
 
 
@@ -336,6 +336,10 @@ class ElasticsearchBulkFeed():
                 'algorithm': 'sha256'
             }, url, method, content_type='', content='').request_header,
         }
+
+    @staticmethod
+    def convert_to_bulk_es(feed):
+        return feed['items']
 
 
 def setup_logging():
