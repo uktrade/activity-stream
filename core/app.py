@@ -40,14 +40,9 @@ async def run_application():
 
     def parse_feed_config(feed_config):
         by_feed_type = {
-            'elasticsearch_bulk': lambda: {
-                'type': feed_config['TYPE'],
-                'seed': feed_config['SEED'],
-                'access_key_id': feed_config['ACCESS_KEY_ID'],
-                'secret_access_key': feed_config['SECRET_ACCESS_KEY'],
-            },
+            'elasticsearch_bulk': ElasticsearchBulkFeed
         }
-        return by_feed_type[feed_config['TYPE']]()
+        return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
     feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
@@ -231,12 +226,12 @@ async def ingest_feed(session, feed_endpoint, es_endpoint):
 async def poll(session, feed):
     app_logger = logging.getLogger(__name__)
 
-    href = feed['seed']
+    href = feed.seed
     while True:
         app_logger.debug('Polling')
         result = await session.get(href, headers=feed_auth_headers(
-            access_key=feed['access_key_id'],
-            secret_key=feed['secret_access_key'],
+            access_key=feed.access_key_id,
+            secret_key=feed.secret_access_key,
             url=href,
         ))
 
@@ -251,20 +246,16 @@ async def poll(session, feed):
         yield feed_parsed
 
         app_logger.debug('Finding next URL...')
-        href = next_href(feed_parsed)
+        href = feed.next_href(feed_parsed)
         app_logger.debug('Finding next URL: done (%s)', href)
 
         if href:
             app_logger.debug('Will immediatly poll (%s)', href)
         else:
-            href = feed['seed']
+            href = feed.seed
             app_logger.debug('Going back to seed')
             app_logger.debug('Waiting to poll (%s)', href)
             await asyncio.sleep(POLLING_INTERVAL)
-
-
-def next_href(feed):
-    return feed['next_url'] if 'next_url' in feed else None
 
 
 def es_bulk(feed):
@@ -330,6 +321,26 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
             f'SignedHeaders={signed_headers}, Signature=' + signature()
         ),
     }
+
+
+class ElasticsearchBulkFeed():
+
+    @classmethod
+    def parse_config(cls, config):
+        return cls(
+            seed=config['SEED'],
+            access_key_id=config['ACCESS_KEY_ID'],
+            secret_access_key=config['SECRET_ACCESS_KEY'],
+        )
+
+    def __init__(self, seed, access_key_id, secret_access_key):
+        self.seed = seed
+        self.access_key_id = access_key_id
+        self.secret_access_key = secret_access_key
+
+    @staticmethod
+    def next_href(feed):
+        return feed['next_url'] if 'next_url' in feed else None
 
 
 def setup_logging():
