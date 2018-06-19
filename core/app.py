@@ -40,13 +40,14 @@ async def run_application():
 
     def parse_feed_config(feed_config):
         by_feed_type = {
-            'es_raw': lambda: {
+            'elasticsearch_bulk': lambda: {
+                'type': feed_config['TYPE'],
                 'seed': feed_config['SEED'],
                 'access_key_id': feed_config['ACCESS_KEY_ID'],
                 'secret_access_key': feed_config['SECRET_ACCESS_KEY'],
             },
         }
-        return by_feed_type['es_raw']()
+        return by_feed_type[feed_config['TYPE']]()
 
     feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 

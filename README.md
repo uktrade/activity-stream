@@ -21,6 +21,7 @@ Activity Stream is a collector of various interactions between people and DIT.
     FEEDS__1__SEED=http://some-endpoint/ \
     FEEDS__1__ACCESS_KEY_ID=feed-some-id \
     FEEDS__1__SECRET_ACCESS_KEY=feed-some-secret \
+    FEEDS__1__TYPE=elasticsearch_bulk \
     ELASTICSEARCH__AWS_ACCESS_KEY_ID=some-id \
     ELASTICSEARCH__AWS_SECRET_ACCESS_KEY=aws-secret \
     ELASTICSEARCH__HOST=127.0.0.1 \
