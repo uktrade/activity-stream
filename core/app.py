@@ -229,11 +229,7 @@ async def poll(session, feed):
     href = feed.seed
     while True:
         app_logger.debug('Polling')
-        result = await session.get(href, headers=feed_auth_headers(
-            access_key=feed.access_key_id,
-            secret_key=feed.secret_access_key,
-            url=href,
-        ))
+        result = await session.get(href, headers=feed.auth_headers(url=href))
 
         app_logger.debug('Fetching contents of feed...')
         feed_contents = await result.content.read()
@@ -264,17 +260,6 @@ def es_bulk(feed):
          json.dumps(item['source'], sort_keys=True)]
         for item in feed['items']
     ])) + '\n'
-
-
-def feed_auth_headers(access_key, secret_key, url):
-    method = 'GET'
-    return {
-        'Authorization': mohawk.Sender({
-            'id': access_key,
-            'key': secret_key,
-            'algorithm': 'sha256'
-        }, url, method, content_type='', content='').request_header,
-    }
 
 
 def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
@@ -341,6 +326,16 @@ class ElasticsearchBulkFeed():
     @staticmethod
     def next_href(feed):
         return feed['next_url'] if 'next_url' in feed else None
+
+    def auth_headers(self, url):
+        method = 'GET'
+        return {
+            'Authorization': mohawk.Sender({
+                'id': self.access_key_id,
+                'key': self.secret_access_key,
+                'algorithm': 'sha256'
+            }, url, method, content_type='', content='').request_header,
+        }
 
 
 def setup_logging():
