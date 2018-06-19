@@ -254,11 +254,11 @@ async def poll(session, feed):
             await asyncio.sleep(POLLING_INTERVAL)
 
 
-def es_bulk(feed):
+def es_bulk(items):
     return '\n'.join(flatten([
         [json.dumps(item['action_and_metadata'], sort_keys=True),
          json.dumps(item['source'], sort_keys=True)]
-        for item in feed
+        for item in items
     ])) + '\n'
 
 
