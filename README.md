@@ -5,8 +5,9 @@ Activity Stream is a collector of various interactions between people and DIT.
 ## Services data is/will be collected from
 
 - https://opportunities.export.great.gov.uk/
-- https://find-a-buyer.export.great.gov.uk/
-- https://selling-online-overseas.export.great.gov.uk/
+- https://github.com/uktrade/directory-api, which backs the services
+  - https://find-a-buyer.export.great.gov.uk/
+  - https://selling-online-overseas.export.great.gov.uk/
 - https://www.datahub.trade.gov.uk/
 - ZendDesk
 
