@@ -38,5 +38,6 @@ jobs:
             set -xu
             ./cc-test-reporter before-build
             ./tests.sh
+            coverage combine
             coverage xml
             ./cc-test-reporter after-build --exit-code $?

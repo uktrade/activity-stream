@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import os
+import signal
 import sys
 
 import aiohttp
@@ -329,9 +330,16 @@ def setup_logging():
     app_logger.addHandler(stdout_handler)
 
 
+def exit_gracefully():
+    asyncio.get_event_loop().stop()
+    sys.exit(0)
+
+
 if __name__ == '__main__':
     setup_logging()
 
     LOOP = asyncio.get_event_loop()
+    LOOP.add_signal_handler(signal.SIGINT, exit_gracefully)
+    LOOP.add_signal_handler(signal.SIGTERM, exit_gracefully)
     asyncio.ensure_future(run_application(), loop=LOOP)
     LOOP.run_forever()

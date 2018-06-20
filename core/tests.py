@@ -565,13 +565,14 @@ class TestProcess(unittest.TestCase):
         self.es_runner = loop.run_until_complete(run_es_application(Mock()))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
-            **{'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'}
+            **{'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_1.json'},
+            'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
         })
 
     def tearDown(self):
         for task in asyncio.Task.all_tasks():
             task.cancel()
-        self.server.kill()
+        self.server.terminate()
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.feed_runner_1.cleanup())
         loop.run_until_complete(self.es_runner.cleanup())
