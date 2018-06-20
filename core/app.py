@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import signal
 import sys
 
@@ -39,7 +40,8 @@ async def run_application():
 
     def parse_feed_config(feed_config):
         by_feed_type = {
-            'elasticsearch_bulk': ElasticsearchBulkFeed
+            'elasticsearch_bulk': ElasticsearchBulkFeed,
+            'zendesk': ZendeskFeed,
         }
         return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
@@ -228,7 +230,7 @@ async def poll(session, feed):
     href = feed.seed
     while True:
         app_logger.debug('Polling')
-        result = await session.get(href, headers=feed.auth_headers(url=href))
+        result = await session.get(href, headers=feed.auth_headers(href))
 
         app_logger.debug('Fetching contents of feed...')
         feed_contents = await result.content.read()
@@ -342,6 +344,68 @@ class ElasticsearchBulkFeed():
     @staticmethod
     def convert_to_bulk_es(feed):
         return feed['items']
+
+
+class ZendeskFeed():
+
+    # The staging API is severely rate limited
+    # This could be dynamic, but KISS
+    polling_page_interval = 30
+    polling_seed_interval = 60
+
+    company_number_regex = r'Company number:\s*(\d+)'
+
+    @classmethod
+    def parse_config(cls, config):
+        return cls(
+            seed=config['SEED'],
+            api_email=config['API_EMAIL'],
+            api_key=config['API_KEY'],
+        )
+
+    def __init__(self, seed, api_email, api_key):
+        self.seed = seed
+        self.api_email = api_email
+        self.api_key = api_key
+
+    @staticmethod
+    def next_href(feed):
+        return feed['next_page']
+
+    def auth_headers(self, _):
+        return {
+            'Authorization': aiohttp.helpers.BasicAuth(
+                login=self.api_email + '/token',
+                password=self.api_key,
+            ).encode()
+        }
+
+    @classmethod
+    def convert_to_bulk_es(cls, page):
+        def company_numbers(description):
+            match = re.search(cls.company_number_regex, description)
+            return [match[1]] if match else []
+
+        tickets_with_company_numbers = [
+            (ticket['id'], ticket['created_at'], company_number)
+            for ticket in page['tickets']
+            for company_number in company_numbers(ticket['description'])
+        ]
+
+        return [{
+            'action_and_metadata': {
+                'index': {
+                    '_index': 'company_timeline',
+                    '_type': '_doc',
+                    '_id': 'contact-made-' + str(ticket_id),
+                },
+            },
+            'source': {
+                'date': created_at,
+                'activity': 'contact-made',
+                'company_house_number': company_number,
+            }
+        } for ticket_id, created_at, company_number in tickets_with_company_numbers]
 
 
 def setup_logging():

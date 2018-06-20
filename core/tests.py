@@ -441,7 +441,8 @@ class TestApplication(TestBase):
             {'FEEDS__1__SEED': (
                 'http://localhost:8081/'
                 'tests_fixture_elasticsearch_bulk_multipage_1.json'
-            )},
+            )
+            },
             mock_feed,
             append_es,
         )
@@ -498,6 +499,51 @@ class TestApplication(TestBase):
         ]
         self.assertIn('export-oportunity-enquiry-made-49863', ids)
         self.assertIn('export-oportunity-enquiry-made-42863', ids)
+
+    def test_zendesk(self):
+        def has_two_contact_ids(results):
+            item_ids = [
+                json.loads(item)['index']['_id']
+                for es_bulk_content, _ in results
+                for item in es_bulk_content.split(b'\n')[::2]
+                if item
+            ]
+            contact_ids = [
+                item_id
+                for item_id in item_ids
+                if 'contact-made-' in item_id
+            ]
+            return len(contact_ids) == 2
+
+        posted_contacts_twice, append_es = append_until(has_two_contact_ids)
+
+        self.setup_manual(
+            {
+                'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
+                'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
+                'FEEDS__2__API_EMAIL': 'test@test.com',
+                'FEEDS__2__API_KEY': 'some-key',
+                'FEEDS__2__TYPE': 'zendesk',
+            },
+            mock_feed,
+            append_es,
+        )
+
+        original_sleep = asyncio.sleep
+
+        async def fast_sleep(_):
+            await original_sleep(0)
+
+        async def _test():
+            with patch('asyncio.sleep', wraps=fast_sleep):
+                asyncio.ensure_future(run_application())
+                return await posted_contacts_twice
+
+        results = self.loop.run_until_complete(_test())
+        self.assertIn('contact-made-1', str(results))
+        self.assertIn('2011-04-12T12:48:13+00:00', str(results))
+        self.assertIn('contact-made-3', str(results))
+        self.assertIn('2011-04-12T12:48:13+00:00', str(results))
 
     def test_on_bad_json_retries(self):
         posted_to_es_once, append_es = append_until(lambda results: len(results) == 1)
