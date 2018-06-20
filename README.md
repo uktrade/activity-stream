@@ -18,15 +18,18 @@ Activity Stream is a collector of various interactions between people and DIT.
 ## Running locally
 
     PORT=8080 \
-    FEED_ENDPOINT=http://some-endpoint/ \
-    FEED_ACCESS_KEY_ID=feed-some-id \
-    FEED_SECRET_ACCESS_KEY=feed-some-secret \
-    ELASTICSEARCH_AWS_ACCESS_KEY_ID=some-id \
-    ELASTICSEARCH_AWS_SECRET_ACCESS_KEY=aws-secret \
-    ELASTICSEARCH_HOST=127.0.0.1 \
-    ELASTICSEARCH_PORT=8082 \
-    ELASTICSEARCH_PROTOCOL=http \
-    ELASTICSEARCH_REGION=us-east-2 \
+    FEEDS__1__SEED=http://some-endpoint/ \
+    FEEDS__1__ACCESS_KEY_ID=feed-some-id \
+    FEEDS__1__SECRET_ACCESS_KEY=feed-some-secret \
+    ELASTICSEARCH__AWS_ACCESS_KEY_ID=some-id \
+    ELASTICSEARCH__AWS_SECRET_ACCESS_KEY=aws-secret \
+    ELASTICSEARCH__HOST=127.0.0.1 \
+    ELASTICSEARCH__PORT=8082 \
+    ELASTICSEARCH__PROTOCOL=http \
+    ELASTICSEARCH__REGION=us-east-2 \
+    INCOMING_ACCESS_KEY_PAIRS__1__KEY_ID=some-id \
+    INCOMING_ACCESS_KEY_PAIRS__1__SECRET_KEY=some-secret \
+    INCOMING_IP_WHITELIST=1.2.3.4 \
     python -m core.app
 
 ## Managing Requirements
