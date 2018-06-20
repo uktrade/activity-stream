@@ -462,8 +462,12 @@ class TestApplication(TestBase):
         )
 
         async def _test():
-            asyncio.ensure_future(run_application())
-            return await es_bulk[1]
+            with patch('asyncio.sleep', wraps=asyncio.sleep) as mock_sleep:
+                asyncio.ensure_future(run_application())
+                mock_sleep.assert_not_called()
+                result = await es_bulk[1]
+                mock_sleep.assert_called_once_with(0)
+                return result
 
         es_bulk_content, _ = self.loop.run_until_complete(_test())
 

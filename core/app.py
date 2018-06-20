@@ -20,7 +20,6 @@ from .utils import (
     normalise_environment,
 )
 
-POLLING_INTERVAL = 5
 EXCEPTION_INTERVAL = 60
 NONCE_EXPIRE = 120
 
@@ -245,13 +244,13 @@ async def poll(session, feed):
         href = feed.next_href(feed_parsed)
         app_logger.debug('Finding next URL: done (%s)', href)
 
-        if href:
-            app_logger.debug('Will immediatly poll (%s)', href)
-        else:
-            href = feed.seed
-            app_logger.debug('Going back to seed')
-            app_logger.debug('Waiting to poll (%s)', href)
-            await asyncio.sleep(POLLING_INTERVAL)
+        href, interval, message = \
+            (href, feed.polling_page_interval, 'Will poll next page in feed') if href else \
+            (feed.seed, feed.polling_seed_interval, 'Will poll seed page')
+
+        app_logger.debug(message)
+        app_logger.debug('Sleeping for %s seconds', interval)
+        await asyncio.sleep(interval)
 
 
 def es_bulk(items):
@@ -309,6 +308,9 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
 
 
 class ElasticsearchBulkFeed():
+
+    polling_page_interval = 0
+    polling_seed_interval = 5
 
     @classmethod
     def parse_config(cls, config):
