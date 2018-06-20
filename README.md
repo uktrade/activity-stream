@@ -16,7 +16,7 @@ Activity Stream is a collector of various interactions between people and DIT.
 
 ## Running locally
 
-	PORT=8080 \
+    PORT=8080 \
     FEED_ENDPOINT=http://some-endpoint/ \
     FEED_ACCESS_KEY_ID=feed-some-id \
     FEED_SECRET_ACCESS_KEY=feed-some-secret \
