@@ -1,0 +1,15 @@
+{
+  "next_page": null,
+  "tickets": [
+    {
+      "created_at": "2011-04-12T12:48:13+00:00",
+      "description": "Company number: \n321",
+      "id": "3"
+    },
+    {
+      "created_at": "2018-04-12T12:48:13+00:00",
+      "description": "Without number",
+      "id": "4"
+    }
+  ]
+}
