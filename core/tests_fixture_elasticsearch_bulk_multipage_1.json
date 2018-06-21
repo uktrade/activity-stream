@@ -15,5 +15,5 @@
       }
     }
   ],
-  "next_url": "http://localhost:8081/tests_fixture_multipage_2.json"
+  "next_url": "http://localhost:8081/tests_fixture_elasticsearch_bulk_multipage_2.json"
 }
