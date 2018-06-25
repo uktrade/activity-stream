@@ -47,10 +47,10 @@ async def run_application():
 
     feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
-    incoming_key_pairs = {
-        key_pair['KEY_ID']: key_pair['SECRET_KEY']
-        for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']
-    }
+    incoming_key_pairs = [{
+        'key_id': key_pair['KEY_ID'],
+        'secret_key': key_pair['SECRET_KEY']
+    } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
     ip_whitelist = env['INCOMING_IP_WHITELIST']
 
     es_host = env['ELASTICSEARCH']['HOST']
@@ -99,12 +99,18 @@ def authenticator(ip_whitelist, incoming_key_pairs):
     app_logger = logging.getLogger(__name__)
 
     def lookup_credentials(passed_access_key_id):
-        if passed_access_key_id not in incoming_key_pairs:
+        matching_key_pairs = [
+            key_pair
+            for key_pair in incoming_key_pairs
+            if key_pair['key_id'] == passed_access_key_id
+        ]
+
+        if not matching_key_pairs:
             raise HawkFail(f'No Hawk ID of {passed_access_key_id}')
 
         return {
-            'id': passed_access_key_id,
-            'key': incoming_key_pairs[passed_access_key_id],
+            'id': matching_key_pairs[0]['key_id'],
+            'key': matching_key_pairs[0]['secret_key'],
             'algorithm': 'sha256',
         }
 
