@@ -375,7 +375,7 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 200)
         self.assertEqual(text, '{"secret": "to-be-hidden"}')
 
-    def test_get_returns_object(self):
+    def test_post_creds_get_403(self):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
@@ -388,6 +388,25 @@ class TestAuthentication(TestBase):
         url = 'http://127.0.0.1:8080/v1/'
         auth = auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', '',
+        )
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 403)
+        self.assertEqual(text, '{"details": "You are not authorized to perform this action."}')
+
+    def test_get_returns_object(self):
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            mock_feed,
+            lambda _: None,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/v1/'
+        auth = auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
         )
         x_forwarded_for = '1.2.3.4'
         text, status = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
@@ -780,8 +799,13 @@ def mock_env():
         'FEEDS__1__TYPE': 'elasticsearch_bulk',
         'INCOMING_ACCESS_KEY_PAIRS__1__KEY_ID': 'incoming-some-id-1',
         'INCOMING_ACCESS_KEY_PAIRS__1__SECRET_KEY': 'incoming-some-secret-1',
+        'INCOMING_ACCESS_KEY_PAIRS__1__PERMISSIONS__1': 'POST',
         'INCOMING_ACCESS_KEY_PAIRS__2__KEY_ID': 'incoming-some-id-2',
         'INCOMING_ACCESS_KEY_PAIRS__2__SECRET_KEY': 'incoming-some-secret-2',
+        'INCOMING_ACCESS_KEY_PAIRS__2__PERMISSIONS__1': 'POST',
+        'INCOMING_ACCESS_KEY_PAIRS__3__KEY_ID': 'incoming-some-id-3',
+        'INCOMING_ACCESS_KEY_PAIRS__3__SECRET_KEY': 'incoming-some-secret-3',
+        'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__1': 'GET',
         'INCOMING_IP_WHITELIST__1': '1.2.3.4',
         'INCOMING_IP_WHITELIST__2': '2.3.4.5',
     }
