@@ -89,6 +89,7 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
     ])
     app.add_routes([
         web.post('/v1/', handle),
+        web.get('/v1/', handle),
     ])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 

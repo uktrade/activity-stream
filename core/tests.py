@@ -375,6 +375,25 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 200)
         self.assertEqual(text, '{"secret": "to-be-hidden"}')
 
+    def test_get_returns_object(self):
+        self.setup_manual(
+            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            mock_feed,
+            lambda _: None,
+        )
+
+        asyncio.ensure_future(run_application(), loop=self.loop)
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/v1/'
+        auth = auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', '',
+        )
+        x_forwarded_for = '1.2.3.4'
+        text, status = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
+        self.assertEqual(status, 200)
+        self.assertEqual(text, '{"secret": "to-be-hidden"}')
+
 
 class TestApplication(TestBase):
 
@@ -696,6 +715,16 @@ def auth_header(key_id, secret_key, url, method, content, content_type):
         'key': secret_key,
         'algorithm': 'sha256',
     }, url, method, content=content, content_type=content_type).request_header
+
+
+async def get_text(url, auth, x_forwarded_for):
+    async with aiohttp.ClientSession() as session:
+        result = await session.get(url, headers={
+            'Authorization': auth,
+            'Content-Type': '',
+            'X-Forwarded-For': x_forwarded_for,
+        }, timeout=1)
+    return (await result.text(), result.status)
 
 
 async def post_text(url, auth, x_forwarded_for):
