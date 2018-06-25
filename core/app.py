@@ -85,7 +85,9 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
 
     app_logger.debug('Creating listening web application...')
     app = web.Application(middlewares=[authenticator(ip_whitelist, incoming_key_pairs)])
-    app.add_routes([web.post('/v1/', handle)])
+    app.add_routes([
+        web.post('/v1/', handle),
+    ])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 
     runner = web.AppRunner(app, access_log_format=access_log_format)
