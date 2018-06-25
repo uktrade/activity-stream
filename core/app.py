@@ -86,6 +86,7 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
     app_logger.debug('Creating listening web application...')
     app = web.Application(middlewares=[
         authenticator(ip_whitelist, incoming_key_pairs),
+        authorizer(),
     ])
     app.add_routes([
         web.post('/v1/', handle),
@@ -183,6 +184,14 @@ def authenticator(ip_whitelist, incoming_key_pairs):
         return await handler(request)
 
     return authenticate
+
+
+def authorizer():
+    @web.middleware
+    async def authorize(request, handler):
+        return await handler(request)
+
+    return authorize
 
 
 async def create_outgoing_application(feed_endpoints, es_endpoint):
