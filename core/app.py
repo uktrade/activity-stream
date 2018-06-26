@@ -81,7 +81,10 @@ async def run_application():
 async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
     app_logger = logging.getLogger(__name__)
 
-    async def handle(_):
+    async def handle_post(_):
+        return json_response({'secret': 'to-be-hidden'}, status=200)
+
+    async def handle_get(_):
         return json_response({'secret': 'to-be-hidden'}, status=200)
 
     app_logger.debug('Creating listening web application...')
@@ -90,8 +93,8 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
         authorizer(),
     ])
     app.add_routes([
-        web.post('/v1/', handle),
-        web.get('/v1/', handle),
+        web.post('/v1/', handle_post),
+        web.get('/v1/', handle_get),
     ])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 
