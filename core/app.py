@@ -15,7 +15,7 @@ from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
 
-from .utils import (
+from .app_utils import (
     ExpiringSet,
     flatten,
     normalise_environment,
