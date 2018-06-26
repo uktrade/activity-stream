@@ -6,14 +6,16 @@ import hmac
 import json
 import logging
 import os
-import re
 import signal
 import sys
 
 import aiohttp
 from aiohttp import web
-import mohawk
 
+from .app_feeds import (
+    ElasticsearchBulkFeed,
+    ZendeskFeed,
+)
 from .app_server import (
     authenticator,
     authorizer,
@@ -22,7 +24,6 @@ from .app_server import (
 from .app_utils import (
     flatten,
     normalise_environment,
-    sub_dict_lower,
 )
 
 EXCEPTION_INTERVAL = 60
@@ -240,97 +241,6 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
             f'SignedHeaders={signed_headers}, Signature=' + signature()
         ),
     }
-
-
-class ElasticsearchBulkFeed():
-
-    polling_page_interval = 0
-    polling_seed_interval = 5
-
-    @classmethod
-    def parse_config(cls, config):
-        return cls(**sub_dict_lower(config, ['SEED', 'ACCESS_KEY_ID', 'SECRET_ACCESS_KEY']))
-
-    def __init__(self, seed, access_key_id, secret_access_key):
-        self.seed = seed
-        self.access_key_id = access_key_id
-        self.secret_access_key = secret_access_key
-
-    @staticmethod
-    def next_href(feed):
-        return feed['next_url'] if 'next_url' in feed else None
-
-    def auth_headers(self, url):
-        method = 'GET'
-        return {
-            'Authorization': mohawk.Sender({
-                'id': self.access_key_id,
-                'key': self.secret_access_key,
-                'algorithm': 'sha256'
-            }, url, method, content_type='', content='').request_header,
-        }
-
-    @staticmethod
-    def convert_to_bulk_es(feed):
-        return feed['items']
-
-
-class ZendeskFeed():
-
-    # The staging API is severely rate limited
-    # This could be dynamic, but KISS
-    polling_page_interval = 30
-    polling_seed_interval = 60
-
-    company_number_regex = r'Company number:\s*(\d+)'
-
-    @classmethod
-    def parse_config(cls, config):
-        return cls(**sub_dict_lower(config, ['SEED', 'API_EMAIL', 'API_KEY']))
-
-    def __init__(self, seed, api_email, api_key):
-        self.seed = seed
-        self.api_email = api_email
-        self.api_key = api_key
-
-    @staticmethod
-    def next_href(feed):
-        return feed['next_page']
-
-    def auth_headers(self, _):
-        return {
-            'Authorization': aiohttp.helpers.BasicAuth(
-                login=self.api_email + '/token',
-                password=self.api_key,
-            ).encode()
-        }
-
-    @classmethod
-    def convert_to_bulk_es(cls, page):
-        def company_numbers(description):
-            match = re.search(cls.company_number_regex, description)
-            return [match[1]] if match else []
-
-        tickets_with_company_numbers = [
-            (ticket['id'], ticket['created_at'], company_number)
-            for ticket in page['tickets']
-            for company_number in company_numbers(ticket['description'])
-        ]
-
-        return [{
-            'action_and_metadata': {
-                'index': {
-                    '_index': 'company_timeline',
-                    '_type': '_doc',
-                    '_id': 'contact-made-' + str(ticket_id),
-                },
-            },
-            'source': {
-                'date': created_at,
-                'activity': 'contact-made',
-                'company_house_number': company_number,
-            }
-        } for ticket_id, created_at, company_number in tickets_with_company_numbers]
 
 
 def setup_logging():
