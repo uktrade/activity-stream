@@ -84,7 +84,9 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
         return web.json_response({'secret': 'to-be-hidden'})
 
     app_logger.debug('Creating listening web application...')
-    app = web.Application(middlewares=[authenticator(ip_whitelist, incoming_key_pairs)])
+    app = web.Application(middlewares=[
+        authenticator(ip_whitelist, incoming_key_pairs),
+    ])
     app.add_routes([
         web.post('/v1/', handle),
     ])
