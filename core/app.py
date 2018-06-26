@@ -80,6 +80,24 @@ async def run_application():
 async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
     app_logger = logging.getLogger(__name__)
 
+    async def handle(_):
+        return web.json_response({'secret': 'to-be-hidden'})
+
+    app_logger.debug('Creating listening web application...')
+    app = web.Application(middlewares=[authenticator(ip_whitelist, incoming_key_pairs)])
+    app.add_routes([web.post('/v1/', handle)])
+    access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
+
+    runner = web.AppRunner(app, access_log_format=access_log_format)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    app_logger.debug('Creating listening web application: done')
+
+
+def authenticator(ip_whitelist, incoming_key_pairs):
+    app_logger = logging.getLogger(__name__)
+
     def lookup_credentials(passed_access_key_id):
         if passed_access_key_id not in incoming_key_pairs:
             raise HawkFail(f'No Hawk ID of {passed_access_key_id}')
@@ -153,19 +171,7 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
 
         return await handler(request)
 
-    async def handle(_):
-        return web.json_response({'secret': 'to-be-hidden'})
-
-    app_logger.debug('Creating listening web application...')
-    app = web.Application(middlewares=[authenticate])
-    app.add_routes([web.post('/v1/', handle)])
-    access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
-
-    runner = web.AppRunner(app, access_log_format=access_log_format)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', port)
-    await site.start()
-    app_logger.debug('Creating listening web application: done')
+    return authenticate
 
 
 async def create_outgoing_application(feed_endpoints, es_endpoint):
