@@ -13,6 +13,12 @@ Activity Stream is a collector of various interactions between people and DIT.
 
 ## Running tests
 
+Elasticsearch must be started first, which you can do by
+
+    ./tests_es_start.sh
+
+and then to run the tests themselves
+
     ./tests.sh
 
 ## Running locally

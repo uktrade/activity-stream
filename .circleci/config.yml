@@ -37,7 +37,6 @@ jobs:
           name: Run tests
           command: |
             set -xu
-            sleep 10 && wget --waitretry=5 --retry-connrefused -v http://127.0.0.1:9200/
             ./cc-test-reporter before-build
             ./tests.sh
             coverage combine
