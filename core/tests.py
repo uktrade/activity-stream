@@ -29,8 +29,13 @@ class TestBase(unittest.TestCase):
         self.feed_requested = [asyncio.Future(), asyncio.Future()]
 
         def feed_requested_callback(request):
-            first_not_done = next(future for future in self.feed_requested if not future.done())
-            first_not_done.set_result(request)
+            try:
+                first_not_done = next(
+                    future for future in self.feed_requested if not future.done())
+            except StopIteration:
+                pass
+            else:
+                first_not_done.set_result(request)
 
         self.es_runner, self.feed_runner_1 = \
             self.loop.run_until_complete(asyncio.gather(
