@@ -22,6 +22,7 @@ from .app_server import (
 from .app_utils import (
     flatten,
     normalise_environment,
+    sub_dict_lower,
 )
 
 EXCEPTION_INTERVAL = 60
@@ -248,11 +249,7 @@ class ElasticsearchBulkFeed():
 
     @classmethod
     def parse_config(cls, config):
-        return cls(
-            seed=config['SEED'],
-            access_key_id=config['ACCESS_KEY_ID'],
-            secret_access_key=config['SECRET_ACCESS_KEY'],
-        )
+        return cls(**sub_dict_lower(config, ['SEED', 'ACCESS_KEY_ID', 'SECRET_ACCESS_KEY']))
 
     def __init__(self, seed, access_key_id, secret_access_key):
         self.seed = seed
@@ -289,11 +286,7 @@ class ZendeskFeed():
 
     @classmethod
     def parse_config(cls, config):
-        return cls(
-            seed=config['SEED'],
-            api_email=config['API_EMAIL'],
-            api_key=config['API_KEY'],
-        )
+        return cls(**sub_dict_lower(config, ['SEED', 'API_EMAIL', 'API_KEY']))
 
     def __init__(self, seed, api_email, api_key):
         self.seed = seed

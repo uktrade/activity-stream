@@ -137,3 +137,10 @@ def normalise_environment(key_values):
     return \
         list_sorted_by_int_key() if all_keys_are_ints() else \
         nested_structured_dict
+
+
+def sub_dict_lower(super_dict, keys):
+    return {
+        key.lower(): super_dict[key]
+        for key in keys
+    }
