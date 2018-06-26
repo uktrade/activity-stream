@@ -203,7 +203,9 @@ def authorizer():
 
 
 def json_response(data, status):
-    return web.json_response(data, status=status)
+    return web.json_response(data, status=status, headers={
+        'Server': 'activity-stream'
+    })
 
 
 async def create_outgoing_application(feed_endpoints, es_endpoint):

@@ -412,7 +412,7 @@ class TestAuthentication(TestBase):
         text, status, headers = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
         self.assertEqual(status, 200)
         self.assertEqual(text, '{"secret": "to-be-hidden"}')
-        self.assertEqual(headers['Server'], 'Python/3.6 aiohttp/3.2.1')
+        self.assertEqual(headers['Server'], 'activity-stream')
 
 
 class TestApplication(TestBase):
