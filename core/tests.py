@@ -390,7 +390,7 @@ class TestAuthentication(TestBase):
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', '',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
+        text, status, _ = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
         self.assertEqual(status, 403)
         self.assertEqual(text, '{"details": "You are not authorized to perform this action."}')
 
@@ -409,9 +409,10 @@ class TestAuthentication(TestBase):
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
+        text, status, headers = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
         self.assertEqual(status, 200)
         self.assertEqual(text, '{"secret": "to-be-hidden"}')
+        self.assertEqual(headers['Server'], 'Python/3.6 aiohttp/3.2.1')
 
 
 class TestApplication(TestBase):
@@ -743,7 +744,7 @@ async def get_text(url, auth, x_forwarded_for):
             'Content-Type': '',
             'X-Forwarded-For': x_forwarded_for,
         }, timeout=1)
-    return (await result.text(), result.status)
+    return (await result.text(), result.status, result.headers)
 
 
 async def post_text(url, auth, x_forwarded_for):
