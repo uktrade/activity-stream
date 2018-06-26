@@ -14,8 +14,7 @@ import aiohttp
 from aiohttp import web
 import mohawk
 
-
-from .app_server_utils import (
+from .app_server import (
     authenticator,
     authorizer,
     json_response,
