@@ -710,7 +710,7 @@ async def run_es_application(es_bulk_request_callback):
     app.add_routes([web.post('/_bulk', handle)])
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '127.0.0.1', 8082)
+    site = web.TCPSite(runner, '127.0.0.1', 9200)
     await site.start()
     return runner
 
@@ -792,7 +792,7 @@ def mock_env():
         'ELASTICSEARCH__AWS_ACCESS_KEY_ID': 'some-id',
         'ELASTICSEARCH__AWS_SECRET_ACCESS_KEY': 'aws-secret',
         'ELASTICSEARCH__HOST': '127.0.0.1',
-        'ELASTICSEARCH__PORT': '8082',
+        'ELASTICSEARCH__PORT': '9200',
         'ELASTICSEARCH__PROTOCOL': 'http',
         'ELASTICSEARCH__REGION': 'us-east-2',
         'FEEDS__1__ACCESS_KEY_ID': 'feed-some-id',
