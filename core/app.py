@@ -87,7 +87,7 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
 
     app_logger.debug('Creating listening web application...')
     app = web.Application(middlewares=[
-        authenticator(ip_whitelist, incoming_key_pairs),
+        authenticator(ip_whitelist, incoming_key_pairs, NONCE_EXPIRE),
         authorizer(),
     ])
     app.add_routes([
@@ -103,7 +103,7 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
     app_logger.debug('Creating listening web application: done')
 
 
-def authenticator(ip_whitelist, incoming_key_pairs):
+def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
     app_logger = logging.getLogger(__name__)
 
     def lookup_credentials(passed_access_key_id):
@@ -125,7 +125,7 @@ def authenticator(ip_whitelist, incoming_key_pairs):
 
     # This would need to be stored externally if this was ever to be load balanced,
     # otherwise replay attacks could succeed by hitting another instance
-    seen_nonces = ExpiringSet(NONCE_EXPIRE)
+    seen_nonces = ExpiringSet(nonce_expire)
 
     def seen_nonce(access_key_id, nonce, _):
         nonce_tuple = (access_key_id, nonce)
