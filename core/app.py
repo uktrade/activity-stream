@@ -28,6 +28,7 @@ NOT_PROVIDED = 'Authentication credentials were not provided.'
 INCORRECT = 'Incorrect authentication credentials.'
 MISSING_CONTENT_TYPE = 'Content-Type header was not set. ' + \
                        'It must be set for authentication, even if as the empty string.'
+NOT_AUTHORIZED = 'You are not authorized to perform this action.'
 
 
 async def run_application():
@@ -47,10 +48,11 @@ async def run_application():
 
     feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
-    incoming_key_pairs = {
-        key_pair['KEY_ID']: key_pair['SECRET_KEY']
-        for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']
-    }
+    incoming_key_pairs = [{
+        'key_id': key_pair['KEY_ID'],
+        'secret_key': key_pair['SECRET_KEY'],
+        'permissions': key_pair['PERMISSIONS'],
+    } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
     ip_whitelist = env['INCOMING_IP_WHITELIST']
 
     es_host = env['ELASTICSEARCH']['HOST']
@@ -80,13 +82,44 @@ async def run_application():
 async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
     app_logger = logging.getLogger(__name__)
 
+    async def handle(_):
+        return web.json_response({'secret': 'to-be-hidden'})
+
+    app_logger.debug('Creating listening web application...')
+    app = web.Application(middlewares=[
+        authenticator(ip_whitelist, incoming_key_pairs),
+        authorizer(),
+    ])
+    app.add_routes([
+        web.post('/v1/', handle),
+        web.get('/v1/', handle),
+    ])
+    access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
+
+    runner = web.AppRunner(app, access_log_format=access_log_format)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    app_logger.debug('Creating listening web application: done')
+
+
+def authenticator(ip_whitelist, incoming_key_pairs):
+    app_logger = logging.getLogger(__name__)
+
     def lookup_credentials(passed_access_key_id):
-        if passed_access_key_id not in incoming_key_pairs:
+        matching_key_pairs = [
+            key_pair
+            for key_pair in incoming_key_pairs
+            if key_pair['key_id'] == passed_access_key_id
+        ]
+
+        if not matching_key_pairs:
             raise HawkFail(f'No Hawk ID of {passed_access_key_id}')
 
         return {
-            'id': passed_access_key_id,
-            'key': incoming_key_pairs[passed_access_key_id],
+            'id': matching_key_pairs[0]['key_id'],
+            'key': matching_key_pairs[0]['secret_key'],
+            'permissions': matching_key_pairs[0]['permissions'],
             'algorithm': 'sha256',
         }
 
@@ -101,8 +134,8 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
             seen_nonces.add(nonce_tuple)
         return seen
 
-    async def raise_if_not_authentic(request):
-        mohawk.Receiver(
+    async def authenticate_or_raise(request):
+        return mohawk.Receiver(
             lookup_credentials,
             request.headers['Authorization'],
             str(request.url),
@@ -144,28 +177,29 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
             }, status=401)
 
         try:
-            await raise_if_not_authentic(request)
+            receiver = await authenticate_or_raise(request)
         except HawkFail as exception:
             app_logger.warning('Failed authentication %s', exception)
             return web.json_response({
                 'details': INCORRECT,
             }, status=401)
 
+        request['permissions'] = receiver.resource.credentials['permissions']
         return await handler(request)
 
-    async def handle(_):
-        return web.json_response({'secret': 'to-be-hidden'})
+    return authenticate
 
-    app_logger.debug('Creating listening web application...')
-    app = web.Application(middlewares=[authenticate])
-    app.add_routes([web.post('/', handle)])
-    access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 
-    runner = web.AppRunner(app, access_log_format=access_log_format)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', port)
-    await site.start()
-    app_logger.debug('Creating listening web application: done')
+def authorizer():
+    @web.middleware
+    async def authorize(request, handler):
+        if request.method not in request['permissions']:
+            return web.json_response({
+                'details': NOT_AUTHORIZED,
+            }, status=403)
+        return await handler(request)
+
+    return authorize
 
 
 async def create_outgoing_application(feed_endpoints, es_endpoint):
