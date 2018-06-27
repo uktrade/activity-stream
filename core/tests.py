@@ -197,9 +197,10 @@ class TestAuthentication(TestBase):
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', 'some-type',
         )
         x_forwarded_for = '1.2.3.4'
-        _, status = self.loop.run_until_complete(
+        text, status = self.loop.run_until_complete(
             post_text_no_content_type(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
+        self.assertIn('Content-Type header was not set.', text)
 
     def test_time_skew_then_401(self):
         self.setup_manual(
@@ -789,7 +790,7 @@ async def post_text_no_x_forwarded_for(url, auth):
 
 
 async def post_text_no_content_type(url, auth, x_forwarded_for):
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(skip_auto_headers=['Content-Type']) as session:
         result = await session.post(url, headers={
             'Authorization': auth,
             'X-Forwarded-For': x_forwarded_for,
