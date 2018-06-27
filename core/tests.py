@@ -519,6 +519,24 @@ class TestApplication(TestBase):
         self.assertEqual(status, 500)
         self.assertEqual(text, '{"details": "An unknown error occurred."}')
 
+    def test_es_no_connect_is_500(self):
+        self.setup_manual({
+            'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
+            'ELASTICSEARCH__PORT': '1234'
+        }, mock_feed)
+        asyncio.ensure_future(run_application())
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/v1/'
+        auth = auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
+        )
+        x_forwarded_for = '1.2.3.4'
+        text, status, _ = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
+
+        self.assertEqual(status, 500)
+        self.assertEqual(text, '{"details": "An unknown error occurred."}')
+
     def test_multipage(self):
         def has_at_least_two_results(results):
             return (

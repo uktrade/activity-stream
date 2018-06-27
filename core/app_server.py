@@ -1,5 +1,6 @@
 import logging
 
+import aiohttp
 from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
@@ -120,6 +121,8 @@ async def handle_post(_):
 
 
 def handle_get(session, es_auth_headers, es_endpoint):
+    app_logger = logging.getLogger(__name__)
+
     path = '/_search'
     url = es_endpoint['base_url'] + path
 
@@ -131,9 +134,15 @@ def handle_get(session, es_auth_headers, es_endpoint):
             payload=b'',
         )
 
-        results = await session.get(url, headers=auth_headers)
+        succesful = False
+        try:
+            results = await session.get(url, headers=auth_headers)
+            succesful = results.status == 200
+        except aiohttp.ClientError as exception:
+            app_logger.warning('Error connecting to Elasticsearch: %s', exception)
+
         return \
-            json_response(await results.json(), status=200) if results.status == 200 else \
+            json_response(await results.json(), status=200) if succesful else \
             json_response({'details': 'An unknown error occurred.'}, status=500)
 
     return handle
