@@ -19,7 +19,8 @@ from .app_feeds import (
 from .app_server import (
     authenticator,
     authorizer,
-    json_response,
+    handle_get,
+    handle_post,
 )
 from .app_utils import (
     flatten,
@@ -98,14 +99,6 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
     app_logger.debug('Creating listening web application: done')
-
-
-async def handle_post(_):
-    return json_response({'secret': 'to-be-hidden'}, status=200)
-
-
-async def handle_get(_):
-    return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
 async def create_outgoing_application(session, feed_endpoints, es_endpoint):

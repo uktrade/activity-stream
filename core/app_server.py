@@ -115,6 +115,14 @@ def authorizer():
     return authorize
 
 
+async def handle_post(_):
+    return json_response({'secret': 'to-be-hidden'}, status=200)
+
+
+async def handle_get(_):
+    return json_response({'secret': 'to-be-hidden'}, status=200)
+
+
 def json_response(data, status):
     return web.json_response(data, status=status, headers={
         'Server': 'activity-stream'
