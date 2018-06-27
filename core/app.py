@@ -148,7 +148,7 @@ async def ingest_feed(session, feed_endpoint, es_endpoint):
         headers = {
             'Content-Type': 'application/x-ndjson'
         }
-        auth_headers = es_bulk_auth_headers(
+        auth_headers = es_auth_headers(
             access_key=es_endpoint['access_key_id'],
             secret_key=es_endpoint['secret_key'],
             region=es_endpoint['region'],
@@ -200,7 +200,7 @@ def es_bulk(items):
     ])) + '\n'
 
 
-def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
+def es_auth_headers(access_key, secret_key, region, host, path, payload):
     service = 'es'
     method = 'POST'
     signed_headers = 'content-type;host;x-amz-date'
