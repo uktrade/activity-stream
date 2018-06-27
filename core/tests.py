@@ -485,6 +485,40 @@ class TestApplication(TestBase):
         self.assertEqual(es_bulk_request_dicts[3]['activity'], 'export-oportunity-enquiry-made')
         self.assertEqual(es_bulk_request_dicts[3]['company_house_number'], '82312')
 
+    def test_es_401_is_500(self):
+        async def run_es_application():
+            async def return_401(_):
+                return web.Response(text='', status=401)
+
+            app = web.Application()
+            app.add_routes([
+                web.get('/_search', return_401),
+            ])
+            runner = web.AppRunner(app)
+            await runner.setup()
+            site = web.TCPSite(runner, '127.0.0.1', 9201)
+            await site.start()
+            return runner
+
+        es_runner = asyncio.get_event_loop().run_until_complete(run_es_application())
+        self.setup_manual({
+            'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
+            'ELASTICSEARCH__PORT': '9201'
+        }, mock_feed)
+        asyncio.ensure_future(run_application())
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/v1/'
+        auth = auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
+        )
+        x_forwarded_for = '1.2.3.4'
+        text, status, _ = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
+        self.loop.run_until_complete(es_runner.cleanup())
+
+        self.assertEqual(status, 500)
+        self.assertEqual(text, '{"details": "An unknown error occurred."}')
+
     def test_multipage(self):
         def has_at_least_two_results(results):
             return (

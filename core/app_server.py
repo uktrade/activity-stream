@@ -132,7 +132,9 @@ def handle_get(session, es_auth_headers, es_endpoint):
         )
 
         results = await session.get(url, headers=auth_headers)
-        return json_response(await results.json(), status=200)
+        return \
+            json_response(await results.json(), status=200) if results.status == 200 else \
+            json_response({'details': 'An unknown error occurred.'}, status=500)
 
     return handle
 
