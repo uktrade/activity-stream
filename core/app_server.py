@@ -119,9 +119,20 @@ async def handle_post(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
-def handle_get():
+def handle_get(session, es_auth_headers, es_endpoint):
+    path = '/_search'
+    url = es_endpoint['base_url'] + path
+
     async def handle(_):
-        return json_response({'secret': 'to-be-hidden'}, status=200)
+        auth_headers = es_auth_headers(
+            endpoint=es_endpoint,
+            method='GET',
+            path=path,
+            payload=b'',
+        )
+
+        results = await session.get(url, headers=auth_headers)
+        return json_response(await results.json(), status=200)
 
     return handle
 

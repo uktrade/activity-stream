@@ -73,14 +73,15 @@ async def run_application():
 
     async with aiohttp.ClientSession() as session:
         await create_incoming_application(
-            port, ip_whitelist, incoming_key_pairs,
+            port, ip_whitelist, incoming_key_pairs, session, es_endpoint,
         )
         await create_outgoing_application(
             session, feed_endpoints, es_endpoint,
         )
 
 
-async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
+async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
+                                      session, es_endpoint):
     app_logger = logging.getLogger(__name__)
 
     app_logger.debug('Creating listening web application...')
@@ -90,7 +91,7 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
     ])
     app.add_routes([
         web.post('/v1/', handle_post),
-        web.get('/v1/', handle_get()),
+        web.get('/v1/', handle_get(session, es_auth_headers, es_endpoint)),
     ])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 

@@ -383,7 +383,14 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 403)
         self.assertEqual(text, '{"details": "You are not authorized to perform this action."}')
 
-    def test_get_returns_object(self):
+    def test_get_returns_feed_data(self):
+        def has_at_least_two_results(results):
+            return (
+                'hits' in results and
+                'hits' in results['hits'] and
+                len(results['hits']['hits']) >= 2
+            )
+
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
@@ -393,13 +400,13 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
-            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
-        )
         x_forwarded_for = '1.2.3.4'
-        text, status, headers = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
+
+        result, status, headers = self.loop.run_until_complete(
+            get_text_until(url, x_forwarded_for, has_at_least_two_results, asyncio.sleep))
         self.assertEqual(status, 200)
-        self.assertEqual(text, '{"secret": "to-be-hidden"}')
+        self.assertEqual(result['hits']['hits'][0]['_id'], 'export-oportunity-enquiry-made-49863')
+        self.assertEqual(result['hits']['hits'][1]['_id'], 'export-oportunity-enquiry-made-49862')
         self.assertEqual(headers['Server'], 'activity-stream')
 
 
@@ -758,6 +765,20 @@ async def get_text(url, auth, x_forwarded_for):
             'X-Forwarded-For': x_forwarded_for,
         }, timeout=1)
     return (await result.text(), result.status, result.headers)
+
+
+async def get_text_until(url, x_forwarded_for, condition, sleep):
+    while True:
+        auth = auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
+        )
+        all_data, status, headers = await get_text(url, auth, x_forwarded_for)
+        dict_data = json.loads(all_data)
+        if condition(dict_data):
+            break
+        await sleep(0.05)
+
+    return dict_data, status, headers
 
 
 async def post_text(url, auth, x_forwarded_for):
