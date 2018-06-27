@@ -83,7 +83,7 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
     app_logger = logging.getLogger(__name__)
 
     async def handle(_):
-        return web.json_response({'secret': 'to-be-hidden'})
+        return json_response({'secret': 'to-be-hidden'}, status=200)
 
     app_logger.debug('Creating listening web application...')
     app = web.Application(middlewares=[
@@ -151,7 +151,7 @@ def authenticator(ip_whitelist, incoming_key_pairs):
             app_logger.warning(
                 'Failed authentication: no X-Forwarded-For header passed'
             )
-            return web.json_response({
+            return json_response({
                 'details': INCORRECT,
             }, status=401)
 
@@ -162,17 +162,17 @@ def authenticator(ip_whitelist, incoming_key_pairs):
                 'Failed authentication: the X-Forwarded-For header did not '
                 'start with an IP in the whitelist'
             )
-            return web.json_response({
+            return json_response({
                 'details': INCORRECT,
             }, status=401)
 
         if 'Authorization' not in request.headers:
-            return web.json_response({
+            return json_response({
                 'details': NOT_PROVIDED,
             }, status=401)
 
         if 'Content-Type' not in request.headers:
-            return web.json_response({
+            return json_response({
                 'details': MISSING_CONTENT_TYPE,
             }, status=401)
 
@@ -180,7 +180,7 @@ def authenticator(ip_whitelist, incoming_key_pairs):
             receiver = await authenticate_or_raise(request)
         except HawkFail as exception:
             app_logger.warning('Failed authentication %s', exception)
-            return web.json_response({
+            return json_response({
                 'details': INCORRECT,
             }, status=401)
 
@@ -194,12 +194,18 @@ def authorizer():
     @web.middleware
     async def authorize(request, handler):
         if request.method not in request['permissions']:
-            return web.json_response({
+            return json_response({
                 'details': NOT_AUTHORIZED,
             }, status=403)
         return await handler(request)
 
     return authorize
+
+
+def json_response(data, status):
+    return web.json_response(data, status=status, headers={
+        'Server': 'activity-stream'
+    })
 
 
 async def create_outgoing_application(feed_endpoints, es_endpoint):
