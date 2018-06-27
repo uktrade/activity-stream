@@ -55,17 +55,17 @@ async def run_application():
     ip_whitelist = env['INCOMING_IP_WHITELIST']
 
     es_host = env['ELASTICSEARCH']['HOST']
-    es_path = '/_bulk'
     es_endpoint = {
         'host': es_host,
-        'path': es_path,
         'access_key_id': env['ELASTICSEARCH']['AWS_ACCESS_KEY_ID'],
         'secret_key': env['ELASTICSEARCH']['AWS_SECRET_ACCESS_KEY'],
         'region': env['ELASTICSEARCH']['REGION'],
-        'url': (
+        'protocol': env['ELASTICSEARCH']['PROTOCOL'],
+        'base_url': (
             env['ELASTICSEARCH']['PROTOCOL'] + '://' +
-            es_host + ':' + env['ELASTICSEARCH']['PORT'] + es_path
+            es_host + ':' + env['ELASTICSEARCH']['PORT']
         ),
+        'port': env['ELASTICSEARCH']['PORT'],
     }
 
     app_logger.debug('Examining environment: done')
@@ -148,16 +148,16 @@ async def ingest_feed(session, feed_endpoint, es_endpoint):
         headers = {
             'Content-Type': 'application/x-ndjson'
         }
+        path = '/_bulk'
         auth_headers = es_auth_headers(
-            access_key=es_endpoint['access_key_id'],
-            secret_key=es_endpoint['secret_key'],
-            region=es_endpoint['region'],
-            host=es_endpoint['host'],
-            path=es_endpoint['path'],
+            endpoint=es_endpoint,
+            method='POST',
+            path='/_bulk',
             payload=es_bulk_contents,
         )
+        url = es_endpoint['base_url'] + path
         es_result = await session.post(
-            es_endpoint['url'], data=es_bulk_contents, headers={**headers, **auth_headers})
+            url, data=es_bulk_contents, headers={**headers, **auth_headers})
         app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
 
 
@@ -200,9 +200,8 @@ def es_bulk(items):
     ])) + '\n'
 
 
-def es_auth_headers(access_key, secret_key, region, host, path, payload):
+def es_auth_headers(endpoint, method, path, payload):
     service = 'es'
-    method = 'POST'
     signed_headers = 'content-type;host;x-amz-date'
     algorithm = 'AWS4-HMAC-SHA256'
 
@@ -210,7 +209,7 @@ def es_auth_headers(access_key, secret_key, region, host, path, payload):
     amzdate = now.strftime('%Y%m%dT%H%M%SZ')
     datestamp = now.strftime('%Y%m%d')
 
-    credential_scope = f'{datestamp}/{region}/{service}/aws4_request'
+    credential_scope = f'{datestamp}/{endpoint["region"]}/{service}/aws4_request'
 
     def signature():
         def canonical_request():
@@ -218,7 +217,7 @@ def es_auth_headers(access_key, secret_key, region, host, path, payload):
             canonical_querystring = ''
             canonical_headers = \
                 f'content-type:application/x-ndjson\n' + \
-                f'host:{host}\nx-amz-date:{amzdate}\n'
+                f'host:{endpoint["host"]}\nx-amz-date:{amzdate}\n'
             payload_hash = hashlib.sha256(payload).hexdigest()
 
             return f'{method}\n{canonical_uri}\n{canonical_querystring}\n' + \
@@ -231,8 +230,8 @@ def es_auth_headers(access_key, secret_key, region, host, path, payload):
             f'{algorithm}\n{amzdate}\n{credential_scope}\n' + \
             hashlib.sha256(canonical_request().encode('utf-8')).hexdigest()
 
-        date_key = sign(('AWS4' + secret_key).encode('utf-8'), datestamp)
-        region_key = sign(date_key, region)
+        date_key = sign(('AWS4' + endpoint['secret_key']).encode('utf-8'), datestamp)
+        region_key = sign(date_key, endpoint['region'])
         service_key = sign(region_key, service)
         request_key = sign(service_key, 'aws4_request')
         return sign(request_key, string_to_sign).hex()
@@ -240,7 +239,7 @@ def es_auth_headers(access_key, secret_key, region, host, path, payload):
     return {
         'x-amz-date': amzdate,
         'Authorization': (
-            f'{algorithm} Credential={access_key}/{credential_scope}, ' +
+            f'{algorithm} Credential={endpoint["access_key_id"]}/{credential_scope}, ' +
             f'SignedHeaders={signed_headers}, Signature=' + signature()
         ),
     }
