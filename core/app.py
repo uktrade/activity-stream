@@ -70,12 +70,13 @@ async def run_application():
 
     app_logger.debug('Examining environment: done')
 
-    await create_incoming_application(
-        port, ip_whitelist, incoming_key_pairs,
-    )
-    await create_outgoing_application(
-        feed_endpoints, es_endpoint,
-    )
+    async with aiohttp.ClientSession() as session:
+        await create_incoming_application(
+            port, ip_whitelist, incoming_key_pairs,
+        )
+        await create_outgoing_application(
+            session, feed_endpoints, es_endpoint,
+        )
 
 
 async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
@@ -107,17 +108,16 @@ async def handle_get(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
-async def create_outgoing_application(feed_endpoints, es_endpoint):
-    async with aiohttp.ClientSession() as session:
-        feeds = [
-            repeat_even_on_exception(functools.partial(
-                ingest_feed,
-                session, feed_endpoint,
-                es_endpoint,
-            ))
-            for feed_endpoint in feed_endpoints
-        ]
-        await asyncio.gather(*feeds)
+async def create_outgoing_application(session, feed_endpoints, es_endpoint):
+    feeds = [
+        repeat_even_on_exception(functools.partial(
+            ingest_feed,
+            session, feed_endpoint,
+            es_endpoint,
+        ))
+        for feed_endpoint in feed_endpoints
+    ]
+    await asyncio.gather(*feeds)
 
 
 async def repeat_even_on_exception(never_ending_coroutine):
