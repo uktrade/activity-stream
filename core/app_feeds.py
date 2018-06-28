@@ -22,7 +22,7 @@ class ElasticsearchBulkFeed:
 
     @staticmethod
     def next_href(feed):
-        return feed['next_url'] if 'next_url' in feed else None
+        return feed.get('next_url', None)
 
     def auth_headers(self, url):
         method = 'GET'
