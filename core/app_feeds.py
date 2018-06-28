@@ -8,7 +8,7 @@ from .app_utils import (
 )
 
 
-class ElasticsearchBulkFeed():
+class ElasticsearchBulkFeed:
 
     polling_page_interval = 0
     polling_seed_interval = 5
@@ -41,7 +41,7 @@ class ElasticsearchBulkFeed():
         return feed['items']
 
 
-class ZendeskFeed():
+class ZendeskFeed:
 
     # The staging API is severely rate limited
     # This could be dynamic, but KISS
