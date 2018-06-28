@@ -3,9 +3,7 @@ import re
 import aiohttp
 import mohawk
 
-from .app_utils import (
-    sub_dict_lower,
-)
+from .app_utils import sub_dict_lower
 
 
 class ElasticsearchBulkFeed:
