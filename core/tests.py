@@ -17,7 +17,7 @@ from core.app import run_application
 
 class TestBase(unittest.TestCase):
 
-    def setup_manual(self, env, feed, es_bulk_request_callback):
+    def setup_manual(self, env, feed):
         ''' Test setUp function that can be customised on a per-test basis '''
         self.os_environ_patcher = patch.dict(os.environ, {
             **mock_env(),
@@ -29,14 +29,18 @@ class TestBase(unittest.TestCase):
         self.feed_requested = [asyncio.Future(), asyncio.Future()]
 
         def feed_requested_callback(request):
-            first_not_done = next(future for future in self.feed_requested if not future.done())
-            first_not_done.set_result(request)
+            try:
+                first_not_done = next(
+                    future for future in self.feed_requested if not future.done())
+            except StopIteration:
+                pass
+            else:
+                first_not_done.set_result(request)
 
-        self.es_runner, self.feed_runner_1 = \
-            self.loop.run_until_complete(asyncio.gather(
-                run_es_application(es_bulk_request_callback),
+        self.feed_runner_1 = \
+            self.loop.run_until_complete(
                 run_feed_application(feed, feed_requested_callback, 8081),
-            ))
+            )
 
         original_app_runner = aiohttp.web.AppRunner
 
@@ -46,6 +50,7 @@ class TestBase(unittest.TestCase):
 
         self.app_runner_patcher = patch('aiohttp.web.AppRunner', wraps=wrapped_app_runner)
         self.app_runner_patcher.start()
+        self.loop.run_until_complete(delete_all_es_data())
 
     def tearDown(self):
         for task in asyncio.Task.all_tasks():
@@ -54,7 +59,7 @@ class TestBase(unittest.TestCase):
         self.loop.run_until_complete(asyncio.gather(
             self.app_runner.cleanup(),
             self.feed_runner_1.cleanup(),
-            self.es_runner.cleanup(),
+            # self.es_runner.cleanup(),
         ))
         self.app_runner_patcher.stop()
         self.os_environ_patcher.stop()
@@ -66,7 +71,6 @@ class TestConnection(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -79,7 +83,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -94,7 +97,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -113,7 +115,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -132,7 +133,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -151,7 +151,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -170,7 +169,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -189,7 +187,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -200,15 +197,15 @@ class TestAuthentication(TestBase):
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', 'some-type',
         )
         x_forwarded_for = '1.2.3.4'
-        _, status = self.loop.run_until_complete(
+        text, status = self.loop.run_until_complete(
             post_text_no_content_type(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
+        self.assertIn('Content-Type header was not set.', text)
 
     def test_time_skew_then_401(self):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -229,7 +226,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -255,7 +251,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         now = datetime.datetime.now()
@@ -285,7 +280,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -303,7 +297,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -322,7 +315,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -341,7 +333,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -360,7 +351,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -379,7 +369,6 @@ class TestAuthentication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -394,24 +383,30 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 403)
         self.assertEqual(text, '{"details": "You are not authorized to perform this action."}')
 
-    def test_get_returns_object(self):
+    def test_get_returns_feed_data(self):
+        def has_at_least_two_results(results):
+            return (
+                'hits' in results and
+                'hits' in results['hits'] and
+                len(results['hits']['hits']) >= 2
+            )
+
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed,
-            lambda _: None,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
-            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
-        )
         x_forwarded_for = '1.2.3.4'
-        text, status, headers = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
+
+        result, status, headers = self.loop.run_until_complete(
+            get_text_until(url, x_forwarded_for, has_at_least_two_results, asyncio.sleep))
         self.assertEqual(status, 200)
-        self.assertEqual(text, '{"secret": "to-be-hidden"}')
+        self.assertEqual(result['hits']['hits'][0]['_id'], 'export-oportunity-enquiry-made-49863')
+        self.assertEqual(result['hits']['hits'][1]['_id'], 'export-oportunity-enquiry-made-49862')
         self.assertEqual(headers['Server'], 'activity-stream')
 
 
@@ -422,11 +417,26 @@ class TestApplication(TestBase):
     def test_single_page(self, _):
         posted_to_es_once, append_es = append_until(lambda results: len(results) == 1)
 
-        self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
-            mock_feed,
-            append_es,
-        )
+        async def run_es_application():
+            async def handle(request):
+                content, headers = (await request.content.read(), request.headers)
+                asyncio.get_event_loop().call_soon(append_es, (content, headers))
+                return web.Response(text='')
+
+            app = web.Application()
+            app.add_routes([web.post('/_bulk', handle)])
+            runner = web.AppRunner(app)
+            await runner.setup()
+            site = web.TCPSite(runner, '127.0.0.1', 9201)
+            await site.start()
+            return runner
+
+        self.setup_manual({
+            'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
+            'ELASTICSEARCH__PORT': '9201'
+        }, mock_feed)
+
+        es_runner = self.loop.run_until_complete(run_es_application())
 
         async def _test():
             asyncio.ensure_future(run_application())
@@ -437,6 +447,8 @@ class TestApplication(TestBase):
             json.loads(line)
             for line in es_bulk_content.split(b'\n')[0:-1]
         ]
+
+        self.loop.run_until_complete(es_runner.cleanup())
 
         self.assertEqual(self.feed_requested[0].result(
         ).headers['Authorization'], (
@@ -473,8 +485,65 @@ class TestApplication(TestBase):
         self.assertEqual(es_bulk_request_dicts[3]['activity'], 'export-oportunity-enquiry-made')
         self.assertEqual(es_bulk_request_dicts[3]['company_house_number'], '82312')
 
+    def test_es_401_is_500(self):
+        async def run_es_application():
+            async def return_401(_):
+                return web.Response(text='', status=401)
+
+            app = web.Application()
+            app.add_routes([
+                web.get('/_search', return_401),
+            ])
+            runner = web.AppRunner(app)
+            await runner.setup()
+            site = web.TCPSite(runner, '127.0.0.1', 9201)
+            await site.start()
+            return runner
+
+        es_runner = asyncio.get_event_loop().run_until_complete(run_es_application())
+        self.setup_manual({
+            'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
+            'ELASTICSEARCH__PORT': '9201'
+        }, mock_feed)
+        asyncio.ensure_future(run_application())
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/v1/'
+        auth = auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
+        )
+        x_forwarded_for = '1.2.3.4'
+        text, status, _ = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
+        self.loop.run_until_complete(es_runner.cleanup())
+
+        self.assertEqual(status, 500)
+        self.assertEqual(text, '{"details": "An unknown error occurred."}')
+
+    def test_es_no_connect_is_500(self):
+        self.setup_manual({
+            'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
+            'ELASTICSEARCH__PORT': '1234'
+        }, mock_feed)
+        asyncio.ensure_future(run_application())
+        is_http_accepted_eventually()
+
+        url = 'http://127.0.0.1:8080/v1/'
+        auth = auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
+        )
+        x_forwarded_for = '1.2.3.4'
+        text, status, _ = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
+
+        self.assertEqual(status, 500)
+        self.assertEqual(text, '{"details": "An unknown error occurred."}')
+
     def test_multipage(self):
-        posted_to_es_twice, append_es = append_until(lambda results: len(results) == 2)
+        def has_at_least_two_results(results):
+            return (
+                'hits' in results and
+                'hits' in results['hits'] and
+                len(results['hits']['hits']) >= 2
+            )
 
         self.setup_manual(
             {'FEEDS__1__SEED': (
@@ -483,28 +552,32 @@ class TestApplication(TestBase):
             )
             },
             mock_feed,
-            append_es,
         )
 
+        original_sleep = asyncio.sleep
+
+        async def fast_sleep(_):
+            await original_sleep(0)
+
         async def _test():
-            with patch('asyncio.sleep', wraps=asyncio.sleep) as mock_sleep:
+            with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
                 asyncio.ensure_future(run_application())
                 mock_sleep.assert_not_called()
-                result = await posted_to_es_twice
-                mock_sleep.assert_called_once_with(0)
+                result = await fetch_all_es_data_until(has_at_least_two_results, original_sleep)
+                mock_sleep.assert_any_call(0)
                 return result
 
-        [[_, _], [es_bulk_content, _]] = self.loop.run_until_complete(_test())
-
-        es_bulk_request_dicts = [
-            json.loads(line)
-            for line in es_bulk_content.split(b'\n')[0:-1]
-        ]
-        self.assertEqual(es_bulk_request_dicts[0]['index']['_id'],
-                         'export-oportunity-enquiry-made-second-page-4986999')
+        results = self.loop.run_until_complete(_test())
+        self.assertIn('export-oportunity-enquiry-made-second-page-4986999',
+                      str(results))
 
     def test_two_feeds(self):
-        posted_to_es_twice, append_es = append_until(lambda results: len(results) == 2)
+        def has_at_least_four_results(results):
+            return (
+                'hits' in results and
+                'hits' in results['hits'] and
+                len(results['hits']['hits']) >= 4
+            )
 
         self.setup_manual(
             {
@@ -515,57 +588,6 @@ class TestApplication(TestBase):
                 'FEEDS__2__TYPE': 'elasticsearch_bulk',
             },
             mock_feed,
-            append_es,
-        )
-
-        async def _test():
-            asyncio.ensure_future(run_application())
-            return await posted_to_es_twice
-
-        [[es_bulk_content_1, _], [es_bulk_content_2, _]] = self.loop.run_until_complete(_test())
-
-        es_bulk_request_dicts_1 = [
-            json.loads(line)
-            for line in es_bulk_content_1.split(b'\n')[0:-1]
-        ]
-        es_bulk_request_dicts_2 = [
-            json.loads(line)
-            for line in es_bulk_content_2.split(b'\n')[0:-1]
-        ]
-        ids = [
-            es_bulk_request_dicts_1[0]['index']['_id'],
-            es_bulk_request_dicts_2[0]['index']['_id'],
-        ]
-        self.assertIn('export-oportunity-enquiry-made-49863', ids)
-        self.assertIn('export-oportunity-enquiry-made-42863', ids)
-
-    def test_zendesk(self):
-        def has_two_contact_ids(results):
-            item_ids = [
-                json.loads(item)['index']['_id']
-                for es_bulk_content, _ in results
-                for item in es_bulk_content.split(b'\n')[::2]
-                if item
-            ]
-            contact_ids = [
-                item_id
-                for item_id in item_ids
-                if 'contact-made-' in item_id
-            ]
-            return len(contact_ids) == 2
-
-        posted_contacts_twice, append_es = append_until(has_two_contact_ids)
-
-        self.setup_manual(
-            {
-                'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
-                'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
-                'FEEDS__2__API_EMAIL': 'test@test.com',
-                'FEEDS__2__API_KEY': 'some-key',
-                'FEEDS__2__TYPE': 'zendesk',
-            },
-            mock_feed,
-            append_es,
         )
 
         original_sleep = asyncio.sleep
@@ -576,7 +598,44 @@ class TestApplication(TestBase):
         async def _test():
             with patch('asyncio.sleep', wraps=fast_sleep):
                 asyncio.ensure_future(run_application())
-                return await posted_contacts_twice
+                return await fetch_all_es_data_until(has_at_least_four_results, original_sleep)
+
+        results = self.loop.run_until_complete(_test())
+        self.assertIn('export-oportunity-enquiry-made-49863', str(results))
+        self.assertIn('export-oportunity-enquiry-made-42863', str(results))
+
+    def test_zendesk(self):
+        def has_two_contact_ids(results):
+            if 'hits' not in results or 'hits' not in results['hits']:
+                return False
+
+            with_contact_id = [
+                item
+                for item in results['hits']['hits']
+                if 'contact-made-' in item['_id']
+            ]
+            return len(with_contact_id) == 2
+
+        self.setup_manual(
+            {
+                'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
+                'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
+                'FEEDS__2__API_EMAIL': 'test@test.com',
+                'FEEDS__2__API_KEY': 'some-key',
+                'FEEDS__2__TYPE': 'zendesk',
+            },
+            mock_feed,
+        )
+
+        original_sleep = asyncio.sleep
+
+        async def fast_sleep(_):
+            await original_sleep(0)
+
+        async def _test():
+            with patch('asyncio.sleep', wraps=fast_sleep):
+                asyncio.ensure_future(run_application())
+                return await fetch_all_es_data_until(has_two_contact_ids, original_sleep)
 
         results = self.loop.run_until_complete(_test())
         self.assertIn('contact-made-1', str(results))
@@ -585,7 +644,12 @@ class TestApplication(TestBase):
         self.assertIn('2011-04-12T12:48:13+00:00', str(results))
 
     def test_on_bad_json_retries(self):
-        posted_to_es_once, append_es = append_until(lambda results: len(results) == 1)
+        def has_at_least_one_result(results):
+            return (
+                'hits' in results and
+                'hits' in results['hits'] and
+                len(results['hits']['hits']) >= 1
+            )
 
         sent_broken = False
 
@@ -602,7 +666,6 @@ class TestApplication(TestBase):
         self.setup_manual(
             {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             mock_feed_broken_then_fixed,
-            append_es,
         )
 
         original_sleep = asyncio.sleep
@@ -614,19 +677,15 @@ class TestApplication(TestBase):
             with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
                 asyncio.ensure_future(run_application())
                 mock_sleep.assert_not_called()
-                result = await posted_to_es_once
-                mock_sleep.assert_called_once_with(60)
-                return result
+                results = await fetch_all_es_data_until(has_at_least_one_result, original_sleep)
+                mock_sleep.assert_any_call(60)
+                return results
 
-        [[es_bulk_content, _]] = self.loop.run_until_complete(_test())
+        es_results = self.loop.run_until_complete(_test())
 
-        es_bulk_request_dicts = [
-            json.loads(line)
-            for line in es_bulk_content.split(b'\n')[0:-1]
-        ]
         self.assertIn(
             'export-oportunity-enquiry-made-49863',
-            es_bulk_request_dicts[0]['index']['_id'],
+            str(es_results),
         )
 
 
@@ -636,7 +695,6 @@ class TestProcess(unittest.TestCase):
         loop = asyncio.get_event_loop()
 
         self.feed_runner_1 = loop.run_until_complete(run_feed_application(mock_feed, Mock(), 8081))
-        self.es_runner = loop.run_until_complete(run_es_application(Mock()))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
             **{'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
@@ -649,7 +707,6 @@ class TestProcess(unittest.TestCase):
         self.server.terminate()
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.feed_runner_1.cleanup())
-        loop.run_until_complete(self.es_runner.cleanup())
 
     def test_server_accepts_http(self):
         self.assertTrue(is_http_accepted_eventually())
@@ -700,19 +757,34 @@ async def run_feed_application(feed, feed_requested_callback, port):
     return runner
 
 
-async def run_es_application(es_bulk_request_callback):
-    async def handle(request):
-        content, headers = (await request.content.read(), request.headers)
-        asyncio.get_event_loop().call_soon(es_bulk_request_callback, (content, headers))
-        return web.Response(text='')
+async def delete_all_es_data():
+    async with aiohttp.ClientSession() as session:
+        await session.delete('http://127.0.0.1:9200/*')
 
-    app = web.Application()
-    app.add_routes([web.post('/_bulk', handle)])
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '127.0.0.1', 8082)
-    await site.start()
-    return runner
+    def has_no_results(results):
+        return (
+            'hits' in results and
+            'hits' in results['hits'] and
+            len(results['hits']['hits']) >= 0
+        )
+
+    await fetch_all_es_data_until(has_no_results, asyncio.sleep)
+
+
+async def fetch_all_es_data_until(condition, sleep):
+
+    async def fetch_all_es_data():
+        async with aiohttp.ClientSession() as session:
+            results = await session.get('http://127.0.0.1:9200/_search')
+            return json.loads(await results.text())
+
+    while True:
+        all_es_data = await fetch_all_es_data()
+        if condition(all_es_data):
+            break
+        await sleep(0.05)
+
+    return all_es_data
 
 
 def append_until(condition):
@@ -747,6 +819,20 @@ async def get_text(url, auth, x_forwarded_for):
     return (await result.text(), result.status, result.headers)
 
 
+async def get_text_until(url, x_forwarded_for, condition, sleep):
+    while True:
+        auth = auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
+        )
+        all_data, status, headers = await get_text(url, auth, x_forwarded_for)
+        dict_data = json.loads(all_data)
+        if condition(dict_data):
+            break
+        await sleep(0.05)
+
+    return dict_data, status, headers
+
+
 async def post_text(url, auth, x_forwarded_for):
     async with aiohttp.ClientSession() as session:
         result = await session.post(url, headers={
@@ -777,7 +863,7 @@ async def post_text_no_x_forwarded_for(url, auth):
 
 
 async def post_text_no_content_type(url, auth, x_forwarded_for):
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(skip_auto_headers=['Content-Type']) as session:
         result = await session.post(url, headers={
             'Authorization': auth,
             'X-Forwarded-For': x_forwarded_for,
@@ -792,7 +878,7 @@ def mock_env():
         'ELASTICSEARCH__AWS_ACCESS_KEY_ID': 'some-id',
         'ELASTICSEARCH__AWS_SECRET_ACCESS_KEY': 'aws-secret',
         'ELASTICSEARCH__HOST': '127.0.0.1',
-        'ELASTICSEARCH__PORT': '8082',
+        'ELASTICSEARCH__PORT': '9200',
         'ELASTICSEARCH__PROTOCOL': 'http',
         'ELASTICSEARCH__REGION': 'us-east-2',
         'FEEDS__1__ACCESS_KEY_ID': 'feed-some-id',

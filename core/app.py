@@ -6,29 +6,29 @@ import hmac
 import json
 import logging
 import os
-import re
 import signal
 import sys
 
 import aiohttp
 from aiohttp import web
-import mohawk
-from mohawk.exc import HawkFail
 
-from .utils import (
-    ExpiringSet,
+from .app_feeds import (
+    ElasticsearchBulkFeed,
+    ZendeskFeed,
+)
+from .app_server import (
+    authenticator,
+    authorizer,
+    handle_get,
+    handle_post,
+)
+from .app_utils import (
     flatten,
     normalise_environment,
 )
 
 EXCEPTION_INTERVAL = 60
 NONCE_EXPIRE = 120
-
-NOT_PROVIDED = 'Authentication credentials were not provided.'
-INCORRECT = 'Incorrect authentication credentials.'
-MISSING_CONTENT_TYPE = 'Content-Type header was not set. ' + \
-                       'It must be set for authentication, even if as the empty string.'
-NOT_AUTHORIZED = 'You are not authorized to perform this action.'
 
 
 async def run_application():
@@ -56,43 +56,42 @@ async def run_application():
     ip_whitelist = env['INCOMING_IP_WHITELIST']
 
     es_host = env['ELASTICSEARCH']['HOST']
-    es_path = '/_bulk'
     es_endpoint = {
         'host': es_host,
-        'path': es_path,
         'access_key_id': env['ELASTICSEARCH']['AWS_ACCESS_KEY_ID'],
         'secret_key': env['ELASTICSEARCH']['AWS_SECRET_ACCESS_KEY'],
         'region': env['ELASTICSEARCH']['REGION'],
-        'url': (
+        'protocol': env['ELASTICSEARCH']['PROTOCOL'],
+        'base_url': (
             env['ELASTICSEARCH']['PROTOCOL'] + '://' +
-            es_host + ':' + env['ELASTICSEARCH']['PORT'] + es_path
+            es_host + ':' + env['ELASTICSEARCH']['PORT']
         ),
+        'port': env['ELASTICSEARCH']['PORT'],
     }
 
     app_logger.debug('Examining environment: done')
 
-    await create_incoming_application(
-        port, ip_whitelist, incoming_key_pairs,
-    )
-    await create_outgoing_application(
-        feed_endpoints, es_endpoint,
-    )
+    async with aiohttp.ClientSession() as session:
+        await create_incoming_application(
+            port, ip_whitelist, incoming_key_pairs, session, es_endpoint,
+        )
+        await create_outgoing_application(
+            session, feed_endpoints, es_endpoint,
+        )
 
 
-async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
+async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
+                                      session, es_endpoint):
     app_logger = logging.getLogger(__name__)
-
-    async def handle(_):
-        return json_response({'secret': 'to-be-hidden'}, status=200)
 
     app_logger.debug('Creating listening web application...')
     app = web.Application(middlewares=[
-        authenticator(ip_whitelist, incoming_key_pairs),
+        authenticator(ip_whitelist, incoming_key_pairs, NONCE_EXPIRE),
         authorizer(),
     ])
     app.add_routes([
-        web.post('/v1/', handle),
-        web.get('/v1/', handle),
+        web.post('/v1/', handle_post),
+        web.get('/v1/', handle_get(session, es_auth_headers, es_endpoint)),
     ])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 
@@ -103,122 +102,16 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs):
     app_logger.debug('Creating listening web application: done')
 
 
-def authenticator(ip_whitelist, incoming_key_pairs):
-    app_logger = logging.getLogger(__name__)
-
-    def lookup_credentials(passed_access_key_id):
-        matching_key_pairs = [
-            key_pair
-            for key_pair in incoming_key_pairs
-            if key_pair['key_id'] == passed_access_key_id
-        ]
-
-        if not matching_key_pairs:
-            raise HawkFail(f'No Hawk ID of {passed_access_key_id}')
-
-        return {
-            'id': matching_key_pairs[0]['key_id'],
-            'key': matching_key_pairs[0]['secret_key'],
-            'permissions': matching_key_pairs[0]['permissions'],
-            'algorithm': 'sha256',
-        }
-
-    # This would need to be stored externally if this was ever to be load balanced,
-    # otherwise replay attacks could succeed by hitting another instance
-    seen_nonces = ExpiringSet(NONCE_EXPIRE)
-
-    def seen_nonce(access_key_id, nonce, _):
-        nonce_tuple = (access_key_id, nonce)
-        seen = nonce_tuple in seen_nonces
-        if not seen:
-            seen_nonces.add(nonce_tuple)
-        return seen
-
-    async def authenticate_or_raise(request):
-        return mohawk.Receiver(
-            lookup_credentials,
-            request.headers['Authorization'],
-            str(request.url),
-            request.method,
-            content=await request.content.read(),
-            content_type=request.headers['Content-Type'],
-            seen_nonce=seen_nonce,
-        )
-
-    @web.middleware
-    async def authenticate(request, handler):
-        if 'X-Forwarded-For' not in request.headers:
-            app_logger.warning(
-                'Failed authentication: no X-Forwarded-For header passed'
-            )
-            return json_response({
-                'details': INCORRECT,
-            }, status=401)
-
-        remote_address = request.headers['X-Forwarded-For'].split(',')[0].strip()
-
-        if remote_address not in ip_whitelist:
-            app_logger.warning(
-                'Failed authentication: the X-Forwarded-For header did not '
-                'start with an IP in the whitelist'
-            )
-            return json_response({
-                'details': INCORRECT,
-            }, status=401)
-
-        if 'Authorization' not in request.headers:
-            return json_response({
-                'details': NOT_PROVIDED,
-            }, status=401)
-
-        if 'Content-Type' not in request.headers:
-            return json_response({
-                'details': MISSING_CONTENT_TYPE,
-            }, status=401)
-
-        try:
-            receiver = await authenticate_or_raise(request)
-        except HawkFail as exception:
-            app_logger.warning('Failed authentication %s', exception)
-            return json_response({
-                'details': INCORRECT,
-            }, status=401)
-
-        request['permissions'] = receiver.resource.credentials['permissions']
-        return await handler(request)
-
-    return authenticate
-
-
-def authorizer():
-    @web.middleware
-    async def authorize(request, handler):
-        if request.method not in request['permissions']:
-            return json_response({
-                'details': NOT_AUTHORIZED,
-            }, status=403)
-        return await handler(request)
-
-    return authorize
-
-
-def json_response(data, status):
-    return web.json_response(data, status=status, headers={
-        'Server': 'activity-stream'
-    })
-
-
-async def create_outgoing_application(feed_endpoints, es_endpoint):
-    async with aiohttp.ClientSession() as session:
-        feeds = [
-            repeat_even_on_exception(functools.partial(
-                ingest_feed,
-                session, feed_endpoint,
-                es_endpoint,
-            ))
-            for feed_endpoint in feed_endpoints
-        ]
-        await asyncio.gather(*feeds)
+async def create_outgoing_application(session, feed_endpoints, es_endpoint):
+    feeds = [
+        repeat_even_on_exception(functools.partial(
+            ingest_feed,
+            session, feed_endpoint,
+            es_endpoint,
+        ))
+        for feed_endpoint in feed_endpoints
+    ]
+    await asyncio.gather(*feeds)
 
 
 async def repeat_even_on_exception(never_ending_coroutine):
@@ -251,16 +144,16 @@ async def ingest_feed(session, feed_endpoint, es_endpoint):
         headers = {
             'Content-Type': 'application/x-ndjson'
         }
-        auth_headers = es_bulk_auth_headers(
-            access_key=es_endpoint['access_key_id'],
-            secret_key=es_endpoint['secret_key'],
-            region=es_endpoint['region'],
-            host=es_endpoint['host'],
-            path=es_endpoint['path'],
+        path = '/_bulk'
+        auth_headers = es_auth_headers(
+            endpoint=es_endpoint,
+            method='POST',
+            path='/_bulk',
             payload=es_bulk_contents,
         )
+        url = es_endpoint['base_url'] + path
         es_result = await session.post(
-            es_endpoint['url'], data=es_bulk_contents, headers={**headers, **auth_headers})
+            url, data=es_bulk_contents, headers={**headers, **auth_headers})
         app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
 
 
@@ -303,9 +196,8 @@ def es_bulk(items):
     ])) + '\n'
 
 
-def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
+def es_auth_headers(endpoint, method, path, payload):
     service = 'es'
-    method = 'POST'
     signed_headers = 'content-type;host;x-amz-date'
     algorithm = 'AWS4-HMAC-SHA256'
 
@@ -313,7 +205,7 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
     amzdate = now.strftime('%Y%m%dT%H%M%SZ')
     datestamp = now.strftime('%Y%m%d')
 
-    credential_scope = f'{datestamp}/{region}/{service}/aws4_request'
+    credential_scope = f'{datestamp}/{endpoint["region"]}/{service}/aws4_request'
 
     def signature():
         def canonical_request():
@@ -321,7 +213,7 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
             canonical_querystring = ''
             canonical_headers = \
                 f'content-type:application/x-ndjson\n' + \
-                f'host:{host}\nx-amz-date:{amzdate}\n'
+                f'host:{endpoint["host"]}\nx-amz-date:{amzdate}\n'
             payload_hash = hashlib.sha256(payload).hexdigest()
 
             return f'{method}\n{canonical_uri}\n{canonical_querystring}\n' + \
@@ -334,8 +226,8 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
             f'{algorithm}\n{amzdate}\n{credential_scope}\n' + \
             hashlib.sha256(canonical_request().encode('utf-8')).hexdigest()
 
-        date_key = sign(('AWS4' + secret_key).encode('utf-8'), datestamp)
-        region_key = sign(date_key, region)
+        date_key = sign(('AWS4' + endpoint['secret_key']).encode('utf-8'), datestamp)
+        region_key = sign(date_key, endpoint['region'])
         service_key = sign(region_key, service)
         request_key = sign(service_key, 'aws4_request')
         return sign(request_key, string_to_sign).hex()
@@ -343,109 +235,10 @@ def es_bulk_auth_headers(access_key, secret_key, region, host, path, payload):
     return {
         'x-amz-date': amzdate,
         'Authorization': (
-            f'{algorithm} Credential={access_key}/{credential_scope}, ' +
+            f'{algorithm} Credential={endpoint["access_key_id"]}/{credential_scope}, ' +
             f'SignedHeaders={signed_headers}, Signature=' + signature()
         ),
     }
-
-
-class ElasticsearchBulkFeed():
-
-    polling_page_interval = 0
-    polling_seed_interval = 5
-
-    @classmethod
-    def parse_config(cls, config):
-        return cls(
-            seed=config['SEED'],
-            access_key_id=config['ACCESS_KEY_ID'],
-            secret_access_key=config['SECRET_ACCESS_KEY'],
-        )
-
-    def __init__(self, seed, access_key_id, secret_access_key):
-        self.seed = seed
-        self.access_key_id = access_key_id
-        self.secret_access_key = secret_access_key
-
-    @staticmethod
-    def next_href(feed):
-        return feed['next_url'] if 'next_url' in feed else None
-
-    def auth_headers(self, url):
-        method = 'GET'
-        return {
-            'Authorization': mohawk.Sender({
-                'id': self.access_key_id,
-                'key': self.secret_access_key,
-                'algorithm': 'sha256'
-            }, url, method, content_type='', content='').request_header,
-        }
-
-    @staticmethod
-    def convert_to_bulk_es(feed):
-        return feed['items']
-
-
-class ZendeskFeed():
-
-    # The staging API is severely rate limited
-    # This could be dynamic, but KISS
-    polling_page_interval = 30
-    polling_seed_interval = 60
-
-    company_number_regex = r'Company number:\s*(\d+)'
-
-    @classmethod
-    def parse_config(cls, config):
-        return cls(
-            seed=config['SEED'],
-            api_email=config['API_EMAIL'],
-            api_key=config['API_KEY'],
-        )
-
-    def __init__(self, seed, api_email, api_key):
-        self.seed = seed
-        self.api_email = api_email
-        self.api_key = api_key
-
-    @staticmethod
-    def next_href(feed):
-        return feed['next_page']
-
-    def auth_headers(self, _):
-        return {
-            'Authorization': aiohttp.helpers.BasicAuth(
-                login=self.api_email + '/token',
-                password=self.api_key,
-            ).encode()
-        }
-
-    @classmethod
-    def convert_to_bulk_es(cls, page):
-        def company_numbers(description):
-            match = re.search(cls.company_number_regex, description)
-            return [match[1]] if match else []
-
-        tickets_with_company_numbers = [
-            (ticket['id'], ticket['created_at'], company_number)
-            for ticket in page['tickets']
-            for company_number in company_numbers(ticket['description'])
-        ]
-
-        return [{
-            'action_and_metadata': {
-                'index': {
-                    '_index': 'company_timeline',
-                    '_type': '_doc',
-                    '_id': 'contact-made-' + str(ticket_id),
-                },
-            },
-            'source': {
-                'date': created_at,
-                'activity': 'contact-made',
-                'company_house_number': company_number,
-            }
-        } for ticket_id, created_at, company_number in tickets_with_company_numbers]
 
 
 def setup_logging():

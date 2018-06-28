@@ -13,6 +13,12 @@ Activity Stream is a collector of various interactions between people and DIT.
 
 ## Running tests
 
+Elasticsearch must be started first, which you can do by
+
+    ./tests_es_start.sh
+
+and then to run the tests themselves
+
     ./tests.sh
 
 ## Running locally
@@ -40,6 +46,8 @@ When adding a new library, first add it to requirements.in, then::
     pip install pip-tools
     pip-compile --output-file requirements.txt requirements.in
     pip install -r requirements.txt
+
+For a library only to be present for tests, do the same but for `requirements_test.in` and `requirements_test.txt`.
 
 ## Endpoints
 
