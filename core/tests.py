@@ -407,8 +407,10 @@ class TestAuthentication(TestBase):
         result, status, headers = self.loop.run_until_complete(
             get_text_until(url, x_forwarded_for, has_at_least_two_results, asyncio.sleep))
         self.assertEqual(status, 200)
-        self.assertEqual(result['hits']['hits'][0]['_id'], 'export-oportunity-enquiry-made-49863')
-        self.assertEqual(result['hits']['hits'][1]['_id'], 'export-oportunity-enquiry-made-49862')
+        self.assertEqual(result['hits']['hits'][0]['_id'],
+                         'dit:exportOpportunities:Enquiry:49863:Create')
+        self.assertEqual(result['hits']['hits'][1]['_id'],
+                         'dit:exportOpportunities:Enquiry:49862:Create')
         self.assertEqual(headers['Server'], 'activity-stream')
 
 
@@ -467,25 +469,29 @@ class TestApplication(TestBase):
             'AWS4-HMAC-SHA256 '
             'Credential=some-id/20120114/us-east-2/es/aws4_request, '
             'SignedHeaders=content-type;host;x-amz-date, '
-            'Signature=544dff75ed37c19a96124d849cd09bd1488c061dc1666fedf93d5bc20609d78b')
+            'Signature=ce881b6b5506fb0b6a8c1ab8f79ef7d162020a98f90fc2a5abfc62c3eb23ffb8')
         self.assertEqual(es_bulk_content.decode('utf-8')[-1], '\n')
         self.assertEqual(es_bulk_headers['Content-Type'], 'application/x-ndjson')
 
-        self.assertEqual(es_bulk_request_dicts[0]['index']['_index'], 'company_timeline')
+        self.assertEqual(es_bulk_request_dicts[0]['index']['_index'], 'activities')
         self.assertEqual(es_bulk_request_dicts[0]['index']['_type'], '_doc')
         self.assertEqual(es_bulk_request_dicts[0]['index']
-                         ['_id'], 'export-oportunity-enquiry-made-49863')
-        self.assertEqual(es_bulk_request_dicts[1]['date'], '2018-04-12T12:48:13+00:00')
-        self.assertEqual(es_bulk_request_dicts[1]['activity'], 'export-oportunity-enquiry-made')
-        self.assertEqual(es_bulk_request_dicts[1]['company_house_number'], '123432')
+                         ['_id'], 'dit:exportOpportunities:Enquiry:49863:Create')
+        self.assertEqual(es_bulk_request_dicts[1]['published'], '2018-04-12T12:48:13+00:00')
+        self.assertEqual(es_bulk_request_dicts[1]['type'], 'Create')
+        self.assertEqual(es_bulk_request_dicts[1]['object']
+                         ['type'][1], 'dit:exportOpportunities:Enquiry')
+        self.assertEqual(es_bulk_request_dicts[1]['actor']['dit:companiesHouseNumber'], '123432')
 
-        self.assertEqual(es_bulk_request_dicts[2]['index']['_index'], 'company_timeline')
+        self.assertEqual(es_bulk_request_dicts[2]['index']['_index'], 'activities')
         self.assertEqual(es_bulk_request_dicts[2]['index']['_type'], '_doc')
         self.assertEqual(es_bulk_request_dicts[2]['index']
-                         ['_id'], 'export-oportunity-enquiry-made-49862')
-        self.assertEqual(es_bulk_request_dicts[3]['date'], '2018-03-23T17:06:53+00:00')
-        self.assertEqual(es_bulk_request_dicts[3]['activity'], 'export-oportunity-enquiry-made')
-        self.assertEqual(es_bulk_request_dicts[3]['company_house_number'], '82312')
+                         ['_id'], 'dit:exportOpportunities:Enquiry:49862:Create')
+        self.assertEqual(es_bulk_request_dicts[3]['published'], '2018-03-23T17:06:53+00:00')
+        self.assertEqual(es_bulk_request_dicts[3]['type'], 'Create')
+        self.assertEqual(es_bulk_request_dicts[3]['object']
+                         ['type'][1], 'dit:exportOpportunities:Enquiry')
+        self.assertEqual(es_bulk_request_dicts[3]['actor']['dit:companiesHouseNumber'], '82312')
 
     def test_es_401_is_500(self):
         async def run_es_application():
@@ -570,7 +576,7 @@ class TestApplication(TestBase):
                 return result
 
         results = self.loop.run_until_complete(_test())
-        self.assertIn('export-oportunity-enquiry-made-second-page-4986999',
+        self.assertIn('dit:exportOpportunities:Enquiry:4986999:Create',
                       str(results))
 
     def test_two_feeds(self):
@@ -603,8 +609,8 @@ class TestApplication(TestBase):
                 return await fetch_all_es_data_until(has_at_least_four_results, original_sleep)
 
         results = self.loop.run_until_complete(_test())
-        self.assertIn('export-oportunity-enquiry-made-49863', str(results))
-        self.assertIn('export-oportunity-enquiry-made-42863', str(results))
+        self.assertIn('dit:exportOpportunities:Enquiry:49863:Create', str(results))
+        self.assertIn('dit:exportOpportunities:Enquiry:42863:Create', str(results))
 
     def test_zendesk(self):
         def has_two_zendesk_tickets(results):
@@ -689,7 +695,7 @@ class TestApplication(TestBase):
         es_results = self.loop.run_until_complete(_test())
 
         self.assertIn(
-            'export-oportunity-enquiry-made-49863',
+            'dit:exportOpportunities:Enquiry:49863:Create',
             str(es_results),
         )
 

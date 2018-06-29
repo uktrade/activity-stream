@@ -3,29 +3,59 @@
     {
       "action_and_metadata": {
         "index": {
-          "_id": "export-oportunity-enquiry-made-42863",
-          "_index": "company_timeline",
+          "_id": "dit:exportOpportunities:Enquiry:42863:Create",
+          "_index": "activities",
           "_type": "_doc"
         }
       },
       "source": {
-        "activity": "export-oportunity-enquiry-made",
-        "company_house_number": "123432",
-        "date": "2011-04-12T12:48:13+00:00"
+        "actor": {
+          "dit:companiesHouseNumber": "123432",
+          "type": [
+            "Organization",
+            "dit:Company"
+          ]
+        },
+        "dit:application": "exportOpportunities",
+        "object": {
+          "id": "dit:exportOpportunities:Enquiry:42863",
+          "type": [
+            "Document",
+            "dit:exportOpportunities:Enquiry"
+          ],
+          "url": "https://export-opportunities-continuous-deployment.cloudapps.digital/admin/enquiries/42863"
+        },
+        "published": "2011-04-12T12:48:13+00:00",
+        "type": "Create"
       }
     },
     {
       "action_and_metadata": {
         "index": {
-          "_id": "export-oportunity-enquiry-made-42862",
-          "_index": "company_timeline",
+          "_id": "dit:exportOpportunities:Enquiry:42862:Create",
+          "_index": "activities",
           "_type": "_doc"
         }
       },
       "source": {
-        "activity": "export-oportunity-enquiry-made",
-        "company_house_number": "22312",
-        "date": "2011-03-23T17:06:53+00:00"
+        "actor": {
+          "dit:companiesHouseNumber": "22312",
+          "type": [
+            "Organization",
+            "dit:Company"
+          ]
+        },
+        "dit:application": "exportOpportunities",
+        "object": {
+          "id": "dit:exportOpportunities:Enquiry:42862",
+          "type": [
+            "Document",
+            "dit:exportOpportunities:Enquiry"
+          ],
+          "url": "https://export-opportunities-continuous-deployment.cloudapps.digital/admin/enquiries/42862"
+        },
+        "published": "2011-03-23T17:06:53+00:00",
+        "type": "Create"
       }
     }
   ]
