@@ -13,6 +13,7 @@ from freezegun import freeze_time
 import mohawk
 
 from core.app import run_application
+from core.app_utils import flatten
 
 
 class TestBase(unittest.TestCase):
@@ -56,13 +57,14 @@ class TestBase(unittest.TestCase):
         for task in asyncio.Task.all_tasks():
             task.cancel()
         self.loop = asyncio.get_event_loop()
-        self.loop.run_until_complete(asyncio.gather(
-            self.app_runner.cleanup(),
-            self.feed_runner_1.cleanup(),
-            # self.es_runner.cleanup(),
-        ))
-        self.app_runner_patcher.stop()
-        self.os_environ_patcher.stop()
+        self.loop.run_until_complete(asyncio.gather(*flatten([
+            ([self.app_runner.cleanup()] if hasattr(self, 'app_runner') else []) +
+            ([self.feed_runner_1.cleanup()] if hasattr(self, 'feed_runner_1') else [])
+        ])))
+        if hasattr(self, 'app_runner_patcher'):
+            self.app_runner_patcher.stop()
+        if hasattr(self, 'os_environ_patcher'):
+            self.os_environ_patcher.stop()
 
 
 class TestConnection(TestBase):
