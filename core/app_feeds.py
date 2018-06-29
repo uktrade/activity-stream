@@ -81,17 +81,24 @@ class ZendeskFeed:
             for company_number in company_numbers(ticket['description'])
         ]
 
-        return [{
-            'action_and_metadata': {
-                'index': {
-                    '_index': 'company_timeline',
-                    '_type': '_doc',
-                    '_id': 'contact-made-' + str(ticket_id),
-                },
+        return [
+            _activity(ticket_id, created_at, company_number)
+            for ticket_id, created_at, company_number in tickets_with_company_numbers
+        ]
+
+
+def _activity(activity_id, published_date, companies_house_number):
+    return {
+        'action_and_metadata': {
+            'index': {
+                '_index': 'company_timeline',
+                '_type': '_doc',
+                '_id': 'contact-made-' + activity_id,
             },
-            'source': {
-                'date': created_at,
-                'activity': 'contact-made',
-                'company_house_number': company_number,
-            }
-        } for ticket_id, created_at, company_number in tickets_with_company_numbers]
+        },
+        'source': {
+            'date': published_date,
+            'activity': 'contact-made',
+            'company_house_number': companies_house_number,
+        },
+    }
