@@ -86,7 +86,11 @@ class ZendeskFeed:
         ]
 
 
-def _activity(activity_id, published_date, companies_house_number):
+def _activity(
+        activity_id,
+        published_date,
+        companies_house_number,
+):
     return {
         'action_and_metadata': {
             'index': {
