@@ -77,9 +77,9 @@ class ZendeskFeed:
 
         return [
             _activity(
-                activity_id='dit:zendesk:Ticket:' + ticket['id'] + ':Create',
+                activity_id='dit:zendesk:Ticket:' + str(ticket['id']) + ':Create',
                 activity_type='Create',
-                object_id='dit:zendesk:Ticket:' + ticket['id'],
+                object_id='dit:zendesk:Ticket:' + str(ticket['id']),
                 published_date=ticket['created_at'],
                 dit_application='zendesk',
                 object_type='dit:zendesk:Ticket',
