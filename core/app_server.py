@@ -54,7 +54,7 @@ def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
             request.headers['Authorization'],
             str(request.url),
             request.method,
-            content=await request.content.read(),
+            content=await request.read(),
             content_type=request.headers['Content-Type'],
             seen_nonce=seen_nonce,
         )
