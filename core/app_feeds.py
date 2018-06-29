@@ -75,15 +75,10 @@ class ZendeskFeed:
             match = re.search(cls.company_number_regex, description)
             return [match[1]] if match else []
 
-        tickets_with_company_numbers = [
-            (ticket['id'], ticket['created_at'], company_number)
+        return [
+            _activity('contact-made-' + ticket['id'], ticket['created_at'], company_number)
             for ticket in page['tickets']
             for company_number in company_numbers(ticket['description'])
-        ]
-
-        return [
-            _activity('contact-made-' + ticket_id, created_at, company_number)
-            for ticket_id, created_at, company_number in tickets_with_company_numbers
         ]
 
 
