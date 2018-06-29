@@ -638,11 +638,11 @@ class TestApplication(TestBase):
                 asyncio.ensure_future(run_application())
                 return await fetch_all_es_data_until(has_two_zendesk_tickets, original_sleep)
 
-        results = self.loop.run_until_complete(_test())
-        self.assertIn('dit:zendesk:Ticket:1', str(results))
-        self.assertIn('2011-04-12T12:48:13+00:00', str(results))
-        self.assertIn('dit:zendesk:Ticket:3', str(results))
-        self.assertIn('2011-04-12T12:48:13+00:00', str(results))
+        results = json.dumps(self.loop.run_until_complete(_test()))
+        self.assertIn('"dit:zendesk:Ticket:1"', results)
+        self.assertIn('"2011-04-12T12:48:13+00:00"', results)
+        self.assertIn('"dit:zendesk:Ticket:3"', results)
+        self.assertIn('"2011-04-12T12:48:13+00:00"', results)
 
     def test_on_bad_json_retries(self):
         def has_at_least_one_result(results):
