@@ -82,7 +82,7 @@ class ZendeskFeed:
         ]
 
         return [
-            _activity(ticket_id, created_at, company_number)
+            _activity('contact-made-' + ticket_id, created_at, company_number)
             for ticket_id, created_at, company_number in tickets_with_company_numbers
         ]
 
@@ -93,7 +93,7 @@ def _activity(activity_id, published_date, companies_house_number):
             'index': {
                 '_index': 'company_timeline',
                 '_type': '_doc',
-                '_id': 'contact-made-' + activity_id,
+                '_id': activity_id,
             },
         },
         'source': {
