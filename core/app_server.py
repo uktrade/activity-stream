@@ -123,20 +123,28 @@ async def handle_post(_):
 def handle_get(session, es_auth_headers, es_endpoint):
     app_logger = logging.getLogger(__name__)
 
-    path = '/_search'
+    path = '/activities/_search'
     url = es_endpoint['base_url'] + path
 
-    async def handle(_):
+    async def handle(request):
+        incoming_body = await request.read()
+
         auth_headers = es_auth_headers(
             endpoint=es_endpoint,
             method='GET',
             path=path,
-            payload=b'',
+            payload=incoming_body,
         )
 
         succesful = False
         try:
-            results = await session.get(url, headers=auth_headers)
+            results = await session.get(
+                url,
+                headers={**auth_headers, **{
+                    'Content-Type': request.headers['Content-Type'],
+                }},
+                data=incoming_body,
+            )
             succesful = results.status == 200
         except aiohttp.ClientError as exception:
             app_logger.warning('Error connecting to Elasticsearch: %s', exception)

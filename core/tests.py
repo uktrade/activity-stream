@@ -142,7 +142,7 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', '',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
         )
         x_forwarded_for = '1.2.3.4'
         text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
@@ -378,10 +378,10 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', '',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status, _ = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
+        text, status, _ = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for, b''))
         self.assertEqual(status, 403)
         self.assertEqual(text, '{"details": "You are not authorized to perform this action."}')
 
@@ -412,6 +412,64 @@ class TestAuthentication(TestBase):
         self.assertEqual(result['hits']['hits'][1]['_id'],
                          'dit:exportOpportunities:Enquiry:49862:Create')
         self.assertEqual(headers['Server'], 'activity-stream')
+        self.assertEqual(headers['Server'], 'activity-stream')
+
+    def test_get_can_filter(self):
+        def has_at_least_four_results(results):
+            return (
+                'hits' in results and
+                'hits' in results['hits'] and
+                len(results['hits']['hits']) >= 4
+            )
+
+        self.setup_manual(
+            {
+                'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
+                'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
+                'FEEDS__2__API_EMAIL': 'test@test.com',
+                'FEEDS__2__API_KEY': 'some-key',
+                'FEEDS__2__TYPE': 'zendesk',
+            },
+            mock_feed,
+        )
+
+        original_sleep = asyncio.sleep
+
+        async def fast_sleep(_):
+            await original_sleep(0)
+
+        async def _test():
+            with patch('asyncio.sleep', wraps=fast_sleep):
+                asyncio.ensure_future(run_application())
+                return await fetch_all_es_data_until(has_at_least_four_results, original_sleep)
+
+        self.loop.run_until_complete(_test())
+
+        query = json.dumps({
+            'query': {
+                'range': {
+                    'published': {
+                        'gte': '2011-04-12',
+                        'lte': '2011-04-12',
+                    },
+                },
+            },
+        }).encode('utf-8')
+
+        url = 'http://127.0.0.1:8080/v1/'
+        x_forwarded_for = '1.2.3.4'
+        auth = auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', query, 'application/json',
+        )
+        result, status, _ = self.loop.run_until_complete(
+            get_text(url, auth, x_forwarded_for, query))
+        self.assertEqual(status, 200)
+        data = json.loads(result)
+        self.assertEqual(data['hits']['total'], 1)
+        self.assertEqual(data['hits']['hits'][0]['_id'],
+                         'dit:zendesk:Ticket:3:Create')
+        self.assertEqual(data['hits']['hits'][0]['_source']['published'],
+                         '2011-04-12T12:48:13+00:00')
 
 
 class TestApplication(TestBase):
@@ -422,13 +480,18 @@ class TestApplication(TestBase):
         posted_to_es_once, append_es = append_until(lambda results: len(results) == 1)
 
         async def run_es_application():
-            async def handle(request):
+            async def return_200(_):
+                return web.Response(text='{}', status=200, content_type='application/json')
+
+            async def handle_bulk(request):
                 content, headers = (await request.content.read(), request.headers)
                 asyncio.get_event_loop().call_soon(append_es, (content, headers))
-                return web.Response(text='')
+                return web.Response(text='{}', status=200, content_type='application/json')
 
             app = web.Application()
-            app.add_routes([web.post('/_bulk', handle)])
+            app.add_routes([web.put('/activities/_mapping/_doc', return_200)])
+            app.add_routes([web.put('/activities', return_200)])
+            app.add_routes([web.post('/_bulk', handle_bulk)])
             runner = web.AppRunner(app)
             await runner.setup()
             site = web.TCPSite(runner, '127.0.0.1', 9201)
@@ -495,11 +558,16 @@ class TestApplication(TestBase):
 
     def test_es_401_is_500(self):
         async def run_es_application():
+            async def return_200(_):
+                return web.Response(text='{}', status=200, content_type='application/json')
+
             async def return_401(_):
-                return web.Response(text='', status=401)
+                return web.Response(text='{}', status=401, content_type='application/json')
 
             app = web.Application()
             app.add_routes([
+                web.put('/activities/_mapping/_doc', return_200),
+                web.put('/activities', return_200),
                 web.get('/_search', return_401),
             ])
             runner = web.AppRunner(app)
@@ -518,29 +586,48 @@ class TestApplication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = auth_header(
-            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status, _ = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
+        text, status, _ = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for, b''))
         self.loop.run_until_complete(es_runner.cleanup())
 
         self.assertEqual(status, 500)
         self.assertEqual(text, '{"details": "An unknown error occurred."}')
 
-    def test_es_no_connect_is_500(self):
+    def test_es_no_connect_on_get_500(self):
+        # We need a dummy elastic search running on application startup to
+        # actually get to the point where we're accepting GETs
+        async def run_es_application():
+            async def return_200(_):
+                return web.Response(text='{}', status=200, content_type='application/json')
+
+            app = web.Application()
+            app.add_routes([
+                web.put('/activities/_mapping/_doc', return_200),
+                web.put('/activities', return_200),
+            ])
+            runner = web.AppRunner(app)
+            await runner.setup()
+            site = web.TCPSite(runner, '127.0.0.1', 9201)
+            await site.start()
+            return runner
+
+        es_runner = asyncio.get_event_loop().run_until_complete(run_es_application())
         self.setup_manual({
             'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
-            'ELASTICSEARCH__PORT': '1234'
+            'ELASTICSEARCH__PORT': '9201'
         }, mock_feed)
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
+        self.loop.run_until_complete(es_runner.cleanup())
         url = 'http://127.0.0.1:8080/v1/'
         auth = auth_header(
-            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status, _ = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for))
+        text, status, _ = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for, b''))
 
         self.assertEqual(status, 500)
         self.assertEqual(text, '{"details": "An unknown error occurred."}')
@@ -705,6 +792,7 @@ class TestProcess(unittest.TestCase):
     def setUp(self):
         loop = asyncio.get_event_loop()
 
+        loop.run_until_complete(delete_all_es_data())
         self.feed_runner_1 = loop.run_until_complete(run_feed_application(mock_feed, Mock(), 8081))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
@@ -820,22 +908,22 @@ def auth_header(key_id, secret_key, url, method, content, content_type):
     }, url, method, content=content, content_type=content_type).request_header
 
 
-async def get_text(url, auth, x_forwarded_for):
+async def get_text(url, auth, x_forwarded_for, body):
     async with aiohttp.ClientSession() as session:
         result = await session.get(url, headers={
             'Authorization': auth,
-            'Content-Type': '',
+            'Content-Type': 'application/json',
             'X-Forwarded-For': x_forwarded_for,
-        }, timeout=1)
+        }, data=body, timeout=1)
     return (await result.text(), result.status, result.headers)
 
 
 async def get_text_until(url, x_forwarded_for, condition, sleep):
     while True:
         auth = auth_header(
-            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
         )
-        all_data, status, headers = await get_text(url, auth, x_forwarded_for)
+        all_data, status, headers = await get_text(url, auth, x_forwarded_for, b'')
         dict_data = json.loads(all_data)
         if condition(dict_data):
             break
