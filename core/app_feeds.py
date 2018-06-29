@@ -77,8 +77,9 @@ class ZendeskFeed:
 
         return [
             _activity(
-                activity_id='dit:zendesk:Ticket:' + ticket['id'],
+                activity_id='dit:zendesk:Ticket:' + ticket['id'] + ':Create',
                 activity_type='Create',
+                object_id='dit:zendesk:Ticket:' + ticket['id'],
                 published_date=ticket['created_at'],
                 dit_application='zendesk',
                 object_type='dit:zendesk:Ticket',
@@ -92,6 +93,7 @@ class ZendeskFeed:
 def _activity(
         activity_id,
         activity_type,
+        object_id,
         published_date,
         dit_application,
         object_type,
@@ -115,7 +117,7 @@ def _activity(
                     'Document',
                     object_type,
                 ],
-                'id': activity_id,
+                'id': object_id,
             },
         },
     }

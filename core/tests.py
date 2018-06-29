@@ -640,8 +640,10 @@ class TestApplication(TestBase):
 
         results = json.dumps(self.loop.run_until_complete(_test()))
         self.assertIn('"dit:zendesk:Ticket:1"', results)
+        self.assertIn('"dit:zendesk:Ticket:1:Create"', results)
         self.assertIn('"2011-04-12T12:48:13+00:00"', results)
         self.assertIn('"dit:zendesk:Ticket:3"', results)
+        self.assertIn('"dit:zendesk:Ticket:3:Create"', results)
         self.assertIn('"2011-04-12T12:48:13+00:00"', results)
 
     def test_on_bad_json_retries(self):
