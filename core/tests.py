@@ -605,16 +605,17 @@ class TestApplication(TestBase):
         self.assertIn('export-oportunity-enquiry-made-42863', str(results))
 
     def test_zendesk(self):
-        def has_two_contact_ids(results):
+        def has_two_zendesk_tickets(results):
             if 'hits' not in results or 'hits' not in results['hits']:
                 return False
 
-            with_contact_id = [
+            is_zendesk_ticket = [
                 item
                 for item in results['hits']['hits']
-                if 'contact-made-' in item['_id']
+                for source in [item['_source']]
+                if 'dit:application' in source and source['dit:application'] == 'zendesk'
             ]
-            return len(with_contact_id) == 2
+            return len(is_zendesk_ticket) == 2
 
         self.setup_manual(
             {
@@ -635,12 +636,12 @@ class TestApplication(TestBase):
         async def _test():
             with patch('asyncio.sleep', wraps=fast_sleep):
                 asyncio.ensure_future(run_application())
-                return await fetch_all_es_data_until(has_two_contact_ids, original_sleep)
+                return await fetch_all_es_data_until(has_two_zendesk_tickets, original_sleep)
 
         results = self.loop.run_until_complete(_test())
-        self.assertIn('contact-made-1', str(results))
+        self.assertIn('dit:zendesk:Ticket:1', str(results))
         self.assertIn('2011-04-12T12:48:13+00:00', str(results))
-        self.assertIn('contact-made-3', str(results))
+        self.assertIn('dit:zendesk:Ticket:3', str(results))
         self.assertIn('2011-04-12T12:48:13+00:00', str(results))
 
     def test_on_bad_json_retries(self):

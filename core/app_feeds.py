@@ -77,9 +77,12 @@ class ZendeskFeed:
 
         return [
             _activity(
-                activity_id='contact-made-' + ticket['id'],
+                activity_id='dit:zendesk:Ticket:' + ticket['id'],
+                activity_type='Create',
                 published_date=ticket['created_at'],
-                companies_house_number=company_number,
+                dit_application='zendesk',
+                object_type='dit:zendesk:Ticket',
+                actor=_company_actor(companies_house_number=company_number),
             )
             for ticket in page['tickets']
             for company_number in company_numbers(ticket['description'])
@@ -88,20 +91,41 @@ class ZendeskFeed:
 
 def _activity(
         activity_id,
+        activity_type,
         published_date,
-        companies_house_number,
+        dit_application,
+        object_type,
+        actor,
 ):
     return {
         'action_and_metadata': {
             'index': {
-                '_index': 'company_timeline',
+                '_index': 'activities',
                 '_type': '_doc',
                 '_id': activity_id,
             },
         },
         'source': {
-            'date': published_date,
-            'activity': 'contact-made',
-            'company_house_number': companies_house_number,
+            'type': activity_type,
+            'published': published_date,
+            'dit:application': dit_application,
+            'actor': actor,
+            'object': {
+                'type': [
+                    'Document',
+                    object_type,
+                ],
+                'id': activity_id,
+            },
         },
+    }
+
+
+def _company_actor(companies_house_number):
+    return {
+        'type': [
+            'Organization',
+            'dit:company',
+        ],
+        'dit:companiesHouseNumber': companies_house_number,
     }
