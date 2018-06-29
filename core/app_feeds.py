@@ -76,7 +76,11 @@ class ZendeskFeed:
             return [match[1]] if match else []
 
         return [
-            _activity('contact-made-' + ticket['id'], ticket['created_at'], company_number)
+            _activity(
+                activity_id='contact-made-' + ticket['id'],
+                published_date=ticket['created_at'],
+                companies_house_number=company_number,
+            )
             for ticket in page['tickets']
             for company_number in company_numbers(ticket['description'])
         ]
