@@ -18,8 +18,11 @@ from core.app_utils import flatten
 
 class TestBase(unittest.TestCase):
 
-    def setup_manual(self, env, feed):
+    def setup_manual(self, env, mock_feed):
         ''' Test setUp function that can be customised on a per-test basis '''
+
+        self.addCleanup(self.teardown_manual)
+
         self.os_environ_patcher = patch.dict(os.environ, {
             **mock_env(),
             **env,
@@ -40,7 +43,7 @@ class TestBase(unittest.TestCase):
 
         self.feed_runner_1 = \
             self.loop.run_until_complete(
-                run_feed_application(feed, feed_requested_callback, 8081),
+                run_feed_application(mock_feed, feed_requested_callback, 8081),
             )
 
         original_app_runner = aiohttp.web.AppRunner
@@ -53,7 +56,7 @@ class TestBase(unittest.TestCase):
         self.app_runner_patcher.start()
         self.loop.run_until_complete(delete_all_es_data())
 
-    def tearDown(self):
+    def teardown_manual(self):
         for task in asyncio.Task.all_tasks():
             task.cancel()
         self.loop = asyncio.get_event_loop()
@@ -71,8 +74,8 @@ class TestConnection(TestBase):
 
     def test_application_accepts_http(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -83,8 +86,8 @@ class TestAuthentication(TestBase):
 
     def test_no_auth_then_401(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -97,8 +100,8 @@ class TestAuthentication(TestBase):
 
     def test_bad_id_then_401(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -115,8 +118,8 @@ class TestAuthentication(TestBase):
 
     def test_bad_secret_then_401(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -133,8 +136,8 @@ class TestAuthentication(TestBase):
 
     def test_bad_method_then_401(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -151,8 +154,8 @@ class TestAuthentication(TestBase):
 
     def test_bad_content_then_401(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -169,8 +172,8 @@ class TestAuthentication(TestBase):
 
     def test_bad_content_type_then_401(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -187,8 +190,8 @@ class TestAuthentication(TestBase):
 
     def test_no_content_type_then_401(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -206,8 +209,8 @@ class TestAuthentication(TestBase):
 
     def test_time_skew_then_401(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -226,8 +229,8 @@ class TestAuthentication(TestBase):
 
     def test_repeat_auth_then_401(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -251,8 +254,8 @@ class TestAuthentication(TestBase):
             evidence that the cache of nonces was cleared.
         '''
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         now = datetime.datetime.now()
@@ -280,8 +283,8 @@ class TestAuthentication(TestBase):
 
     def test_no_x_forwarded_for_401(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -297,8 +300,8 @@ class TestAuthentication(TestBase):
 
     def test_bad_x_forwarded_for_401(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -315,8 +318,8 @@ class TestAuthentication(TestBase):
 
     def test_at_end_x_forwarded_for_401(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -333,8 +336,8 @@ class TestAuthentication(TestBase):
 
     def test_second_id_returns_object(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -351,8 +354,8 @@ class TestAuthentication(TestBase):
 
     def test_post_returns_object(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -369,8 +372,8 @@ class TestAuthentication(TestBase):
 
     def test_post_creds_get_403(self):
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -397,8 +400,8 @@ class TestApplication(TestBase):
             )
 
         self.setup_manual(
-            {},
-            mock_feed,
+            env={},
+            mock_feed=read_file,
         )
 
         asyncio.ensure_future(run_application(), loop=self.loop)
@@ -432,7 +435,7 @@ class TestApplication(TestBase):
                 'FEEDS__2__API_KEY': 'some-key',
                 'FEEDS__2__TYPE': 'zendesk',
             },
-            mock_feed,
+            mock_feed=read_file,
         )
 
         original_sleep = asyncio.sleep
@@ -499,7 +502,7 @@ class TestApplication(TestBase):
 
         self.setup_manual({
             'ELASTICSEARCH__PORT': '9201'
-        }, mock_feed)
+        }, mock_feed=read_file)
 
         es_runner = self.loop.run_until_complete(run_es_application())
 
@@ -577,7 +580,7 @@ class TestApplication(TestBase):
         es_runner = asyncio.get_event_loop().run_until_complete(run_es_application())
         self.setup_manual({
             'ELASTICSEARCH__PORT': '9201'
-        }, mock_feed)
+        }, mock_feed=read_file)
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
@@ -613,7 +616,7 @@ class TestApplication(TestBase):
         es_runner = asyncio.get_event_loop().run_until_complete(run_es_application())
         self.setup_manual({
             'ELASTICSEARCH__PORT': '9201'
-        }, mock_feed)
+        }, mock_feed=read_file)
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
@@ -642,7 +645,7 @@ class TestApplication(TestBase):
                 'tests_fixture_elasticsearch_bulk_multipage_1.json'
             )
             },
-            mock_feed,
+            mock_feed=read_file,
         )
 
         original_sleep = asyncio.sleep
@@ -677,7 +680,7 @@ class TestApplication(TestBase):
                 'FEEDS__2__SECRET_ACCESS_KEY': '?[!@$%^%',
                 'FEEDS__2__TYPE': 'elasticsearch_bulk',
             },
-            mock_feed,
+            mock_feed=read_file,
         )
 
         original_sleep = asyncio.sleep
@@ -714,7 +717,7 @@ class TestApplication(TestBase):
                 'FEEDS__2__API_KEY': 'some-key',
                 'FEEDS__2__TYPE': 'zendesk',
             },
-            mock_feed,
+            mock_feed=read_file,
         )
 
         original_sleep = asyncio.sleep
@@ -745,19 +748,19 @@ class TestApplication(TestBase):
 
         sent_broken = False
 
-        def mock_feed_broken_then_fixed(path):
+        def read_file_broken_then_fixed(path):
             nonlocal sent_broken
 
             feed_contents_maybe_broken = (
-                mock_feed(path) +
+                read_file(path) +
                 ('something-invalid' if not sent_broken else '')
             )
             sent_broken = True
             return feed_contents_maybe_broken
 
         self.setup_manual(
-            {},
-            mock_feed_broken_then_fixed,
+            env={},
+            mock_feed=read_file_broken_then_fixed,
         )
 
         original_sleep = asyncio.sleep
@@ -787,7 +790,7 @@ class TestProcess(unittest.TestCase):
         loop = asyncio.get_event_loop()
 
         loop.run_until_complete(delete_all_es_data())
-        self.feed_runner_1 = loop.run_until_complete(run_feed_application(mock_feed, Mock(), 8081))
+        self.feed_runner_1 = loop.run_until_complete(run_feed_application(read_file, Mock(), 8081))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
             'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
@@ -829,7 +832,7 @@ async def _is_http_accepted_eventually():
     return False
 
 
-def mock_feed(path):
+def read_file(path):
     with open('core/' + path, 'rb') as file:
         return file.read().decode('utf-8')
 
