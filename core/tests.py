@@ -432,7 +432,7 @@ class TestApplication(TestBase):
         async def return_200_and_callback(request):
             content, headers = (await request.content.read(), request.headers)
             asyncio.get_event_loop().call_soon(append_es, (content, headers))
-            return return_200(request)
+            return respond_http(200)(request)
 
         routes = [
             web.post('/_bulk', return_200_and_callback),
@@ -495,7 +495,7 @@ class TestApplication(TestBase):
         self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                           mock_feed=read_file)
         routes = [
-            web.post('/_search', return_401),
+            web.post('/_search', respond_http(401)),
         ]
         es_runner = self.loop.run_until_complete(
             run_es_application(port=9201, override_routes=routes))
@@ -866,20 +866,19 @@ async def post_no_content_type(url, auth, x_forwarded_for):
     return (await result.text(), result.status)
 
 
-async def return_200(_):
-    return web.Response(text='{}', status=200, content_type='application/json')
+def respond_http(status):
+    async def response(_):
+        return web.Response(text='{}', status=status, content_type='application/json')
 
-
-async def return_401(_):
-    return web.Response(text='{}', status=401, content_type='application/json')
+    return response
 
 
 async def run_es_application(port, override_routes):
     default_routes = [
-        web.put('/activities/_mapping/_doc', return_200),
-        web.put('/activities', return_200),
-        web.get('/_search', return_200),
-        web.post('/_bulk', return_200),
+        web.put('/activities/_mapping/_doc', respond_http(200)),
+        web.put('/activities', respond_http(200)),
+        web.get('/_search', respond_http(200)),
+        web.post('/_bulk', respond_http(200)),
     ]
 
     routes_no_duplicates = {
