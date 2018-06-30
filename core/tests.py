@@ -71,7 +71,7 @@ class TestConnection(TestBase):
 
     def test_application_accepts_http(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -83,7 +83,7 @@ class TestAuthentication(TestBase):
 
     def test_no_auth_then_401(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -97,7 +97,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_id_then_401(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -115,7 +115,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_secret_then_401(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -133,7 +133,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_method_then_401(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -151,7 +151,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_content_then_401(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -169,7 +169,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_content_type_then_401(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -187,7 +187,7 @@ class TestAuthentication(TestBase):
 
     def test_no_content_type_then_401(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -206,7 +206,7 @@ class TestAuthentication(TestBase):
 
     def test_time_skew_then_401(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -226,7 +226,7 @@ class TestAuthentication(TestBase):
 
     def test_repeat_auth_then_401(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -251,7 +251,7 @@ class TestAuthentication(TestBase):
             evidence that the cache of nonces was cleared.
         '''
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -280,7 +280,7 @@ class TestAuthentication(TestBase):
 
     def test_no_x_forwarded_for_401(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -297,7 +297,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_x_forwarded_for_401(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -315,7 +315,7 @@ class TestAuthentication(TestBase):
 
     def test_at_end_x_forwarded_for_401(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -333,7 +333,7 @@ class TestAuthentication(TestBase):
 
     def test_second_id_returns_object(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -351,7 +351,7 @@ class TestAuthentication(TestBase):
 
     def test_post_returns_object(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -369,7 +369,7 @@ class TestAuthentication(TestBase):
 
     def test_post_creds_get_403(self):
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -385,6 +385,9 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 403)
         self.assertEqual(text, '{"details": "You are not authorized to perform this action."}')
 
+
+class TestApplication(TestBase):
+
     def test_get_returns_feed_data(self):
         def has_at_least_two_results(results):
             return (
@@ -394,7 +397,7 @@ class TestAuthentication(TestBase):
             )
 
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed,
         )
 
@@ -424,7 +427,6 @@ class TestAuthentication(TestBase):
 
         self.setup_manual(
             {
-                'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
                 'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
                 'FEEDS__2__API_EMAIL': 'test@test.com',
                 'FEEDS__2__API_KEY': 'some-key',
@@ -471,9 +473,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(data['hits']['hits'][0]['_source']['published'],
                          '2011-04-12T12:48:13+00:00')
 
-
-class TestApplication(TestBase):
-
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
     def test_single_page(self, _):
@@ -499,7 +498,6 @@ class TestApplication(TestBase):
             return runner
 
         self.setup_manual({
-            'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
             'ELASTICSEARCH__PORT': '9201'
         }, mock_feed)
 
@@ -578,7 +576,6 @@ class TestApplication(TestBase):
 
         es_runner = asyncio.get_event_loop().run_until_complete(run_es_application())
         self.setup_manual({
-            'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
             'ELASTICSEARCH__PORT': '9201'
         }, mock_feed)
         asyncio.ensure_future(run_application())
@@ -615,7 +612,6 @@ class TestApplication(TestBase):
 
         es_runner = asyncio.get_event_loop().run_until_complete(run_es_application())
         self.setup_manual({
-            'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
             'ELASTICSEARCH__PORT': '9201'
         }, mock_feed)
         asyncio.ensure_future(run_application())
@@ -676,7 +672,6 @@ class TestApplication(TestBase):
 
         self.setup_manual(
             {
-                'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
                 'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_2.json',
                 'FEEDS__2__ACCESS_KEY_ID': 'feed-some-id',
                 'FEEDS__2__SECRET_ACCESS_KEY': '?[!@$%^%',
@@ -714,7 +709,6 @@ class TestApplication(TestBase):
 
         self.setup_manual(
             {
-                'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
                 'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
                 'FEEDS__2__API_EMAIL': 'test@test.com',
                 'FEEDS__2__API_KEY': 'some-key',
@@ -762,7 +756,7 @@ class TestApplication(TestBase):
             return feed_contents_maybe_broken
 
         self.setup_manual(
-            {'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
+            {},
             mock_feed_broken_then_fixed,
         )
 
@@ -796,7 +790,6 @@ class TestProcess(unittest.TestCase):
         self.feed_runner_1 = loop.run_until_complete(run_feed_application(mock_feed, Mock(), 8081))
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
-            **{'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json'},
             'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
         })
 
@@ -980,6 +973,7 @@ def mock_env():
         'ELASTICSEARCH__PORT': '9200',
         'ELASTICSEARCH__PROTOCOL': 'http',
         'ELASTICSEARCH__REGION': 'us-east-2',
+        'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
         'FEEDS__1__ACCESS_KEY_ID': 'feed-some-id',
         'FEEDS__1__SECRET_ACCESS_KEY': '?[!@$%^%',
         'FEEDS__1__TYPE': 'elasticsearch_bulk',
