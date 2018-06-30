@@ -99,7 +99,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-incorrect', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '1.2.3.4'
@@ -114,7 +114,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-2', url, 'POST', '', '',
         )
         x_forwarded_for = '1.2.3.4'
@@ -129,7 +129,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
         )
         x_forwarded_for = '1.2.3.4'
@@ -144,7 +144,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', 'content', '',
         )
         x_forwarded_for = '1.2.3.4'
@@ -159,7 +159,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', 'some-type',
         )
         x_forwarded_for = '1.2.3.4'
@@ -174,7 +174,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', 'some-type',
         )
         x_forwarded_for = '1.2.3.4'
@@ -192,7 +192,7 @@ class TestAuthentication(TestBase):
         url = 'http://127.0.0.1:8080/v1/'
         past = datetime.datetime.now() + datetime.timedelta(seconds=-61)
         with freeze_time(past):
-            auth = auth_header(
+            auth = hawk_auth_header(
                 'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
             )
         x_forwarded_for = '1.2.3.4'
@@ -207,7 +207,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '1.2.3.4'
@@ -236,7 +236,7 @@ class TestAuthentication(TestBase):
             x_forwarded_for = '1.2.3.4'
 
             with freeze_time(past):
-                auth = auth_header(
+                auth = hawk_auth_header(
                     'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
                 )
                 _, status_1 = self.loop.run_until_complete(
@@ -255,7 +255,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         text, status = self.loop.run_until_complete(post_no_x_forwarded_for(url, auth))
@@ -269,7 +269,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '3.4.5.6'
@@ -284,7 +284,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '3.4.5.6,1.2.3.4'
@@ -299,7 +299,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-2', 'incoming-some-secret-2', url, 'POST', '', '',
         )
         x_forwarded_for = '1.2.3.4'
@@ -314,7 +314,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '1.2.3.4'
@@ -329,7 +329,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
         )
         x_forwarded_for = '1.2.3.4'
@@ -408,7 +408,7 @@ class TestApplication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', query, 'application/json',
         )
         result, status, _ = self.loop.run_until_complete(
@@ -528,7 +528,7 @@ class TestApplication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
         )
         x_forwarded_for = '1.2.3.4'
@@ -566,7 +566,7 @@ class TestApplication(TestBase):
 
         self.loop.run_until_complete(es_runner.cleanup())
         url = 'http://127.0.0.1:8080/v1/'
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
         )
         x_forwarded_for = '1.2.3.4'
@@ -835,7 +835,7 @@ def append_until(condition):
     return (future, append)
 
 
-def auth_header(key_id, secret_key, url, method, content, content_type):
+def hawk_auth_header(key_id, secret_key, url, method, content, content_type):
     return mohawk.Sender({
         'id': key_id,
         'key': secret_key,
@@ -855,7 +855,7 @@ async def get(url, auth, x_forwarded_for, body):
 
 async def get_until(url, x_forwarded_for, condition, sleep):
     while True:
-        auth = auth_header(
+        auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
         )
         all_data, status, headers = await get(url, auth, x_forwarded_for, b'')
