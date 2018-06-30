@@ -521,9 +521,9 @@ class TestApplication(TestBase):
             await site.start()
             return runner
 
-        es_runner = asyncio.get_event_loop().run_until_complete(run_es_application(port=9201))
         self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                           mock_feed=read_file)
+        es_runner = self.loop.run_until_complete(run_es_application(port=9201))
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
