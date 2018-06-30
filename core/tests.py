@@ -78,7 +78,7 @@ class TestConnection(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         self.assertTrue(is_http_accepted_eventually())
 
 
@@ -90,7 +90,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -104,7 +104,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -122,7 +122,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -140,7 +140,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -158,7 +158,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -176,7 +176,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -194,7 +194,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -213,7 +213,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -233,7 +233,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -262,7 +262,7 @@ class TestAuthentication(TestBase):
         past = now + datetime.timedelta(seconds=-45)
 
         with patch('core.app.NONCE_EXPIRE', 30):
-            asyncio.ensure_future(run_application(), loop=self.loop)
+            asyncio.ensure_future(run_application())
             is_http_accepted_eventually()
 
             url = 'http://127.0.0.1:8080/v1/'
@@ -287,7 +287,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -304,7 +304,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -322,7 +322,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -340,7 +340,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -358,7 +358,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -376,7 +376,7 @@ class TestAuthentication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -404,7 +404,7 @@ class TestApplication(TestBase):
             mock_feed=read_file,
         )
 
-        asyncio.ensure_future(run_application(), loop=self.loop)
+        asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -809,7 +809,7 @@ class TestProcess(unittest.TestCase):
 
 def is_http_accepted_eventually():
     loop = asyncio.get_event_loop()
-    connected_future = asyncio.ensure_future(_is_http_accepted_eventually(), loop=loop)
+    connected_future = asyncio.ensure_future(_is_http_accepted_eventually())
     return loop.run_until_complete(connected_future)
 
 
