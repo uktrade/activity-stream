@@ -426,7 +426,7 @@ class TestApplication(TestBase):
     def test_single_page(self, _):
         posted_to_es_once, append_es = append_until(lambda results: len(results) == 1)
 
-        async def run_es_application():
+        async def run_es_application(port):
             async def return_200(_):
                 return web.Response(text='{}', status=200, content_type='application/json')
 
@@ -441,14 +441,14 @@ class TestApplication(TestBase):
             app.add_routes([web.post('/_bulk', handle_bulk)])
             runner = web.AppRunner(app)
             await runner.setup()
-            site = web.TCPSite(runner, '127.0.0.1', 9201)
+            site = web.TCPSite(runner, '127.0.0.1', port)
             await site.start()
             return runner
 
         self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                           mock_feed=read_file)
 
-        es_runner = self.loop.run_until_complete(run_es_application())
+        es_runner = self.loop.run_until_complete(run_es_application(port=9201))
         asyncio.ensure_future(run_application())
 
         async def _test():
@@ -502,7 +502,7 @@ class TestApplication(TestBase):
         self.assertEqual(es_bulk_request_dicts[3]['actor']['dit:companiesHouseNumber'], '82312')
 
     def test_es_401_is_500(self):
-        async def run_es_application():
+        async def run_es_application(port):
             async def return_200(_):
                 return web.Response(text='{}', status=200, content_type='application/json')
 
@@ -517,11 +517,11 @@ class TestApplication(TestBase):
             ])
             runner = web.AppRunner(app)
             await runner.setup()
-            site = web.TCPSite(runner, '127.0.0.1', 9201)
+            site = web.TCPSite(runner, '127.0.0.1', port)
             await site.start()
             return runner
 
-        es_runner = asyncio.get_event_loop().run_until_complete(run_es_application())
+        es_runner = asyncio.get_event_loop().run_until_complete(run_es_application(port=9201))
         self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                           mock_feed=read_file)
         asyncio.ensure_future(run_application())
