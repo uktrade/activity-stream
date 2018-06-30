@@ -507,7 +507,8 @@ class TestApplication(TestBase):
             **mock_env(),
             'ELASTICSEARCH__PORT': '9201'
         }, mock_feed=read_file)
-        es_runner = self.loop.run_until_complete(run_es_application_put_only(port=9201))
+        es_runner = self.loop.run_until_complete(
+            run_es_application(port=9201, callback=lambda _: _))
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -864,9 +865,11 @@ async def run_es_application(port, callback):
         return web.Response(text='{}', status=200, content_type='application/json')
 
     app = web.Application()
-    app.add_routes([web.put('/activities/_mapping/_doc', return_200)])
-    app.add_routes([web.put('/activities', return_200)])
-    app.add_routes([web.post('/_bulk', handle_bulk)])
+    app.add_routes([
+        web.put('/activities/_mapping/_doc', return_200),
+        web.put('/activities', return_200),
+        web.post('/_bulk', handle_bulk),
+    ])
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '127.0.0.1', port)
@@ -886,22 +889,6 @@ async def run_es_application_search_401(port):
         web.put('/activities/_mapping/_doc', return_200),
         web.put('/activities', return_200),
         web.get('/_search', return_401),
-    ])
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '127.0.0.1', port)
-    await site.start()
-    return runner
-
-
-async def run_es_application_put_only(port):
-    async def return_200(_):
-        return web.Response(text='{}', status=200, content_type='application/json')
-
-    app = web.Application()
-    app.add_routes([
-        web.put('/activities/_mapping/_doc', return_200),
-        web.put('/activities', return_200),
     ])
     runner = web.AppRunner(app)
     await runner.setup()
