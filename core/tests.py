@@ -426,29 +426,11 @@ class TestApplication(TestBase):
     def test_single_page(self, _):
         posted_to_es_once, append_es = append_until(lambda results: len(results) == 1)
 
-        async def run_es_application(port):
-            async def return_200(_):
-                return web.Response(text='{}', status=200, content_type='application/json')
-
-            async def handle_bulk(request):
-                content, headers = (await request.content.read(), request.headers)
-                asyncio.get_event_loop().call_soon(append_es, (content, headers))
-                return web.Response(text='{}', status=200, content_type='application/json')
-
-            app = web.Application()
-            app.add_routes([web.put('/activities/_mapping/_doc', return_200)])
-            app.add_routes([web.put('/activities', return_200)])
-            app.add_routes([web.post('/_bulk', handle_bulk)])
-            runner = web.AppRunner(app)
-            await runner.setup()
-            site = web.TCPSite(runner, '127.0.0.1', port)
-            await site.start()
-            return runner
-
         self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                           mock_feed=read_file)
 
-        es_runner = self.loop.run_until_complete(run_es_application(port=9201))
+        es_runner = self.loop.run_until_complete(
+            run_es_application(port=9201, callback=append_es))
         asyncio.ensure_future(run_application())
 
         async def _test():
@@ -502,28 +484,10 @@ class TestApplication(TestBase):
         self.assertEqual(es_bulk_request_dicts[3]['actor']['dit:companiesHouseNumber'], '82312')
 
     def test_es_401_is_500(self):
-        async def run_es_application(port):
-            async def return_200(_):
-                return web.Response(text='{}', status=200, content_type='application/json')
-
-            async def return_401(_):
-                return web.Response(text='{}', status=401, content_type='application/json')
-
-            app = web.Application()
-            app.add_routes([
-                web.put('/activities/_mapping/_doc', return_200),
-                web.put('/activities', return_200),
-                web.get('/_search', return_401),
-            ])
-            runner = web.AppRunner(app)
-            await runner.setup()
-            site = web.TCPSite(runner, '127.0.0.1', port)
-            await site.start()
-            return runner
-
         self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                           mock_feed=read_file)
-        es_runner = self.loop.run_until_complete(run_es_application(port=9201))
+        es_runner = self.loop.run_until_complete(
+            run_es_application_search_401(port=9201))
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
@@ -539,23 +503,6 @@ class TestApplication(TestBase):
         self.assertEqual(text, '{"details": "An unknown error occurred."}')
 
     def test_es_no_connect_on_get_500(self):
-        # We need a dummy elastic search running on application startup to
-        # actually get to the point where we're accepting GETs
-        async def run_es_application_put_only(port):
-            async def return_200(_):
-                return web.Response(text='{}', status=200, content_type='application/json')
-
-            app = web.Application()
-            app.add_routes([
-                web.put('/activities/_mapping/_doc', return_200),
-                web.put('/activities', return_200),
-            ])
-            runner = web.AppRunner(app)
-            await runner.setup()
-            site = web.TCPSite(runner, '127.0.0.1', port)
-            await site.start()
-            return runner
-
         self.setup_manual({
             **mock_env(),
             'ELASTICSEARCH__PORT': '9201'
@@ -905,6 +852,62 @@ async def post_no_content_type(url, auth, x_forwarded_for):
         }, timeout=1)
 
     return (await result.text(), result.status)
+
+
+async def run_es_application(port, callback):
+    async def return_200(_):
+        return web.Response(text='{}', status=200, content_type='application/json')
+
+    async def handle_bulk(request):
+        content, headers = (await request.content.read(), request.headers)
+        asyncio.get_event_loop().call_soon(callback, (content, headers))
+        return web.Response(text='{}', status=200, content_type='application/json')
+
+    app = web.Application()
+    app.add_routes([web.put('/activities/_mapping/_doc', return_200)])
+    app.add_routes([web.put('/activities', return_200)])
+    app.add_routes([web.post('/_bulk', handle_bulk)])
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '127.0.0.1', port)
+    await site.start()
+    return runner
+
+
+async def run_es_application_search_401(port):
+    async def return_200(_):
+        return web.Response(text='{}', status=200, content_type='application/json')
+
+    async def return_401(_):
+        return web.Response(text='{}', status=401, content_type='application/json')
+
+    app = web.Application()
+    app.add_routes([
+        web.put('/activities/_mapping/_doc', return_200),
+        web.put('/activities', return_200),
+        web.get('/_search', return_401),
+    ])
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '127.0.0.1', port)
+    await site.start()
+    return runner
+
+
+async def run_es_application_put_only(port):
+    async def return_200(_):
+        return web.Response(text='{}', status=200, content_type='application/json')
+
+    app = web.Application()
+    app.add_routes([
+        web.put('/activities/_mapping/_doc', return_200),
+        web.put('/activities', return_200),
+    ])
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '127.0.0.1', port)
+    await site.start()
+    return runner
 
 
 def mock_env():
