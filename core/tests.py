@@ -88,7 +88,7 @@ class TestAuthentication(TestBase):
         is_http_accepted_eventually()
 
         url = 'http://127.0.0.1:8080/v1/'
-        text, status = self.loop.run_until_complete(post_text_no_auth(url, '1.2.3.4'))
+        text, status = self.loop.run_until_complete(post_no_auth(url, '1.2.3.4'))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Authentication credentials were not provided."}')
 
@@ -103,7 +103,7 @@ class TestAuthentication(TestBase):
             'incoming-some-id-incorrect', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        text, status = self.loop.run_until_complete(post(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -118,7 +118,7 @@ class TestAuthentication(TestBase):
             'incoming-some-id-1', 'incoming-some-secret-2', url, 'POST', '', '',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        text, status = self.loop.run_until_complete(post(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -133,7 +133,7 @@ class TestAuthentication(TestBase):
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        text, status = self.loop.run_until_complete(post(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -148,7 +148,7 @@ class TestAuthentication(TestBase):
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', 'content', '',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        text, status = self.loop.run_until_complete(post(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -163,7 +163,7 @@ class TestAuthentication(TestBase):
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', 'some-type',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        text, status = self.loop.run_until_complete(post(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -179,7 +179,7 @@ class TestAuthentication(TestBase):
         )
         x_forwarded_for = '1.2.3.4'
         text, status = self.loop.run_until_complete(
-            post_text_no_content_type(url, auth, x_forwarded_for))
+            post_no_content_type(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertIn('Content-Type header was not set.', text)
 
@@ -196,7 +196,7 @@ class TestAuthentication(TestBase):
                 'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
             )
         x_forwarded_for = '1.2.3.4'
-        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        text, status = self.loop.run_until_complete(post(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -211,10 +211,10 @@ class TestAuthentication(TestBase):
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '1.2.3.4'
-        _, status_1 = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        _, status_1 = self.loop.run_until_complete(post(url, auth, x_forwarded_for))
         self.assertEqual(status_1, 200)
 
-        text_2, status_2 = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        text_2, status_2 = self.loop.run_until_complete(post(url, auth, x_forwarded_for))
         self.assertEqual(status_2, 401)
         self.assertEqual(text_2, '{"details": "Incorrect authentication credentials."}')
 
@@ -240,12 +240,12 @@ class TestAuthentication(TestBase):
                     'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
                 )
                 _, status_1 = self.loop.run_until_complete(
-                    post_text(url, auth, x_forwarded_for))
+                    post(url, auth, x_forwarded_for))
             self.assertEqual(status_1, 200)
 
             with freeze_time(now):
                 _, status_2 = self.loop.run_until_complete(
-                    post_text(url, auth, x_forwarded_for))
+                    post(url, auth, x_forwarded_for))
             self.assertEqual(status_2, 200)
 
     def test_no_x_forwarded_for_401(self):
@@ -258,7 +258,7 @@ class TestAuthentication(TestBase):
         auth = auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
-        text, status = self.loop.run_until_complete(post_text_no_x_forwarded_for(url, auth))
+        text, status = self.loop.run_until_complete(post_no_x_forwarded_for(url, auth))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -273,7 +273,7 @@ class TestAuthentication(TestBase):
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '3.4.5.6'
-        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        text, status = self.loop.run_until_complete(post(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -288,7 +288,7 @@ class TestAuthentication(TestBase):
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '3.4.5.6,1.2.3.4'
-        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        text, status = self.loop.run_until_complete(post(url, auth, x_forwarded_for))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -303,7 +303,7 @@ class TestAuthentication(TestBase):
             'incoming-some-id-2', 'incoming-some-secret-2', url, 'POST', '', '',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        text, status = self.loop.run_until_complete(post(url, auth, x_forwarded_for))
         self.assertEqual(status, 200)
         self.assertEqual(text, '{"secret": "to-be-hidden"}')
 
@@ -318,7 +318,7 @@ class TestAuthentication(TestBase):
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status = self.loop.run_until_complete(post_text(url, auth, x_forwarded_for))
+        text, status = self.loop.run_until_complete(post(url, auth, x_forwarded_for))
         self.assertEqual(status, 200)
         self.assertEqual(text, '{"secret": "to-be-hidden"}')
 
@@ -867,7 +867,7 @@ async def get_text_until(url, x_forwarded_for, condition, sleep):
     return dict_data, status, headers
 
 
-async def post_text(url, auth, x_forwarded_for):
+async def post(url, auth, x_forwarded_for):
     async with aiohttp.ClientSession() as session:
         result = await session.post(url, headers={
             'Authorization': auth,
@@ -877,7 +877,7 @@ async def post_text(url, auth, x_forwarded_for):
     return (await result.text(), result.status)
 
 
-async def post_text_no_auth(url, x_forwarded_for):
+async def post_no_auth(url, x_forwarded_for):
     async with aiohttp.ClientSession() as session:
         result = await session.post(url, headers={
             'Content-Type': '',
@@ -886,7 +886,7 @@ async def post_text_no_auth(url, x_forwarded_for):
     return (await result.text(), result.status)
 
 
-async def post_text_no_x_forwarded_for(url, auth):
+async def post_no_x_forwarded_for(url, auth):
     async with aiohttp.ClientSession() as session:
         headers = {
             'Authorization': auth,
@@ -896,7 +896,7 @@ async def post_text_no_x_forwarded_for(url, auth):
     return (await result.text(), result.status)
 
 
-async def post_text_no_content_type(url, auth, x_forwarded_for):
+async def post_no_content_type(url, auth, x_forwarded_for):
     async with aiohttp.ClientSession(skip_auto_headers=['Content-Type']) as session:
         result = await session.post(url, headers={
             'Authorization': auth,
