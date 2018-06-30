@@ -541,7 +541,7 @@ class TestApplication(TestBase):
     def test_es_no_connect_on_get_500(self):
         # We need a dummy elastic search running on application startup to
         # actually get to the point where we're accepting GETs
-        async def run_es_application_put_only():
+        async def run_es_application_put_only(port):
             async def return_200(_):
                 return web.Response(text='{}', status=200, content_type='application/json')
 
@@ -552,15 +552,16 @@ class TestApplication(TestBase):
             ])
             runner = web.AppRunner(app)
             await runner.setup()
-            site = web.TCPSite(runner, '127.0.0.1', 9201)
+            site = web.TCPSite(runner, '127.0.0.1', port)
             await site.start()
             return runner
 
-        es_runner = asyncio.get_event_loop().run_until_complete(run_es_application_put_only())
         self.setup_manual({
             **mock_env(),
             'ELASTICSEARCH__PORT': '9201'
         }, mock_feed=read_file)
+        es_runner = self.loop.run_until_complete(run_es_application_put_only(port=9201))
+
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
