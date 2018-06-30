@@ -430,7 +430,7 @@ class TestApplication(TestBase):
                           mock_feed=read_file)
 
         es_runner = self.loop.run_until_complete(
-            run_es_application(port=9201, callback=append_es))
+            run_es_application_on_bulk(port=9201, callback=append_es))
         asyncio.ensure_future(run_application())
 
         async def _test():
@@ -508,7 +508,7 @@ class TestApplication(TestBase):
             'ELASTICSEARCH__PORT': '9201'
         }, mock_feed=read_file)
         es_runner = self.loop.run_until_complete(
-            run_es_application(port=9201, callback=lambda _: _))
+            run_es_application(port=9201, override_routes=[]))
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -863,7 +863,7 @@ async def return_401(_):
     return web.Response(text='{}', status=401, content_type='application/json')
 
 
-async def run_es_application(port, callback):
+async def run_es_application_on_bulk(port, callback):
 
     async def return_200_and_callback(request):
         content, headers = (await request.content.read(), request.headers)
@@ -871,24 +871,34 @@ async def run_es_application(port, callback):
         return return_200(request)
 
     routes = [
-        web.put('/activities/_mapping/_doc', return_200),
-        web.put('/activities', return_200),
-        web.get('/_search', return_401),
         web.post('/_bulk', return_200_and_callback),
     ]
 
-    return await _web_application(port=port, routes=routes)
+    return await run_es_application(port=port, override_routes=routes)
 
 
 async def run_es_application_search_401(port):
     routes = [
+        web.get('/_search', return_401),
+    ]
+
+    return await run_es_application(port=port, override_routes=routes)
+
+
+async def run_es_application(port, override_routes):
+    default_routes = [
         web.put('/activities/_mapping/_doc', return_200),
         web.put('/activities', return_200),
-        web.get('/_search', return_401),
+        web.get('/_search', return_200),
         web.post('/_bulk', return_200),
     ]
 
-    return await _web_application(port=port, routes=routes)
+    routes_no_duplicates = {
+        (route.method, route.path): route
+        for route in (default_routes+override_routes)
+    }.values()
+
+    return await _web_application(port=port, routes=routes_no_duplicates)
 
 
 async def _web_application(port, routes):
