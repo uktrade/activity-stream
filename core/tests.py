@@ -23,10 +23,7 @@ class TestBase(unittest.TestCase):
 
         self.addCleanup(self.teardown_manual)
 
-        self.os_environ_patcher = patch.dict(os.environ, {
-            **mock_env(),
-            **env,
-        })
+        self.os_environ_patcher = patch.dict(os.environ, env)
         self.os_environ_patcher.start()
         self.loop = asyncio.get_event_loop()
 
@@ -74,7 +71,7 @@ class TestConnection(TestBase):
 
     def test_application_accepts_http(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -86,7 +83,7 @@ class TestAuthentication(TestBase):
 
     def test_no_auth_then_401(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -100,7 +97,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_id_then_401(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -118,7 +115,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_secret_then_401(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -136,7 +133,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_method_then_401(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -154,7 +151,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_content_then_401(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -172,7 +169,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_content_type_then_401(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -190,7 +187,7 @@ class TestAuthentication(TestBase):
 
     def test_no_content_type_then_401(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -209,7 +206,7 @@ class TestAuthentication(TestBase):
 
     def test_time_skew_then_401(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -229,7 +226,7 @@ class TestAuthentication(TestBase):
 
     def test_repeat_auth_then_401(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -254,7 +251,7 @@ class TestAuthentication(TestBase):
             evidence that the cache of nonces was cleared.
         '''
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -283,7 +280,7 @@ class TestAuthentication(TestBase):
 
     def test_no_x_forwarded_for_401(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -300,7 +297,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_x_forwarded_for_401(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -318,7 +315,7 @@ class TestAuthentication(TestBase):
 
     def test_at_end_x_forwarded_for_401(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -336,7 +333,7 @@ class TestAuthentication(TestBase):
 
     def test_second_id_returns_object(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -354,7 +351,7 @@ class TestAuthentication(TestBase):
 
     def test_post_returns_object(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -372,7 +369,7 @@ class TestAuthentication(TestBase):
 
     def test_post_creds_get_403(self):
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -400,7 +397,7 @@ class TestApplication(TestBase):
             )
 
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file,
         )
 
@@ -428,15 +425,14 @@ class TestApplication(TestBase):
                 len(results['hits']['hits']) >= 4
             )
 
-        self.setup_manual(
-            {
-                'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
-                'FEEDS__2__API_EMAIL': 'test@test.com',
-                'FEEDS__2__API_KEY': 'some-key',
-                'FEEDS__2__TYPE': 'zendesk',
-            },
-            mock_feed=read_file,
-        )
+        env = {
+            **mock_env(),
+            'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
+            'FEEDS__2__API_EMAIL': 'test@test.com',
+            'FEEDS__2__API_KEY': 'some-key',
+            'FEEDS__2__TYPE': 'zendesk',
+        }
+        self.setup_manual(env=env, mock_feed=read_file)
 
         original_sleep = asyncio.sleep
 
@@ -500,9 +496,8 @@ class TestApplication(TestBase):
             await site.start()
             return runner
 
-        self.setup_manual({
-            'ELASTICSEARCH__PORT': '9201'
-        }, mock_feed=read_file)
+        self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
+                          mock_feed=read_file)
 
         es_runner = self.loop.run_until_complete(run_es_application())
 
@@ -578,9 +573,8 @@ class TestApplication(TestBase):
             return runner
 
         es_runner = asyncio.get_event_loop().run_until_complete(run_es_application())
-        self.setup_manual({
-            'ELASTICSEARCH__PORT': '9201'
-        }, mock_feed=read_file)
+        self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
+                          mock_feed=read_file)
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
@@ -615,6 +609,7 @@ class TestApplication(TestBase):
 
         es_runner = asyncio.get_event_loop().run_until_complete(run_es_application())
         self.setup_manual({
+            **mock_env(),
             'ELASTICSEARCH__PORT': '9201'
         }, mock_feed=read_file)
         asyncio.ensure_future(run_application())
@@ -640,7 +635,7 @@ class TestApplication(TestBase):
             )
 
         self.setup_manual(
-            {'FEEDS__1__SEED': (
+            {**mock_env(), 'FEEDS__1__SEED': (
                 'http://localhost:8081/'
                 'tests_fixture_elasticsearch_bulk_multipage_1.json'
             )
@@ -673,15 +668,14 @@ class TestApplication(TestBase):
                 len(results['hits']['hits']) >= 4
             )
 
-        self.setup_manual(
-            {
-                'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_2.json',
-                'FEEDS__2__ACCESS_KEY_ID': 'feed-some-id',
-                'FEEDS__2__SECRET_ACCESS_KEY': '?[!@$%^%',
-                'FEEDS__2__TYPE': 'elasticsearch_bulk',
-            },
-            mock_feed=read_file,
-        )
+        env = {
+            **mock_env(),
+            'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_2.json',
+            'FEEDS__2__ACCESS_KEY_ID': 'feed-some-id',
+            'FEEDS__2__SECRET_ACCESS_KEY': '?[!@$%^%',
+            'FEEDS__2__TYPE': 'elasticsearch_bulk',
+        }
+        self.setup_manual(env=env, mock_feed=read_file)
 
         original_sleep = asyncio.sleep
 
@@ -710,15 +704,14 @@ class TestApplication(TestBase):
             ]
             return len(is_zendesk_ticket) == 2
 
-        self.setup_manual(
-            {
-                'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
-                'FEEDS__2__API_EMAIL': 'test@test.com',
-                'FEEDS__2__API_KEY': 'some-key',
-                'FEEDS__2__TYPE': 'zendesk',
-            },
-            mock_feed=read_file,
-        )
+        env = {
+            **mock_env(),
+            'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
+            'FEEDS__2__API_EMAIL': 'test@test.com',
+            'FEEDS__2__API_KEY': 'some-key',
+            'FEEDS__2__TYPE': 'zendesk',
+        }
+        self.setup_manual(env=env, mock_feed=read_file)
 
         original_sleep = asyncio.sleep
 
@@ -759,7 +752,7 @@ class TestApplication(TestBase):
             return feed_contents_maybe_broken
 
         self.setup_manual(
-            env={},
+            env=mock_env(),
             mock_feed=read_file_broken_then_fixed,
         )
 
