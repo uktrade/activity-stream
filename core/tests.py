@@ -333,7 +333,7 @@ class TestAuthentication(TestBase):
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status, _ = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for, b''))
+        text, status, _ = self.loop.run_until_complete(get(url, auth, x_forwarded_for, b''))
         self.assertEqual(status, 403)
         self.assertEqual(text, '{"details": "You are not authorized to perform this action."}')
 
@@ -357,7 +357,7 @@ class TestApplication(TestBase):
         x_forwarded_for = '1.2.3.4'
 
         result, status, headers = self.loop.run_until_complete(
-            get_text_until(url, x_forwarded_for, has_at_least_two_results, asyncio.sleep))
+            get_until(url, x_forwarded_for, has_at_least_two_results, asyncio.sleep))
         self.assertEqual(status, 200)
         self.assertEqual(result['hits']['hits'][0]['_id'],
                          'dit:exportOpportunities:Enquiry:49863:Create')
@@ -412,7 +412,7 @@ class TestApplication(TestBase):
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', query, 'application/json',
         )
         result, status, _ = self.loop.run_until_complete(
-            get_text(url, auth, x_forwarded_for, query))
+            get(url, auth, x_forwarded_for, query))
         self.assertEqual(status, 200)
         data = json.loads(result)
         self.assertEqual(data['hits']['total'], 1)
@@ -532,7 +532,7 @@ class TestApplication(TestBase):
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status, _ = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for, b''))
+        text, status, _ = self.loop.run_until_complete(get(url, auth, x_forwarded_for, b''))
         self.loop.run_until_complete(es_runner.cleanup())
 
         self.assertEqual(status, 500)
@@ -570,7 +570,7 @@ class TestApplication(TestBase):
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status, _ = self.loop.run_until_complete(get_text(url, auth, x_forwarded_for, b''))
+        text, status, _ = self.loop.run_until_complete(get(url, auth, x_forwarded_for, b''))
 
         self.assertEqual(status, 500)
         self.assertEqual(text, '{"details": "An unknown error occurred."}')
@@ -843,7 +843,7 @@ def auth_header(key_id, secret_key, url, method, content, content_type):
     }, url, method, content=content, content_type=content_type).request_header
 
 
-async def get_text(url, auth, x_forwarded_for, body):
+async def get(url, auth, x_forwarded_for, body):
     async with aiohttp.ClientSession() as session:
         result = await session.get(url, headers={
             'Authorization': auth,
@@ -853,12 +853,12 @@ async def get_text(url, auth, x_forwarded_for, body):
     return (await result.text(), result.status, result.headers)
 
 
-async def get_text_until(url, x_forwarded_for, condition, sleep):
+async def get_until(url, x_forwarded_for, condition, sleep):
     while True:
         auth = auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
         )
-        all_data, status, headers = await get_text(url, auth, x_forwarded_for, b'')
+        all_data, status, headers = await get(url, auth, x_forwarded_for, b'')
         dict_data = json.loads(all_data)
         if condition(dict_data):
             break
