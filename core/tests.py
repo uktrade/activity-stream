@@ -449,9 +449,9 @@ class TestApplication(TestBase):
                           mock_feed=read_file)
 
         es_runner = self.loop.run_until_complete(run_es_application())
+        asyncio.ensure_future(run_application())
 
         async def _test():
-            asyncio.ensure_future(run_application())
             return await posted_to_es_once
 
         [[es_bulk_content, es_bulk_headers]] = self.loop.run_until_complete(_test())
