@@ -82,10 +82,7 @@ class TestConnection(TestBase):
 class TestAuthentication(TestBase):
 
     def test_no_auth_then_401(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -96,10 +93,7 @@ class TestAuthentication(TestBase):
         self.assertEqual(text, '{"details": "Authentication credentials were not provided."}')
 
     def test_bad_id_then_401(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -114,10 +108,7 @@ class TestAuthentication(TestBase):
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
     def test_bad_secret_then_401(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -132,10 +123,7 @@ class TestAuthentication(TestBase):
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
     def test_bad_method_then_401(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -150,10 +138,7 @@ class TestAuthentication(TestBase):
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
     def test_bad_content_then_401(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -168,10 +153,7 @@ class TestAuthentication(TestBase):
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
     def test_bad_content_type_then_401(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -186,10 +168,7 @@ class TestAuthentication(TestBase):
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
     def test_no_content_type_then_401(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -205,10 +184,7 @@ class TestAuthentication(TestBase):
         self.assertIn('Content-Type header was not set.', text)
 
     def test_time_skew_then_401(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -225,10 +201,7 @@ class TestAuthentication(TestBase):
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
     def test_repeat_auth_then_401(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -250,10 +223,7 @@ class TestAuthentication(TestBase):
             is shorter then the allowed Hawk skew. The second request succeeding gives
             evidence that the cache of nonces was cleared.
         '''
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         now = datetime.datetime.now()
         past = now + datetime.timedelta(seconds=-45)
@@ -279,10 +249,7 @@ class TestAuthentication(TestBase):
             self.assertEqual(status_2, 200)
 
     def test_no_x_forwarded_for_401(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -296,10 +263,7 @@ class TestAuthentication(TestBase):
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
     def test_bad_x_forwarded_for_401(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -314,10 +278,7 @@ class TestAuthentication(TestBase):
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
     def test_at_end_x_forwarded_for_401(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -332,10 +293,7 @@ class TestAuthentication(TestBase):
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
     def test_second_id_returns_object(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -350,10 +308,7 @@ class TestAuthentication(TestBase):
         self.assertEqual(text, '{"secret": "to-be-hidden"}')
 
     def test_post_returns_object(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -368,10 +323,7 @@ class TestAuthentication(TestBase):
         self.assertEqual(text, '{"secret": "to-be-hidden"}')
 
     def test_post_creds_get_403(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -396,10 +348,7 @@ class TestApplication(TestBase):
                 len(results['hits']['hits']) >= 2
             )
 
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
@@ -751,10 +700,7 @@ class TestApplication(TestBase):
             sent_broken = True
             return feed_contents_maybe_broken
 
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file_broken_then_fixed,
-        )
+        self.setup_manual(env=mock_env(), mock_feed=read_file_broken_then_fixed)
 
         original_sleep = asyncio.sleep
 
