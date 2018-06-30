@@ -429,8 +429,16 @@ class TestApplication(TestBase):
         self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                           mock_feed=read_file)
 
+        async def return_200_and_callback(request):
+            content, headers = (await request.content.read(), request.headers)
+            asyncio.get_event_loop().call_soon(append_es, (content, headers))
+            return return_200(request)
+
+        routes = [
+            web.post('/_bulk', return_200_and_callback),
+        ]
         es_runner = self.loop.run_until_complete(
-            run_es_application_on_bulk(port=9201, callback=append_es))
+            run_es_application(port=9201, override_routes=routes))
         asyncio.ensure_future(run_application())
 
         async def _test():
@@ -486,8 +494,11 @@ class TestApplication(TestBase):
     def test_es_401_is_500(self):
         self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                           mock_feed=read_file)
+        routes = [
+            web.post('/_search', return_401),
+        ]
         es_runner = self.loop.run_until_complete(
-            run_es_application_search_401(port=9201))
+            run_es_application(port=9201, override_routes=routes))
         asyncio.ensure_future(run_application())
         is_http_accepted_eventually()
 
@@ -861,28 +872,6 @@ async def return_200(_):
 
 async def return_401(_):
     return web.Response(text='{}', status=401, content_type='application/json')
-
-
-async def run_es_application_on_bulk(port, callback):
-
-    async def return_200_and_callback(request):
-        content, headers = (await request.content.read(), request.headers)
-        asyncio.get_event_loop().call_soon(callback, (content, headers))
-        return return_200(request)
-
-    routes = [
-        web.post('/_bulk', return_200_and_callback),
-    ]
-
-    return await run_es_application(port=port, override_routes=routes)
-
-
-async def run_es_application_search_401(port):
-    routes = [
-        web.get('/_search', return_401),
-    ]
-
-    return await run_es_application(port=port, override_routes=routes)
 
 
 async def run_es_application(port, override_routes):
