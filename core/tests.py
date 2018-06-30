@@ -855,41 +855,45 @@ async def post_no_content_type(url, auth, x_forwarded_for):
     return (await result.text(), result.status)
 
 
-async def run_es_application(port, callback):
-    async def return_200(_):
-        return web.Response(text='{}', status=200, content_type='application/json')
+async def return_200(_):
+    return web.Response(text='{}', status=200, content_type='application/json')
 
-    async def handle_bulk(request):
+
+async def return_401(_):
+    return web.Response(text='{}', status=401, content_type='application/json')
+
+
+async def run_es_application(port, callback):
+
+    async def return_200_and_callback(request):
         content, headers = (await request.content.read(), request.headers)
         asyncio.get_event_loop().call_soon(callback, (content, headers))
-        return web.Response(text='{}', status=200, content_type='application/json')
+        return return_200(request)
 
-    app = web.Application()
-    app.add_routes([
-        web.put('/activities/_mapping/_doc', return_200),
-        web.put('/activities', return_200),
-        web.post('/_bulk', handle_bulk),
-    ])
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '127.0.0.1', port)
-    await site.start()
-    return runner
-
-
-async def run_es_application_search_401(port):
-    async def return_200(_):
-        return web.Response(text='{}', status=200, content_type='application/json')
-
-    async def return_401(_):
-        return web.Response(text='{}', status=401, content_type='application/json')
-
-    app = web.Application()
-    app.add_routes([
+    routes = [
         web.put('/activities/_mapping/_doc', return_200),
         web.put('/activities', return_200),
         web.get('/_search', return_401),
-    ])
+        web.post('/_bulk', return_200_and_callback),
+    ]
+
+    return await _web_application(port=port, routes=routes)
+
+
+async def run_es_application_search_401(port):
+    routes = [
+        web.put('/activities/_mapping/_doc', return_200),
+        web.put('/activities', return_200),
+        web.get('/_search', return_401),
+        web.post('/_bulk', return_200),
+    ]
+
+    return await _web_application(port=port, routes=routes)
+
+
+async def _web_application(port, routes):
+    app = web.Application()
+    app.add_routes(routes)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '127.0.0.1', port)
