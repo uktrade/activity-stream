@@ -450,6 +450,41 @@ class TestApplication(TestBase):
         self.assertIn('2011-04-12', data['hits']['hits'][0]['_source']['published'])
         self.assertIn('2011-04-12', data['hits']['hits'][1]['_source']['published'])
 
+        query = json.dumps({
+            'query': {
+                'bool': {
+                    'filter': [{
+                        'range': {
+                            'published': {
+                                'gte': '2011-04-12',
+                                'lte': '2011-04-12',
+                            },
+                        },
+                    }, {
+                        'term': {
+                            'type': 'Create',
+                        },
+                    }, {
+                        'term': {
+                            'object.type': 'dit:exportOpportunities:Enquiry',
+                        },
+                    }],
+                },
+            },
+        }).encode('utf-8')
+        auth = hawk_auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', query, 'application/json',
+        )
+        result, status, _ = self.loop.run_until_complete(
+            get(url, auth, x_forwarded_for, query))
+        self.assertEqual(status, 200)
+        data = json.loads(result)
+        self.assertEqual(data['hits']['total'], 1)
+        self.assertIn('2011-04-12', data['hits']['hits'][0]['_source']['published'])
+        self.assertEqual('Create', data['hits']['hits'][0]['_source']['type'])
+        self.assertIn('dit:exportOpportunities:Enquiry',
+                      data['hits']['hits'][0]['_source']['object']['type'])
+
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
     def test_single_page(self, _):

@@ -111,6 +111,12 @@ async def ensure_mappings(session, es_endpoint):
             'published_date': {
                 'type': 'date',
             },
+            'type': {
+                'type': 'keyword',
+            },
+            'object.type': {
+                'type': 'keyword',
+            },
         },
     }).encode('utf-8')
     path = '/activities/_mapping/_doc'
