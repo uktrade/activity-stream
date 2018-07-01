@@ -787,21 +787,6 @@ def read_file(path):
         return file.read().decode('utf-8')
 
 
-async def run_feed_application(feed, feed_requested_callback, port):
-    async def handle(request):
-        path = request.match_info['feed']
-        asyncio.get_event_loop().call_soon(feed_requested_callback, request)
-        return web.Response(text=feed(path))
-
-    app = web.Application()
-    app.add_routes([web.get('/{feed}', handle)])
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '127.0.0.1', port)
-    await site.start()
-    return runner
-
-
 async def delete_all_es_data():
     async with aiohttp.ClientSession() as session:
         await session.delete('http://127.0.0.1:9200/*')
@@ -938,6 +923,16 @@ async def run_es_application(port, override_routes):
     }.values()
 
     return await _web_application(port=port, routes=routes_no_duplicates)
+
+
+async def run_feed_application(feed, feed_requested_callback, port):
+    async def handle(request):
+        path = request.match_info['feed']
+        asyncio.get_event_loop().call_soon(feed_requested_callback, request)
+        return web.Response(text=feed(path))
+
+    routes = [web.get('/{feed}', handle)]
+    return await _web_application(port=port, routes=routes)
 
 
 async def _web_application(port, routes):
