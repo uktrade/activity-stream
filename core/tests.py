@@ -382,6 +382,28 @@ class TestApplication(TestBase):
         self.assertIn('mapper [published_date] of different type',
                       str(next(iter(done)).exception()))
 
+    def test_bad_ensure_index_exception(self):
+        self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
+                          mock_feed=read_file)
+
+        async def respond_401_with_message(_):
+            message = '{"error": "some message"}'
+            return web.Response(text=message, status=401, content_type='application/json')
+
+        routes = [
+            web.put('/activities', respond_401_with_message),
+        ]
+        es_runner = self.loop.run_until_complete(
+            run_es_application(port=9201, override_routes=routes))
+
+        app = asyncio.ensure_future(run_application())
+        done, pending = self.loop.run_until_complete(asyncio.wait([app], timeout=5))
+
+        self.loop.run_until_complete(es_runner.cleanup())
+        self.assertFalse(pending)
+        self.assertIn('some message"',
+                      str(next(iter(done)).exception()))
+
     def test_get_can_filter(self):
         env = {
             **mock_env(),
