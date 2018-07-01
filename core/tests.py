@@ -399,6 +399,10 @@ class TestApplication(TestBase):
 
         env = {
             **mock_env(),
+            'FEEDS__1__SEED': (
+                'http://localhost:8081/'
+                'tests_fixture_elasticsearch_bulk_multipage_1.json'
+            ),
             'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
             'FEEDS__2__API_EMAIL': 'test@test.com',
             'FEEDS__2__API_KEY': 'some-key',
@@ -438,11 +442,9 @@ class TestApplication(TestBase):
             get(url, auth, x_forwarded_for, query))
         self.assertEqual(status, 200)
         data = json.loads(result)
-        self.assertEqual(data['hits']['total'], 1)
-        self.assertEqual(data['hits']['hits'][0]['_id'],
-                         'dit:zendesk:Ticket:3:Create')
-        self.assertEqual(data['hits']['hits'][0]['_source']['published'],
-                         '2011-04-12T12:48:13+00:00')
+        self.assertEqual(data['hits']['total'], 2)
+        self.assertIn('2011-04-12', data['hits']['hits'][0]['_source']['published'])
+        self.assertIn('2011-04-12', data['hits']['hits'][1]['_source']['published'])
 
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
