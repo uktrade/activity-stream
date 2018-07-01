@@ -427,11 +427,15 @@ class TestApplication(TestBase):
 
         query = json.dumps({
             'query': {
-                'range': {
-                    'published': {
-                        'gte': '2011-04-12',
-                        'lte': '2011-04-12',
-                    },
+                'bool': {
+                    'filter': [{
+                        'range': {
+                            'published': {
+                                'gte': '2011-04-12',
+                                'lte': '2011-04-12',
+                            },
+                        },
+                    }],
                 },
             },
         }).encode('utf-8')
