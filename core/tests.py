@@ -504,7 +504,7 @@ class TestApplication(TestBase):
         async def return_200_and_callback(request):
             content, headers = (await request.content.read(), request.headers)
             asyncio.get_event_loop().call_soon(append_es, (content, headers))
-            return respond_http(200)(request)
+            return await respond_http(200)(request)
 
         routes = [
             web.post('/_bulk', return_200_and_callback),
