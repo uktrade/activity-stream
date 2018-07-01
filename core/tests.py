@@ -364,7 +364,30 @@ class TestApplication(TestBase):
         self.assertEqual(result['hits']['hits'][1]['_id'],
                          'dit:exportOpportunities:Enquiry:49862:Create')
         self.assertEqual(headers['Server'], 'activity-stream')
-        self.assertEqual(headers['Server'], 'activity-stream')
+
+    def test_bad_mapping_then_exception(self):
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
+
+        async def put_incompatible_mapping():
+            headers = {
+                'Content-Type': 'application/json',
+            }
+
+            async with aiohttp.ClientSession() as session:
+                await session.put('http://127.0.0.1:9200/activities', headers=headers)
+                await session.put('http://127.0.0.1:9200/activities/_doc/1',
+                                  headers=headers, json={
+                                      'published_date': 'Something that is not a date'
+                                  })
+
+        self.loop.run_until_complete(put_incompatible_mapping())
+
+        app = asyncio.ensure_future(run_application())
+        done, pending = self.loop.run_until_complete(asyncio.wait([app], timeout=5))
+
+        self.assertFalse(pending)
+        self.assertIn('mapper [published_date] of different type',
+                      str(next(iter(done)).exception()))
 
     def test_get_can_filter(self):
         def has_at_least_four_results(results):

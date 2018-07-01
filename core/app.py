@@ -101,7 +101,6 @@ async def ensure_index(session, es_endpoint):
     index_exists = (
         results.status == 400 and data['error']['type'] == 'resource_already_exists_exception'
     )
-
     if (results.status != 200 and not index_exists):
         raise Exception(await results.text())
 
