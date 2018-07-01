@@ -341,13 +341,6 @@ class TestAuthentication(TestBase):
 class TestApplication(TestBase):
 
     def test_get_returns_feed_data(self):
-        def has_at_least_two_results(results):
-            return (
-                'hits' in results and
-                'hits' in results['hits'] and
-                len(results['hits']['hits']) >= 2
-            )
-
         self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         asyncio.ensure_future(run_application())
@@ -357,7 +350,7 @@ class TestApplication(TestBase):
         x_forwarded_for = '1.2.3.4'
 
         result, status, headers = self.loop.run_until_complete(
-            get_until(url, x_forwarded_for, has_at_least_two_results, asyncio.sleep))
+            get_until(url, x_forwarded_for, has_at_least(2), asyncio.sleep))
         self.assertEqual(status, 200)
         self.assertEqual(result['hits']['hits'][0]['_id'],
                          'dit:exportOpportunities:Enquiry:49863:Create')
@@ -390,13 +383,6 @@ class TestApplication(TestBase):
                       str(next(iter(done)).exception()))
 
     def test_get_can_filter(self):
-        def has_at_least_four_results(results):
-            return (
-                'hits' in results and
-                'hits' in results['hits'] and
-                len(results['hits']['hits']) >= 4
-            )
-
         env = {
             **mock_env(),
             'FEEDS__1__SEED': (
@@ -418,7 +404,7 @@ class TestApplication(TestBase):
         async def _test():
             with patch('asyncio.sleep', wraps=fast_sleep):
                 asyncio.ensure_future(run_application())
-                return await fetch_all_es_data_until(has_at_least_four_results, original_sleep)
+                return await fetch_all_es_data_until(has_at_least(4), original_sleep)
 
         self.loop.run_until_complete(_test())
 
@@ -600,13 +586,6 @@ class TestApplication(TestBase):
         self.assertEqual(text, '{"details": "An unknown error occurred."}')
 
     def test_multipage(self):
-        def has_at_least_two_results(results):
-            return (
-                'hits' in results and
-                'hits' in results['hits'] and
-                len(results['hits']['hits']) >= 2
-            )
-
         self.setup_manual(
             {**mock_env(), 'FEEDS__1__SEED': (
                 'http://localhost:8081/'
@@ -625,7 +604,7 @@ class TestApplication(TestBase):
             with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
                 asyncio.ensure_future(run_application())
                 mock_sleep.assert_not_called()
-                result = await fetch_all_es_data_until(has_at_least_two_results, original_sleep)
+                result = await fetch_all_es_data_until(has_at_least(2), original_sleep)
                 mock_sleep.assert_any_call(0)
                 return result
 
@@ -634,13 +613,6 @@ class TestApplication(TestBase):
                       str(results))
 
     def test_two_feeds(self):
-        def has_at_least_four_results(results):
-            return (
-                'hits' in results and
-                'hits' in results['hits'] and
-                len(results['hits']['hits']) >= 4
-            )
-
         env = {
             **mock_env(),
             'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_2.json',
@@ -658,7 +630,7 @@ class TestApplication(TestBase):
         async def _test():
             with patch('asyncio.sleep', wraps=fast_sleep):
                 asyncio.ensure_future(run_application())
-                return await fetch_all_es_data_until(has_at_least_four_results, original_sleep)
+                return await fetch_all_es_data_until(has_at_least(4), original_sleep)
 
         results = self.loop.run_until_complete(_test())
         self.assertIn('dit:exportOpportunities:Enquiry:49863:Create', str(results))
@@ -705,13 +677,6 @@ class TestApplication(TestBase):
         self.assertIn('"2011-04-12T12:48:13+00:00"', results)
 
     def test_on_bad_json_retries(self):
-        def has_at_least_one_result(results):
-            return (
-                'hits' in results and
-                'hits' in results['hits'] and
-                len(results['hits']['hits']) >= 1
-            )
-
         sent_broken = False
 
         def read_file_broken_then_fixed(path):
@@ -735,7 +700,7 @@ class TestApplication(TestBase):
             with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
                 asyncio.ensure_future(run_application())
                 mock_sleep.assert_not_called()
-                results = await fetch_all_es_data_until(has_at_least_one_result, original_sleep)
+                results = await fetch_all_es_data_until(has_at_least(1), original_sleep)
                 mock_sleep.assert_any_call(60)
                 return results
 
@@ -961,6 +926,17 @@ async def _web_application(port, routes):
     site = web.TCPSite(runner, '127.0.0.1', port)
     await site.start()
     return runner
+
+
+def has_at_least(num_results):
+    def has(results):
+        return (
+            'hits' in results and
+            'hits' in results['hits'] and
+            len(results['hits']['hits']) >= num_results
+        )
+
+    return has
 
 
 def mock_env():
