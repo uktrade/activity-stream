@@ -422,6 +422,9 @@ class TestApplication(TestBase):
 
         self.loop.run_until_complete(_test())
 
+        url = 'http://127.0.0.1:8080/v1/'
+        x_forwarded_for = '1.2.3.4'
+
         query = json.dumps({
             'query': {
                 'range': {
@@ -432,9 +435,6 @@ class TestApplication(TestBase):
                 },
             },
         }).encode('utf-8')
-
-        url = 'http://127.0.0.1:8080/v1/'
-        x_forwarded_for = '1.2.3.4'
         auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', query, 'application/json',
         )
