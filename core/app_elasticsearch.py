@@ -108,8 +108,15 @@ def es_auth_headers(endpoint, method, path, payload):
     }
 
 
-async def es_search(session, es_endpoint, query, content_type):
-    path = '/activities/_search?scroll=30s'
+def es_search_new_scroll(_):
+    return '/activities/_search?scroll=30s'
+
+
+def es_search_existing_scroll(match_info):
+    return '/_search/scroll?scroll=30s&scroll_id=' + match_info['scroll_id']
+
+
+async def es_search(session, es_endpoint, path, query, content_type, get_scroll_url):
     url = es_endpoint['base_url'] + path
 
     auth_headers = es_auth_headers(
@@ -128,13 +135,19 @@ async def es_search(session, es_endpoint, query, content_type):
     )
 
     response = await results.json()
-    return (activities(response) if results.status == 200 else response, results.status)
+    return \
+        (activities(response, get_scroll_url), 200) if results.status == 200 else \
+        (response, results.status)
 
 
-def activities(elasticsearch_reponse):
+def activities(elasticsearch_reponse, get_scroll_url):
     elasticsearch_hits = elasticsearch_reponse['hits'].get('hits', [])
+    scroll_id = elasticsearch_reponse['_scroll_id']
+    next_dict = {
+        'next': get_scroll_url(scroll_id)
+    } if elasticsearch_hits else {}
 
-    return {
+    return {**{
         '@context': [
             'https://www.w3.org/ns/activitystreams',
             {
@@ -146,7 +159,7 @@ def activities(elasticsearch_reponse):
             for item in elasticsearch_hits
         ],
         'type': 'Collection',
-    }
+    }, **next_dict}
 
 
 async def es_bulk(session, es_endpoint, items):

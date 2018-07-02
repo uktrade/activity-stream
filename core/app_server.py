@@ -6,6 +6,11 @@ from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
 
+from .app_elasticsearch import (
+    es_search,
+    es_search_existing_scroll,
+    es_search_new_scroll,
+)
 from .app_utils import (
     ExpiringSet,
 )
@@ -121,16 +126,29 @@ async def handle_post(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
-def handle_get(session, es_search, es_endpoint):
+def handle_get_new(session, es_endpoint):
+    return _handle_get(session, es_endpoint, es_search_new_scroll)
+
+
+def handle_get_existing(session, es_endpoint):
+    return _handle_get(session, es_endpoint, es_search_existing_scroll)
+
+
+def _handle_get(session, es_endpoint, get_path):
     app_logger = logging.getLogger(__name__)
 
     async def handle(request):
         incoming_body = await request.read()
+        path = get_path(request.match_info)
+
+        def get_scroll_url(scroll_id):
+            return str(request.url.join(request.app.router['scroll'].url_for(scroll_id=scroll_id)))
 
         succesful_http = False
         try:
-            results, status = await es_search(session, es_endpoint, incoming_body,
-                                              request.headers['Content-Type'])
+            results, status = await es_search(session, es_endpoint, path, incoming_body,
+                                              request.headers['Content-Type'],
+                                              get_scroll_url)
             succesful_http = True
         except aiohttp.ClientError as exception:
             app_logger.warning('Error connecting to Elasticsearch: %s', exception)
