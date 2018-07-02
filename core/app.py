@@ -10,7 +10,7 @@ import aiohttp
 from aiohttp import web
 
 from .app_elasticsearch import (
-    es_auth_headers,
+    es_bulk,
     es_search,
     ensure_index,
     ensure_mappings,
@@ -26,7 +26,6 @@ from .app_server import (
     handle_post,
 )
 from .app_utils import (
-    flatten,
     normalise_environment,
     repeat_even_on_exception,
 )
@@ -121,28 +120,8 @@ async def create_outgoing_application(session, feed_endpoints, es_endpoint):
 
 
 async def ingest_feed(session, feed_endpoint, es_endpoint):
-    app_logger = logging.getLogger(__name__)
-
     async for feed in poll(session, feed_endpoint):
-        app_logger.debug('Converting feed to ES bulk ingest commands...')
-        es_bulk_contents = es_bulk(feed).encode('utf-8')
-        app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
-
-        app_logger.debug('POSTing bulk import to ES...')
-        headers = {
-            'Content-Type': 'application/x-ndjson'
-        }
-        path = '/_bulk'
-        auth_headers = es_auth_headers(
-            endpoint=es_endpoint,
-            method='POST',
-            path='/_bulk',
-            payload=es_bulk_contents,
-        )
-        url = es_endpoint['base_url'] + path
-        es_result = await session.post(
-            url, data=es_bulk_contents, headers={**headers, **auth_headers})
-        app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
+        await es_bulk(session, es_endpoint, feed)
 
 
 async def poll(session, feed):
@@ -174,14 +153,6 @@ async def poll(session, feed):
         app_logger.debug(message)
         app_logger.debug('Sleeping for %s seconds', interval)
         await asyncio.sleep(interval)
-
-
-def es_bulk(items):
-    return '\n'.join(flatten([
-        [json.dumps(item['action_and_metadata'], sort_keys=True),
-         json.dumps(item['source'], sort_keys=True)]
-        for item in items
-    ])) + '\n'
 
 
 def setup_logging():

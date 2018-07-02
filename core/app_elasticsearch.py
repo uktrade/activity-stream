@@ -2,6 +2,11 @@ import datetime
 import hashlib
 import hmac
 import json
+import logging
+
+from .app_utils import (
+    flatten,
+)
 
 
 async def ensure_index(session, es_endpoint):
@@ -121,3 +126,32 @@ async def es_search(session, es_endpoint, query, content_type):
         }},
         data=query,
     )
+
+
+async def es_bulk(session, es_endpoint, items):
+    app_logger = logging.getLogger(__name__)
+
+    app_logger.debug('Converting feed to ES bulk ingest commands...')
+    es_bulk_contents = ('\n'.join(flatten([
+        [json.dumps(item['action_and_metadata'], sort_keys=True),
+         json.dumps(item['source'], sort_keys=True)]
+        for item in items
+    ])) + '\n').encode('utf-8')
+    app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
+
+    app_logger.debug('POSTing bulk import to ES...')
+    headers = {
+        'Content-Type': 'application/x-ndjson'
+    }
+    path = '/_bulk'
+    auth_headers = es_auth_headers(
+        endpoint=es_endpoint,
+        method='POST',
+        path='/_bulk',
+        payload=es_bulk_contents,
+    )
+    url = es_endpoint['base_url'] + path
+    es_result = await session.post(
+        url, data=es_bulk_contents, headers={**headers, **auth_headers})
+
+    app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
