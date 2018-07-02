@@ -563,11 +563,11 @@ class TestApplication(TestBase):
                          ['type'][1], 'dit:exportOpportunities:Enquiry')
         self.assertEqual(es_bulk_request_dicts[3]['actor']['dit:companiesHouseNumber'], '82312')
 
-    def test_es_401_is_500(self):
+    def test_es_401_is_proxied(self):
         self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                           mock_feed=read_file)
         routes = [
-            web.get('/activities/_search', respond_http('{}', 401)),
+            web.get('/activities/_search', respond_http('{"elasticsearch": "error"}', 401)),
         ]
         es_runner = self.loop.run_until_complete(
             run_es_application(port=9201, override_routes=routes))
@@ -582,8 +582,8 @@ class TestApplication(TestBase):
         text, status, _ = self.loop.run_until_complete(get(url, auth, x_forwarded_for, b''))
         self.loop.run_until_complete(es_runner.cleanup())
 
-        self.assertEqual(status, 500)
-        self.assertEqual(text, '{"details": "An unknown error occurred."}')
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"elasticsearch": "error"}')
 
     def test_es_no_connect_on_get_500(self):
         self.setup_manual({

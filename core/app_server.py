@@ -126,16 +126,19 @@ def handle_get(session, es_search, es_endpoint):
     async def handle(request):
         incoming_body = await request.read()
 
+        succesful_http = False
         succesful_search = False
         try:
             results = await es_search(session, es_endpoint, incoming_body,
                                       request.headers['Content-Type'])
+            succesful_http = True
             succesful_search = results.status == 200
         except aiohttp.ClientError as exception:
             app_logger.warning('Error connecting to Elasticsearch: %s', exception)
 
         return \
             json_response(await results.json(), status=200) if succesful_search else \
+            json_response(await results.json(), status=results.status) if succesful_http else \
             json_response({'details': 'An unknown error occurred.'}, status=500)
 
     return handle
