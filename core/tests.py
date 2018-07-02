@@ -67,18 +67,6 @@ class TestBase(unittest.TestCase):
             self.os_environ_patcher.stop()
 
 
-class TestConnection(TestBase):
-
-    def test_application_accepts_http(self):
-        self.setup_manual(
-            env=mock_env(),
-            mock_feed=read_file,
-        )
-
-        asyncio.ensure_future(run_application())
-        self.assertTrue(is_http_accepted_eventually())
-
-
 class TestAuthentication(TestBase):
 
     def test_no_auth_then_401(self):
