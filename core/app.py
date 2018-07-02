@@ -27,6 +27,7 @@ from .app_server import (
 from .app_utils import (
     flatten,
     normalise_environment,
+    repeat_even_on_exception,
 )
 
 EXCEPTION_INTERVAL = 60
@@ -116,25 +117,6 @@ async def create_outgoing_application(session, feed_endpoints, es_endpoint):
         for feed_endpoint in feed_endpoints
     ]
     await asyncio.gather(*feeds)
-
-
-async def repeat_even_on_exception(never_ending_coroutine, exception_interval, logging_title):
-    app_logger = logging.getLogger(__name__)
-
-    while True:
-        try:
-            await never_ending_coroutine()
-        except BaseException as exception:
-            app_logger.warning('%s raised exception: %s', logging_title, exception)
-        else:
-            app_logger.warning(
-                '%s finished without exception. '
-                'This is not expected: it should run forever.',
-                logging_title,
-            )
-        finally:
-            app_logger.warning('Waiting %s seconds until restarting', exception_interval)
-            await asyncio.sleep(exception_interval)
 
 
 async def ingest_feed(session, feed_endpoint, es_endpoint):

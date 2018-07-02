@@ -1,4 +1,6 @@
+import asyncio
 import itertools
+import logging
 import time
 
 
@@ -137,6 +139,25 @@ def normalise_environment(key_values):
     return \
         list_sorted_by_int_key() if all_keys_are_ints() else \
         nested_structured_dict
+
+
+async def repeat_even_on_exception(never_ending_coroutine, exception_interval, logging_title):
+    app_logger = logging.getLogger(__name__)
+
+    while True:
+        try:
+            await never_ending_coroutine()
+        except BaseException as exception:
+            app_logger.warning('%s raised exception: %s', logging_title, exception)
+        else:
+            app_logger.warning(
+                '%s finished without exception. '
+                'This is not expected: it should run forever.',
+                logging_title,
+            )
+        finally:
+            app_logger.warning('Waiting %s seconds until restarting', exception_interval)
+            await asyncio.sleep(exception_interval)
 
 
 def sub_dict_lower(super_dict, keys):
