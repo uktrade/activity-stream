@@ -112,27 +112,28 @@ async def create_outgoing_application(session, feed_endpoints, es_endpoint):
             ingest_feed,
             session, feed_endpoint,
             es_endpoint,
-        ))
+        ), logging_title='Polling feed')
         for feed_endpoint in feed_endpoints
     ]
     await asyncio.gather(*feeds)
 
 
-async def repeat_even_on_exception(never_ending_coroutine):
+async def repeat_even_on_exception(never_ending_coroutine, logging_title):
     app_logger = logging.getLogger(__name__)
 
     while True:
         try:
             await never_ending_coroutine()
         except BaseException as exception:
-            app_logger.warning('Polling feed raised exception: %s', exception)
+            app_logger.warning('%s raised exception: %s', logging_title, exception)
         else:
             app_logger.warning(
-                'Polling feed finished without exception. '
-                'This is not expected: it should run forever.'
+                '%s finished without exception. '
+                'This is not expected: it should run forever.',
+                logging_title,
             )
         finally:
-            app_logger.warning('Waiting %s seconds until restarting the feed', EXCEPTION_INTERVAL)
+            app_logger.warning('Waiting %s seconds until restarting', EXCEPTION_INTERVAL)
             await asyncio.sleep(EXCEPTION_INTERVAL)
 
 
