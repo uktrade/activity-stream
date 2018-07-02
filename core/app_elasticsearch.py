@@ -1,6 +1,61 @@
 import datetime
 import hashlib
 import hmac
+import json
+
+
+async def ensure_index(session, es_endpoint):
+    index_definition = json.dumps({}).encode('utf-8')
+    path = '/activities'
+    auth_headers = es_auth_headers(
+        endpoint=es_endpoint,
+        method='PUT',
+        path=path,
+        payload=index_definition,
+    )
+    headers = {
+        'Content-Type': 'application/json',
+    }
+    url = es_endpoint['base_url'] + path
+    results = await session.put(
+        url, data=index_definition, headers={**headers, **auth_headers})
+    data = await results.json()
+    index_exists = (
+        results.status == 400 and data['error']['type'] == 'resource_already_exists_exception'
+    )
+    if (results.status != 200 and not index_exists):
+        raise Exception(await results.text())
+
+
+async def ensure_mappings(session, es_endpoint):
+    mapping_definition = json.dumps({
+        'properties': {
+            'published_date': {
+                'type': 'date',
+            },
+            'type': {
+                'type': 'keyword',
+            },
+            'object.type': {
+                'type': 'keyword',
+            },
+        },
+    }).encode('utf-8')
+    path = '/activities/_mapping/_doc'
+    auth_headers = es_auth_headers(
+        endpoint=es_endpoint,
+        method='PUT',
+        path=path,
+        payload=mapping_definition,
+    )
+    headers = {
+        'Content-Type': 'application/json',
+    }
+    url = es_endpoint['base_url'] + path
+    results = await session.put(
+        url, data=mapping_definition, headers={**headers, **auth_headers})
+    if results.status != 200:
+        raise Exception(await results.text())
 
 
 def es_auth_headers(endpoint, method, path, payload):
