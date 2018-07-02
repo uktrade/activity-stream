@@ -11,7 +11,6 @@ class ExpiringSet:
         self._expiries = {}
 
     def _remove_old_keys(self, now):
-        now = int(time.time())
         self._expiries = {
             key: expires
             for key, expires in self._expiries.items()
