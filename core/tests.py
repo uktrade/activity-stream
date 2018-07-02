@@ -567,7 +567,7 @@ class TestApplication(TestBase):
         self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                           mock_feed=read_file)
         routes = [
-            web.post('/_search', respond_http(401)),
+            web.get('/activities/_search', respond_http(401)),
         ]
         es_runner = self.loop.run_until_complete(
             run_es_application(port=9201, override_routes=routes))
