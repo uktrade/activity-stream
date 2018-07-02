@@ -1,3 +1,4 @@
+import hmac
 import logging
 
 import aiohttp
@@ -24,7 +25,7 @@ def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
         matching_key_pairs = [
             key_pair
             for key_pair in incoming_key_pairs
-            if key_pair['key_id'] == passed_access_key_id
+            if hmac.compare_digest(key_pair['key_id'], passed_access_key_id)
         ]
 
         if not matching_key_pairs:
