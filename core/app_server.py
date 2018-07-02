@@ -1,3 +1,4 @@
+import hmac
 import logging
 
 import aiohttp
@@ -24,7 +25,7 @@ def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
         matching_key_pairs = [
             key_pair
             for key_pair in incoming_key_pairs
-            if key_pair['key_id'] == passed_access_key_id
+            if hmac.compare_digest(key_pair['key_id'], passed_access_key_id)
         ]
 
         if not matching_key_pairs:
@@ -54,7 +55,7 @@ def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
             request.headers['Authorization'],
             str(request.url),
             request.method,
-            content=await request.content.read(),
+            content=await request.read(),
             content_type=request.headers['Content-Type'],
             seen_nonce=seen_nonce,
         )
@@ -120,29 +121,25 @@ async def handle_post(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
-def handle_get(session, es_auth_headers, es_endpoint):
+def handle_get(session, es_search, es_endpoint):
     app_logger = logging.getLogger(__name__)
 
-    path = '/_search'
-    url = es_endpoint['base_url'] + path
+    async def handle(request):
+        incoming_body = await request.read()
 
-    async def handle(_):
-        auth_headers = es_auth_headers(
-            endpoint=es_endpoint,
-            method='GET',
-            path=path,
-            payload=b'',
-        )
-
-        succesful = False
+        succesful_http = False
+        succesful_search = False
         try:
-            results = await session.get(url, headers=auth_headers)
-            succesful = results.status == 200
+            results = await es_search(session, es_endpoint, incoming_body,
+                                      request.headers['Content-Type'])
+            succesful_http = True
+            succesful_search = results.status == 200
         except aiohttp.ClientError as exception:
             app_logger.warning('Error connecting to Elasticsearch: %s', exception)
 
         return \
-            json_response(await results.json(), status=200) if succesful else \
+            json_response(activities(await results.json()), status=200) if succesful_search else \
+            json_response(await results.json(), status=results.status) if succesful_http else \
             json_response({'details': 'An unknown error occurred.'}, status=500)
 
     return handle
@@ -152,3 +149,21 @@ def json_response(data, status):
     return web.json_response(data, status=status, headers={
         'Server': 'activity-stream'
     })
+
+
+def activities(elasticsearch_reponse):
+    elasticsearch_hits = elasticsearch_reponse['hits'].get('hits', [])
+
+    return {
+        '@context': [
+            'https://www.w3.org/ns/activitystreams',
+            {
+                'dit': 'https://www.trade.gov.uk/ns/activitystreams/v1',
+            }
+        ],
+        'orderedItems': [
+            item['_source']
+            for item in elasticsearch_hits
+        ],
+        'type': 'Collection',
+    }
