@@ -17,6 +17,7 @@
           ]
         },
         "dit:application": "exportOpportunities",
+        "id": "dit:exportOpportunities:Enquiry:42863:Create",
         "object": {
           "id": "dit:exportOpportunities:Enquiry:42863",
           "type": [
@@ -46,6 +47,7 @@
           ]
         },
         "dit:application": "exportOpportunities",
+        "id": "dit:exportOpportunities:Enquiry:42862:Create",
         "object": {
           "id": "dit:exportOpportunities:Enquiry:42862",
           "type": [

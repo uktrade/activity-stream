@@ -108,6 +108,7 @@ def _activity(
             },
         },
         'source': {
+            'id': activity_id,
             'type': activity_type,
             'published': published_date,
             'dit:application': dit_application,

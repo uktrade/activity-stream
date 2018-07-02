@@ -539,7 +539,7 @@ class TestApplication(TestBase):
             'AWS4-HMAC-SHA256 '
             'Credential=some-id/20120114/us-east-2/es/aws4_request, '
             'SignedHeaders=content-type;host;x-amz-date, '
-            'Signature=ce881b6b5506fb0b6a8c1ab8f79ef7d162020a98f90fc2a5abfc62c3eb23ffb8')
+            'Signature=a28466109ed35c5e8b48203115f6c862217886c119fda19dd5bbe6043f0df1fd')
         self.assertEqual(es_bulk_content.decode('utf-8')[-1], '\n')
         self.assertEqual(es_bulk_headers['Content-Type'], 'application/x-ndjson')
 
