@@ -101,3 +101,23 @@ def es_auth_headers(endpoint, method, path, payload):
             f'SignedHeaders={signed_headers}, Signature=' + signature()
         ),
     }
+
+
+async def es_search(session, es_endpoint, query, content_type):
+    path = '/activities/_search'
+    url = es_endpoint['base_url'] + path
+
+    auth_headers = es_auth_headers(
+        endpoint=es_endpoint,
+        method='GET',
+        path=path,
+        payload=query,
+    )
+
+    return await session.get(
+        url,
+        headers={**auth_headers, **{
+            'Content-Type': content_type,
+        }},
+        data=query,
+    )

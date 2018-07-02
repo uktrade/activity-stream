@@ -11,6 +11,7 @@ from aiohttp import web
 
 from .app_elasticsearch import (
     es_auth_headers,
+    es_search,
     ensure_index,
     ensure_mappings,
 )
@@ -96,7 +97,7 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
     ])
     app.add_routes([
         web.post('/v1/', handle_post),
-        web.get('/v1/', handle_get(session, es_auth_headers, es_endpoint)),
+        web.get('/v1/', handle_get(session, es_search, es_endpoint)),
     ])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 
