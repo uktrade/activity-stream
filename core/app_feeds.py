@@ -6,7 +6,7 @@ import mohawk
 from .app_utils import sub_dict_lower
 
 
-class ElasticsearchBulkFeed:
+class ActivityStreamFeed:
 
     polling_page_interval = 0
     polling_seed_interval = 5

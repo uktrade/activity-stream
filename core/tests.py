@@ -409,7 +409,7 @@ class TestApplication(TestBase):
             **mock_env(),
             'FEEDS__1__SEED': (
                 'http://localhost:8081/'
-                'tests_fixture_elasticsearch_bulk_multipage_1.json'
+                'tests_fixture_activity_stream_multipage_1.json'
             ),
             'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
             'FEEDS__2__API_EMAIL': 'test@test.com',
@@ -527,7 +527,7 @@ class TestApplication(TestBase):
         self.assertEqual(self.feed_requested[0].result(
         ).headers['Authorization'], (
             'Hawk '
-            'mac="lTF8bPQSP4HU6oQcassERsIl8DNDbiu6jXhbcdUTKIg=", '
+            'mac="keUgjONtI1hLtS4DzGl+0G63o1nPFmvtIsTsZsB/NPM=", '
             'hash="B0weSUXsMcb5UhL41FZbrUJCAotzSI3HawE1NPLRUz8=", '
             'id="feed-some-id", '
             'ts="1326542401", '
@@ -611,7 +611,7 @@ class TestApplication(TestBase):
         self.setup_manual(
             {**mock_env(), 'FEEDS__1__SEED': (
                 'http://localhost:8081/'
-                'tests_fixture_elasticsearch_bulk_multipage_1.json'
+                'tests_fixture_activity_stream_multipage_1.json'
             )
             },
             mock_feed=read_file,
@@ -637,10 +637,10 @@ class TestApplication(TestBase):
     def test_two_feeds(self):
         env = {
             **mock_env(),
-            'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_2.json',
+            'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_activity_stream_2.json',
             'FEEDS__2__ACCESS_KEY_ID': 'feed-some-id',
             'FEEDS__2__SECRET_ACCESS_KEY': '?[!@$%^%',
-            'FEEDS__2__TYPE': 'elasticsearch_bulk',
+            'FEEDS__2__TYPE': 'activity_stream',
         }
         self.setup_manual(env=env, mock_feed=read_file)
 
@@ -965,10 +965,10 @@ def mock_env():
         'ELASTICSEARCH__PORT': '9200',
         'ELASTICSEARCH__PROTOCOL': 'http',
         'ELASTICSEARCH__REGION': 'us-east-2',
-        'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_elasticsearch_bulk_1.json',
+        'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_activity_stream_1.json',
         'FEEDS__1__ACCESS_KEY_ID': 'feed-some-id',
         'FEEDS__1__SECRET_ACCESS_KEY': '?[!@$%^%',
-        'FEEDS__1__TYPE': 'elasticsearch_bulk',
+        'FEEDS__1__TYPE': 'activity_stream',
         'INCOMING_ACCESS_KEY_PAIRS__1__KEY_ID': 'incoming-some-id-1',
         'INCOMING_ACCESS_KEY_PAIRS__1__SECRET_KEY': 'incoming-some-secret-1',
         'INCOMING_ACCESS_KEY_PAIRS__1__PERMISSIONS__1': 'POST',

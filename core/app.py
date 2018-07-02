@@ -16,7 +16,7 @@ from .app_elasticsearch import (
     ensure_mappings,
 )
 from .app_feeds import (
-    ElasticsearchBulkFeed,
+    ActivityStreamFeed,
     ZendeskFeed,
 )
 from .app_server import (
@@ -45,7 +45,7 @@ async def run_application():
 
     def parse_feed_config(feed_config):
         by_feed_type = {
-            'elasticsearch_bulk': ElasticsearchBulkFeed,
+            'activity_stream': ActivityStreamFeed,
             'zendesk': ZendeskFeed,
         }
         return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
