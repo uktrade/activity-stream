@@ -871,41 +871,37 @@ async def get_until(url, x_forwarded_for, condition, sleep):
 
 
 async def post(url, auth, x_forwarded_for):
-    async with aiohttp.ClientSession(skip_auto_headers=['Content-Type']) as session:
-        result = await session.post(url, headers={
-            'Authorization': auth,
-            'Content-Type': '',
-            'X-Forwarded-For': x_forwarded_for,
-        }, timeout=1)
-    return (await result.text(), result.status)
+    return await _post(url, {
+        'Authorization': auth,
+        'Content-Type': '',
+        'X-Forwarded-For': x_forwarded_for,
+    })
 
 
 async def post_no_auth(url, x_forwarded_for):
-    async with aiohttp.ClientSession(skip_auto_headers=['Content-Type']) as session:
-        result = await session.post(url, headers={
-            'Content-Type': '',
-            'X-Forwarded-For': x_forwarded_for,
-        }, timeout=1)
-    return (await result.text(), result.status)
+    return await _post(url, {
+        'Content-Type': '',
+        'X-Forwarded-For': x_forwarded_for,
+    })
 
 
 async def post_no_x_forwarded_for(url, auth):
-    async with aiohttp.ClientSession(skip_auto_headers=['Content-Type']) as session:
-        headers = {
-            'Authorization': auth,
-            'Content-Type': '',
-        }
-        result = await session.post(url, headers=headers, timeout=1)
-    return (await result.text(), result.status)
+    return await _post(url, {
+        'Authorization': auth,
+        'Content-Type': '',
+    })
 
 
 async def post_no_content_type(url, auth, x_forwarded_for):
-    async with aiohttp.ClientSession(skip_auto_headers=['Content-Type']) as session:
-        result = await session.post(url, headers={
-            'Authorization': auth,
-            'X-Forwarded-For': x_forwarded_for,
-        }, timeout=1)
+    return await _post(url, {
+        'Authorization': auth,
+        'X-Forwarded-For': x_forwarded_for,
+    })
 
+
+async def _post(url, headers):
+    async with aiohttp.ClientSession(skip_auto_headers=['Content-Type']) as session:
+        result = await session.post(url, headers=headers, timeout=1)
     return (await result.text(), result.status)
 
 
