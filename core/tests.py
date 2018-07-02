@@ -771,7 +771,15 @@ async def _is_http_accepted_eventually():
     while attempts < 20:
         try:
             async with aiohttp.ClientSession() as session:
-                await session.get('http://127.0.0.1:8080', timeout=1)
+                url = 'http://127.0.0.1:8080/'
+                auth = hawk_auth_header(
+                    'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
+                )
+                await session.get(url, headers={
+                    'Authorization': auth,
+                    'X-Forwarded-For': '1.2.3.4',
+                    'Content-Type': '',
+                }, timeout=1)
             return True
         except aiohttp.client_exceptions.ClientConnectorError as exception:
             attempts += 1
