@@ -871,7 +871,7 @@ async def get_until(url, x_forwarded_for, condition, sleep):
 
 
 async def post(url, auth, x_forwarded_for):
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(skip_auto_headers=['Content-Type']) as session:
         result = await session.post(url, headers={
             'Authorization': auth,
             'Content-Type': '',
@@ -881,7 +881,7 @@ async def post(url, auth, x_forwarded_for):
 
 
 async def post_no_auth(url, x_forwarded_for):
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(skip_auto_headers=['Content-Type']) as session:
         result = await session.post(url, headers={
             'Content-Type': '',
             'X-Forwarded-For': x_forwarded_for,
@@ -890,7 +890,7 @@ async def post_no_auth(url, x_forwarded_for):
 
 
 async def post_no_x_forwarded_for(url, auth):
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(skip_auto_headers=['Content-Type']) as session:
         headers = {
             'Authorization': auth,
             'Content-Type': '',
