@@ -22,7 +22,7 @@ class ActivityStreamFeed:
 
     @staticmethod
     def next_href(feed):
-        return feed.get('next_url', None)
+        return feed.get('next', None)
 
     def auth_headers(self, url):
         method = 'GET'
@@ -36,7 +36,16 @@ class ActivityStreamFeed:
 
     @staticmethod
     def convert_to_bulk_es(feed):
-        return feed['items']
+        return [{
+            'action_and_metadata': {
+                'index': {
+                    '_id': item['id'],
+                    '_index': 'activities',
+                    '_type': '_doc',
+                }
+            },
+            'source': item
+        } for item in feed['orderedItems']]
 
 
 class ZendeskFeed:

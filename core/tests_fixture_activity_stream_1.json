@@ -1,64 +1,53 @@
 {
-  "items": [
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
     {
-      "action_and_metadata": {
-        "index": {
-          "_id": "dit:exportOpportunities:Enquiry:49863:Create",
-          "_index": "activities",
-          "_type": "_doc"
-        }
+      "dit": "https://www.trade.gov.uk/ns/activitystreams/v1"
+    }
+  ],
+  "orderedItems": [
+    {
+      "actor": {
+        "dit:companiesHouseNumber": "123432",
+        "type": [
+          "Organization",
+          "dit:Company"
+        ]
       },
-      "source": {
-        "actor": {
-          "dit:companiesHouseNumber": "123432",
-          "type": [
-            "Organization",
-            "dit:Company"
-          ]
-        },
-        "dit:application": "exportOpportunities",
-        "id": "dit:exportOpportunities:Enquiry:49863:Create",
-        "object": {
-          "id": "dit:exportOpportunities:Enquiry:49863",
-          "type": [
-            "Document",
-            "dit:exportOpportunities:Enquiry"
-          ],
-          "url": "https://export-opportunities-continuous-deployment.cloudapps.digital/admin/enquiries/49863"
-        },
-        "published": "2018-04-12T12:48:13+00:00",
-        "type": "Create"
-      }
+      "dit:application": "exportOpportunities",
+      "id": "dit:exportOpportunities:Enquiry:49863:Create",
+      "object": {
+        "id": "dit:exportOpportunities:Enquiry:49863",
+        "type": [
+          "Document",
+          "dit:exportOpportunities:Enquiry"
+        ],
+        "url": "https://export-opportunities-continuous-deployment.cloudapps.digital/admin/enquiries/49863"
+      },
+      "published": "2018-04-12T12:48:13+00:00",
+      "type": "Create"
     },
     {
-      "action_and_metadata": {
-        "index": {
-          "_id": "dit:exportOpportunities:Enquiry:49862:Create",
-          "_index": "activities",
-          "_type": "_doc"
-        }
+      "actor": {
+        "dit:companiesHouseNumber": "82312",
+        "type": [
+          "Organization",
+          "dit:Company"
+        ]
       },
-      "source": {
-        "actor": {
-          "dit:companiesHouseNumber": "82312",
-          "type": [
-            "Organization",
-            "dit:Company"
-          ]
-        },
-        "dit:application": "exportOpportunities",
-        "id": "dit:exportOpportunities:Enquiry:49862:Create",
-        "object": {
-          "id": "dit:exportOpportunities:Enquiry:49862",
-          "type": [
-            "Document",
-            "dit:exportOpportunities:Enquiry"
-          ],
-          "url": "https://export-opportunities-continuous-deployment.cloudapps.digital/admin/enquiries/49862"
-        },
-        "published": "2018-03-23T17:06:53+00:00",
-        "type": "Create"
-      }
+      "dit:application": "exportOpportunities",
+      "id": "dit:exportOpportunities:Enquiry:49862:Create",
+      "object": {
+        "id": "dit:exportOpportunities:Enquiry:49862",
+        "type": [
+          "Document",
+          "dit:exportOpportunities:Enquiry"
+        ],
+        "url": "https://export-opportunities-continuous-deployment.cloudapps.digital/admin/enquiries/49862"
+      },
+      "published": "2018-03-23T17:06:53+00:00",
+      "type": "Create"
     }
-  ]
+  ],
+  "type": "Collection"
 }
