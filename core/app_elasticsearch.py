@@ -108,12 +108,14 @@ def es_auth_headers(endpoint, method, path, payload):
     }
 
 
-def es_search_new_scroll(_):
-    return '/activities/_search?scroll=30s'
+def es_search_new_scroll(_, query):
+    return '/activities/_search?scroll=30s', query
 
 
-def es_search_existing_scroll(match_info):
-    return '/_search/scroll?scroll=30s&scroll_id=' + match_info['scroll_id']
+def es_search_existing_scroll(match_info, _):
+    return '/_search/scroll?scroll=30s', json.dumps({
+        'scroll_id': match_info['scroll_id'],
+    }).encode('utf-8')
 
 
 async def es_search(session, es_endpoint, path, query, content_type, get_scroll_url):

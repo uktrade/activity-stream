@@ -134,19 +134,19 @@ def handle_get_existing(session, es_endpoint):
     return _handle_get(session, es_endpoint, es_search_existing_scroll)
 
 
-def _handle_get(session, es_endpoint, get_path):
+def _handle_get(session, es_endpoint, get_path_query):
     app_logger = logging.getLogger(__name__)
 
     async def handle(request):
         incoming_body = await request.read()
-        path = get_path(request.match_info)
+        path, query = get_path_query(request.match_info, incoming_body)
 
         def get_scroll_url(scroll_id):
             return str(request.url.join(request.app.router['scroll'].url_for(scroll_id=scroll_id)))
 
         succesful_http = False
         try:
-            results, status = await es_search(session, es_endpoint, path, incoming_body,
+            results, status = await es_search(session, es_endpoint, path, query,
                                               request.headers['Content-Type'],
                                               get_scroll_url)
             succesful_http = True
