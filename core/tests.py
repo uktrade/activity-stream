@@ -350,11 +350,11 @@ class TestApplication(TestBase):
         x_forwarded_for = '1.2.3.4'
 
         result, status, headers = self.loop.run_until_complete(
-            get_until(url, x_forwarded_for, has_at_least(2), asyncio.sleep))
+            get_until(url, x_forwarded_for, has_at_least_ordered_items(2), asyncio.sleep))
         self.assertEqual(status, 200)
-        self.assertEqual(result['hits']['hits'][0]['_id'],
+        self.assertEqual(result['orderedItems'][0]['id'],
                          'dit:exportOpportunities:Enquiry:49863:Create')
-        self.assertEqual(result['hits']['hits'][1]['_id'],
+        self.assertEqual(result['orderedItems'][1]['id'],
                          'dit:exportOpportunities:Enquiry:49862:Create')
         self.assertEqual(headers['Server'], 'activity-stream')
 
@@ -454,9 +454,9 @@ class TestApplication(TestBase):
             get(url, auth, x_forwarded_for, query))
         self.assertEqual(status, 200)
         data = json.loads(result)
-        self.assertEqual(data['hits']['total'], 2)
-        self.assertIn('2011-04-12', data['hits']['hits'][0]['_source']['published'])
-        self.assertIn('2011-04-12', data['hits']['hits'][1]['_source']['published'])
+        self.assertEqual(len(data['orderedItems']), 2)
+        self.assertIn('2011-04-12', data['orderedItems'][0]['published'])
+        self.assertIn('2011-04-12', data['orderedItems'][1]['published'])
 
         query = json.dumps({
             'query': {
@@ -487,11 +487,10 @@ class TestApplication(TestBase):
             get(url, auth, x_forwarded_for, query))
         self.assertEqual(status, 200)
         data = json.loads(result)
-        self.assertEqual(data['hits']['total'], 1)
-        self.assertIn('2011-04-12', data['hits']['hits'][0]['_source']['published'])
-        self.assertEqual('Create', data['hits']['hits'][0]['_source']['type'])
-        self.assertIn('dit:exportOpportunities:Enquiry',
-                      data['hits']['hits'][0]['_source']['object']['type'])
+        self.assertEqual(len(data['orderedItems']), 1)
+        self.assertIn('2011-04-12', data['orderedItems'][0]['published'])
+        self.assertEqual('Create', data['orderedItems'][0]['type'])
+        self.assertIn('dit:exportOpportunities:Enquiry', data['orderedItems'][0]['object']['type'])
 
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
@@ -960,6 +959,13 @@ def has_at_least(num_results):
             'hits' in results['hits'] and
             len(results['hits']['hits']) >= num_results
         )
+
+    return has
+
+
+def has_at_least_ordered_items(num_results):
+    def has(results):
+        return len(results['orderedItems']) >= num_results
 
     return has
 

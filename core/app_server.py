@@ -138,7 +138,7 @@ def handle_get(session, es_search, es_endpoint):
             app_logger.warning('Error connecting to Elasticsearch: %s', exception)
 
         return \
-            json_response(await results.json(), status=200) if succesful_search else \
+            json_response(activities(await results.json()), status=200) if succesful_search else \
             json_response(await results.json(), status=results.status) if succesful_http else \
             json_response({'details': 'An unknown error occurred.'}, status=500)
 
@@ -149,3 +149,21 @@ def json_response(data, status):
     return web.json_response(data, status=status, headers={
         'Server': 'activity-stream'
     })
+
+
+def activities(elasticsearch_reponse):
+    elasticsearch_hits = elasticsearch_reponse['hits'].get('hits', [])
+
+    return {
+        '@context': [
+            'https://www.w3.org/ns/activitystreams',
+            {
+                'dit': 'https://www.trade.gov.uk/ns/activitystreams/v1',
+            }
+        ],
+        'orderedItems': [
+            item['_source']
+            for item in elasticsearch_hits
+        ],
+        'type': 'Collection',
+    }
