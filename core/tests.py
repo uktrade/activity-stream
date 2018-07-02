@@ -71,9 +71,7 @@ class TestAuthentication(TestBase):
 
     def test_no_auth_then_401(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         text, status = self.loop.run_until_complete(post_no_auth(url, '1.2.3.4'))
@@ -82,9 +80,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_id_then_401(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -97,9 +93,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_secret_then_401(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -112,9 +106,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_method_then_401(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -127,9 +119,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_content_then_401(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -142,9 +132,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_content_type_then_401(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -157,9 +145,7 @@ class TestAuthentication(TestBase):
 
     def test_no_content_type_then_401(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -173,9 +159,7 @@ class TestAuthentication(TestBase):
 
     def test_time_skew_then_401(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         past = datetime.datetime.now() + datetime.timedelta(seconds=-61)
@@ -190,9 +174,7 @@ class TestAuthentication(TestBase):
 
     def test_repeat_auth_then_401(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -217,8 +199,7 @@ class TestAuthentication(TestBase):
         past = now + datetime.timedelta(seconds=-45)
 
         with patch('core.app.NONCE_EXPIRE', 30):
-            asyncio.ensure_future(run_application())
-            is_http_accepted_eventually()
+            run_app_until_accepts_http()
 
             url = 'http://127.0.0.1:8080/v1/'
             x_forwarded_for = '1.2.3.4'
@@ -238,9 +219,7 @@ class TestAuthentication(TestBase):
 
     def test_no_x_forwarded_for_401(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -252,9 +231,7 @@ class TestAuthentication(TestBase):
 
     def test_bad_x_forwarded_for_401(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -267,9 +244,7 @@ class TestAuthentication(TestBase):
 
     def test_at_end_x_forwarded_for_401(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -282,9 +257,7 @@ class TestAuthentication(TestBase):
 
     def test_second_id_returns_object(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -297,9 +270,7 @@ class TestAuthentication(TestBase):
 
     def test_post_returns_object(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -312,9 +283,7 @@ class TestAuthentication(TestBase):
 
     def test_post_creds_get_403(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -330,9 +299,7 @@ class TestApplication(TestBase):
 
     def test_get_returns_feed_data(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4'
@@ -558,8 +525,7 @@ class TestApplication(TestBase):
         ]
         es_runner = self.loop.run_until_complete(
             run_es_application(port=9201, override_routes=routes))
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -579,9 +545,7 @@ class TestApplication(TestBase):
         }, mock_feed=read_file)
         es_runner = self.loop.run_until_complete(
             run_es_application(port=9201, override_routes=[]))
-
-        asyncio.ensure_future(run_application())
-        is_http_accepted_eventually()
+        run_app_until_accepts_http()
 
         self.loop.run_until_complete(es_runner.cleanup())
         url = 'http://127.0.0.1:8080/v1/'
@@ -742,6 +706,11 @@ class TestProcess(unittest.TestCase):
 
     def test_server_accepts_http(self):
         self.assertTrue(is_http_accepted_eventually())
+
+
+def run_app_until_accepts_http():
+    asyncio.ensure_future(run_application())
+    is_http_accepted_eventually()
 
 
 def is_http_accepted_eventually():
