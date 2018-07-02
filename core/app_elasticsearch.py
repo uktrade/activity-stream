@@ -109,7 +109,7 @@ def es_auth_headers(endpoint, method, path, payload):
 
 
 async def es_search(session, es_endpoint, query, content_type):
-    path = '/activities/_search'
+    path = '/activities/_search?scroll=30s'
     url = es_endpoint['base_url'] + path
 
     auth_headers = es_auth_headers(
@@ -119,13 +119,34 @@ async def es_search(session, es_endpoint, query, content_type):
         payload=query,
     )
 
-    return await session.get(
+    results = await session.get(
         url,
         headers={**auth_headers, **{
             'Content-Type': content_type,
         }},
         data=query,
     )
+
+    response = await results.json()
+    return (activities(response) if results.status == 200 else response, results.status)
+
+
+def activities(elasticsearch_reponse):
+    elasticsearch_hits = elasticsearch_reponse['hits'].get('hits', [])
+
+    return {
+        '@context': [
+            'https://www.w3.org/ns/activitystreams',
+            {
+                'dit': 'https://www.trade.gov.uk/ns/activitystreams/v1',
+            }
+        ],
+        'orderedItems': [
+            item['_source']
+            for item in elasticsearch_hits
+        ],
+        'type': 'Collection',
+    }
 
 
 async def es_bulk(session, es_endpoint, items):
