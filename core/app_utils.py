@@ -36,24 +36,12 @@ class ExpiringDict:
 class ExpiringSet:
 
     def __init__(self, seconds):
-        self._seconds = seconds
-        self._store = {}
-
-    def _remove_old_keys(self, now):
-        self._store = {
-            key: expires
-            for key, expires in self._store.items()
-            if expires > now
-        }
+        self._store = ExpiringDict(seconds)
 
     def add(self, item):
-        now = int(time.time())
-        self._remove_old_keys(now)
-        self._store[item] = now + self._seconds
+        self._store[item] = True
 
     def __contains__(self, item):
-        now = int(time.time())
-        self._remove_old_keys(now)
         return item in self._store
 
 
