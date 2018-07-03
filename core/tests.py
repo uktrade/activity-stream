@@ -944,21 +944,14 @@ async def _web_application(port, routes):
 
 
 def has_at_least(num_results):
-    def has(results):
-        return (
-            'hits' in results and
-            'hits' in results['hits'] and
-            len(results['hits']['hits']) >= num_results
-        )
-
-    return has
+    return lambda results: (
+        'hits' in results and 'hits' in results['hits'] and
+        len(results['hits']['hits']) >= num_results
+    )
 
 
 def has_at_least_ordered_items(num_results):
-    def has(results):
-        return len(results['orderedItems']) >= num_results
-
-    return has
+    return lambda results: len(results['orderedItems']) >= num_results
 
 
 def mock_env():
