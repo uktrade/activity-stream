@@ -16,6 +16,7 @@ async def ensure_index(session, es_endpoint):
         endpoint=es_endpoint,
         method='PUT',
         path=path,
+        content_type='application/json',
         payload=index_definition,
     )
     headers = {
@@ -51,6 +52,7 @@ async def ensure_mappings(session, es_endpoint):
         endpoint=es_endpoint,
         method='PUT',
         path=path,
+        content_type='application/json',
         payload=mapping_definition,
     )
     headers = {
@@ -63,7 +65,7 @@ async def ensure_mappings(session, es_endpoint):
         raise Exception(await results.text())
 
 
-def es_auth_headers(endpoint, method, path, payload):
+def es_auth_headers(endpoint, method, path, content_type, payload):
     service = 'es'
     signed_headers = 'content-type;host;x-amz-date'
     algorithm = 'AWS4-HMAC-SHA256'
@@ -79,7 +81,7 @@ def es_auth_headers(endpoint, method, path, payload):
             canonical_uri = path
             canonical_querystring = ''
             canonical_headers = \
-                f'content-type:application/x-ndjson\n' + \
+                f'content-type:{content_type}\n' + \
                 f'host:{endpoint["host"]}\nx-amz-date:{amzdate}\n'
             payload_hash = hashlib.sha256(payload).hexdigest()
 
@@ -125,6 +127,7 @@ async def es_search(session, es_endpoint, path, query, content_type, to_public_s
         endpoint=es_endpoint,
         method='GET',
         path=path,
+        content_type=content_type,
         payload=query,
     )
 
@@ -184,6 +187,7 @@ async def es_bulk(session, es_endpoint, items):
         endpoint=es_endpoint,
         method='POST',
         path='/_bulk',
+        content_type='application/x-ndjson',
         payload=es_bulk_contents,
     )
     url = es_endpoint['base_url'] + path
