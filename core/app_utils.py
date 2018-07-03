@@ -37,24 +37,24 @@ class ExpiringSet:
 
     def __init__(self, seconds):
         self._seconds = seconds
-        self._expiries = {}
+        self._store = {}
 
     def _remove_old_keys(self, now):
-        self._expiries = {
+        self._store = {
             key: expires
-            for key, expires in self._expiries.items()
+            for key, expires in self._store.items()
             if expires > now
         }
 
     def add(self, item):
         now = int(time.time())
         self._remove_old_keys(now)
-        self._expiries[item] = now + self._seconds
+        self._store[item] = now + self._seconds
 
     def __contains__(self, item):
         now = int(time.time())
         self._remove_old_keys(now)
-        return item in self._expiries
+        return item in self._store
 
 
 def flatten(list_to_flatten):
