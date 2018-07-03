@@ -359,6 +359,42 @@ class TestApplication(TestBase):
                          'dit:exportOpportunities:Enquiry:49862:Create')
         self.assertIn('next', result_2_json)
 
+    def test_pagination_expiry(self):
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
+        run_app_until_accepts_http()
+
+        url_1 = 'http://127.0.0.1:8080/v1/'
+        x_forwarded_for = '1.2.3.4'
+        self.loop.run_until_complete(
+            get_until(url_1, x_forwarded_for, has_at_least_ordered_items(2), asyncio.sleep))
+
+        now = datetime.datetime.now()
+        past = now + datetime.timedelta(seconds=-60)
+
+        query = json.dumps({
+            'size': '1',
+        }).encode('utf-8')
+
+        with freeze_time(past):
+            auth = hawk_auth_header(
+                'incoming-some-id-3', 'incoming-some-secret-3', url_1,
+                'GET', query, 'application/json',
+            )
+            result_1, _, _ = self.loop.run_until_complete(
+                get(url_1, auth, x_forwarded_for, query))
+            result_1_json = json.loads(result_1)
+            url_2 = result_1_json['next']
+
+        with freeze_time(now):
+            auth_2 = hawk_auth_header(
+                'incoming-some-id-3', 'incoming-some-secret-3', url_2,
+                'GET', b'', 'application/json',
+            )
+            _, status_2, _ = self.loop.run_until_complete(
+                get(url_2, auth_2, x_forwarded_for, b''))
+            # Not great, but it'll do for now.
+            self.assertEqual(status_2, 500)
+
     def test_bad_mapping_then_exception(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
 

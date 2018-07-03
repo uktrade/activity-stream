@@ -26,6 +26,7 @@ from .app_server import (
     handle_post,
 )
 from .app_utils import (
+    ExpiringDict,
     normalise_environment,
     repeat_even_on_exception,
 )
@@ -90,14 +91,19 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
     app_logger = logging.getLogger(__name__)
 
     app_logger.debug('Creating listening web application...')
+
+    public_to_private_scroll_ids = ExpiringDict(30)
     app = web.Application(middlewares=[
         authenticator(ip_whitelist, incoming_key_pairs, NONCE_EXPIRE),
         authorizer(),
     ])
     app.add_routes([
         web.post('/v1/', handle_post),
-        web.get('/v1/', handle_get_new(session, es_endpoint)),
-        web.get('/v1/{scroll_id}', handle_get_existing(session, es_endpoint), name='scroll'),
+        web.get('/v1/', handle_get_new(session, public_to_private_scroll_ids, es_endpoint)),
+        web.get(
+            '/v1/{public_scroll_id}',
+            handle_get_existing(session, public_to_private_scroll_ids, es_endpoint), name='scroll',
+        ),
     ])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 

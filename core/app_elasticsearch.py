@@ -108,17 +108,17 @@ def es_auth_headers(endpoint, method, path, payload):
     }
 
 
-def es_search_new_scroll(_, query):
+def es_search_new_scroll(_, __, query):
     return '/activities/_search?scroll=30s', query
 
 
-def es_search_existing_scroll(match_info, _):
+def es_search_existing_scroll(public_to_private_scroll_ids, match_info, _):
     return '/_search/scroll?scroll=30s', json.dumps({
-        'scroll_id': match_info['scroll_id'],
+        'scroll_id': public_to_private_scroll_ids[match_info['public_scroll_id']],
     }).encode('utf-8')
 
 
-async def es_search(session, es_endpoint, path, query, content_type, get_scroll_url):
+async def es_search(session, es_endpoint, path, query, content_type, to_public_scroll_url):
     url = es_endpoint['base_url'] + path
 
     auth_headers = es_auth_headers(
@@ -138,15 +138,15 @@ async def es_search(session, es_endpoint, path, query, content_type, get_scroll_
 
     response = await results.json()
     return \
-        (activities(response, get_scroll_url), 200) if results.status == 200 else \
+        (activities(response, to_public_scroll_url), 200) if results.status == 200 else \
         (response, results.status)
 
 
-def activities(elasticsearch_reponse, get_scroll_url):
+def activities(elasticsearch_reponse, to_public_scroll_url):
     elasticsearch_hits = elasticsearch_reponse['hits'].get('hits', [])
-    scroll_id = elasticsearch_reponse['_scroll_id']
+    private_scroll_id = elasticsearch_reponse['_scroll_id']
     next_dict = {
-        'next': get_scroll_url(scroll_id)
+        'next': to_public_scroll_url(private_scroll_id)
     } if elasticsearch_hits else {}
 
     return {**{

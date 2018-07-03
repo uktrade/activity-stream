@@ -1,5 +1,6 @@
 import hmac
 import logging
+import uuid
 
 import aiohttp
 from aiohttp import web
@@ -126,29 +127,35 @@ async def handle_post(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
-def handle_get_new(session, es_endpoint):
-    return _handle_get(session, es_endpoint, es_search_new_scroll)
+def handle_get_new(session, public_to_private_scroll_ids, es_endpoint):
+    return _handle_get(session, public_to_private_scroll_ids,
+                       es_endpoint, es_search_new_scroll)
 
 
-def handle_get_existing(session, es_endpoint):
-    return _handle_get(session, es_endpoint, es_search_existing_scroll)
+def handle_get_existing(session, public_to_private_scroll_ids, es_endpoint):
+    return _handle_get(session, public_to_private_scroll_ids,
+                       es_endpoint, es_search_existing_scroll)
 
 
-def _handle_get(session, es_endpoint, get_path_query):
+def _handle_get(session, public_to_private_scroll_ids, es_endpoint, get_path_query):
     app_logger = logging.getLogger(__name__)
 
     async def handle(request):
         incoming_body = await request.read()
-        path, query = get_path_query(request.match_info, incoming_body)
+        path, query = get_path_query(public_to_private_scroll_ids,
+                                     request.match_info, incoming_body)
 
-        def get_scroll_url(scroll_id):
-            return str(request.url.join(request.app.router['scroll'].url_for(scroll_id=scroll_id)))
+        def to_public_scroll_url(private_scroll_id):
+            public_scroll_id = uuid.uuid4().hex
+            public_to_private_scroll_ids[public_scroll_id] = private_scroll_id
+            return str(request.url.join(
+                request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)))
 
         succesful_http = False
         try:
             results, status = await es_search(session, es_endpoint, path, query,
                                               request.headers['Content-Type'],
-                                              get_scroll_url)
+                                              to_public_scroll_url)
             succesful_http = True
         except aiohttp.ClientError as exception:
             app_logger.warning('Error connecting to Elasticsearch: %s', exception)
