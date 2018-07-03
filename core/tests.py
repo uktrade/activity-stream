@@ -793,15 +793,6 @@ async def delete_all_es_data():
     async with aiohttp.ClientSession() as session:
         await session.delete('http://127.0.0.1:9200/*')
 
-    def has_no_results(results):
-        return (
-            'hits' in results and
-            'hits' in results['hits'] and
-            len(results['hits']['hits']) >= 0
-        )
-
-    await fetch_all_es_data_until(has_no_results, asyncio.sleep)
-
 
 async def fetch_all_es_data_until(condition, sleep):
 
