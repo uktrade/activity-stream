@@ -74,7 +74,10 @@ class TestAuthentication(TestBase):
         run_app_until_accepts_http()
 
         url = 'http://127.0.0.1:8080/v1/'
-        text, status = self.loop.run_until_complete(post_no_auth(url, '1.2.3.4'))
+        text, status = self.loop.run_until_complete(post_with_headers(url, {
+            'Content-Type': '',
+            'X-Forwarded-For': '1.2.3.4',
+        }))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Authentication credentials were not provided."}')
 
@@ -152,8 +155,10 @@ class TestAuthentication(TestBase):
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', 'some-type',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status = self.loop.run_until_complete(
-            post_no_content_type(url, auth, x_forwarded_for))
+        text, status = self.loop.run_until_complete(post_with_headers(url, {
+            'Authorization': auth,
+            'X-Forwarded-For': x_forwarded_for,
+        }))
         self.assertEqual(status, 401)
         self.assertIn('Content-Type header was not set.', text)
 
@@ -225,7 +230,10 @@ class TestAuthentication(TestBase):
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
-        text, status = self.loop.run_until_complete(post_no_x_forwarded_for(url, auth))
+        text, status = self.loop.run_until_complete(post_with_headers(url, {
+            'Authorization': auth,
+            'Content-Type': '',
+        }))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -860,27 +868,6 @@ async def post(url, auth, x_forwarded_for):
     return await post_with_headers(url, {
         'Authorization': auth,
         'Content-Type': '',
-        'X-Forwarded-For': x_forwarded_for,
-    })
-
-
-async def post_no_auth(url, x_forwarded_for):
-    return await post_with_headers(url, {
-        'Content-Type': '',
-        'X-Forwarded-For': x_forwarded_for,
-    })
-
-
-async def post_no_x_forwarded_for(url, auth):
-    return await post_with_headers(url, {
-        'Authorization': auth,
-        'Content-Type': '',
-    })
-
-
-async def post_no_content_type(url, auth, x_forwarded_for):
-    return await post_with_headers(url, {
-        'Authorization': auth,
         'X-Forwarded-For': x_forwarded_for,
     })
 
