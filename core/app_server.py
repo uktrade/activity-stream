@@ -22,6 +22,7 @@ INCORRECT = 'Incorrect authentication credentials.'
 MISSING_CONTENT_TYPE = 'Content-Type header was not set. ' + \
                        'It must be set for authentication, even if as the empty string.'
 NOT_AUTHORIZED = 'You are not authorized to perform this action.'
+UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
 def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
@@ -162,7 +163,7 @@ def _handle_get(session, public_to_private_scroll_ids, es_endpoint, get_path_que
 
         return \
             json_response(results, status=status) if succesful_http else \
-            json_response({'details': 'An unknown error occurred.'}, status=500)
+            json_response({'details': UNKNOWN_ERROR}, status=500)
 
     return handle
 
