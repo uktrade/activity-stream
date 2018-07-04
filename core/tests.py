@@ -390,10 +390,10 @@ class TestApplication(TestBase):
                 'incoming-some-id-3', 'incoming-some-secret-3', url_2,
                 'GET', b'', 'application/json',
             )
-            _, status_2, _ = self.loop.run_until_complete(
+            result_2, status_2, _ = self.loop.run_until_complete(
                 get(url_2, auth_2, x_forwarded_for, b''))
-            # Not great, but it'll do for now.
-            self.assertEqual(status_2, 500)
+            self.assertEqual(json.loads(result_2)['details'], 'Scroll ID not found.')
+            self.assertEqual(status_2, 404)
 
     def test_bad_mapping_then_exception(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)

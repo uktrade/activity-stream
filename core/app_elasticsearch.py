@@ -4,6 +4,10 @@ import hmac
 import json
 import logging
 
+from aiohttp.web import (
+    HTTPNotFound,
+)
+
 from .app_utils import (
     flatten,
 )
@@ -115,8 +119,22 @@ def es_search_new_scroll(_, __, query):
 
 
 def es_search_existing_scroll(public_to_private_scroll_ids, match_info, _):
+    # This is not wrapped in a try/except. This function should only be
+    # called if public_scroll_id is in match_info, and there is some server
+    # error if this isn't present, and so bubbling up and resulting in a 500
+    # is appropriate if a KeyError is thrown
+    public_scroll_id = match_info['public_scroll_id']
+
+    try:
+        private_scroll_id = public_to_private_scroll_ids[public_scroll_id]
+    except KeyError:
+        # It can be argued that this function shouldn't have knowledge that
+        # it's called from a HTTP request. However, that _is_ its only use,
+        # so KISS, and not introduce more layers unless needed
+        raise HTTPNotFound(text='Scroll ID not found.')
+
     return '/_search/scroll?scroll=30s', json.dumps({
-        'scroll_id': public_to_private_scroll_ids[match_info['public_scroll_id']],
+        'scroll_id': private_scroll_id,
     }).encode('utf-8')
 
 
