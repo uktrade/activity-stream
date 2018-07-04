@@ -21,6 +21,7 @@ from .app_feeds import (
 from .app_server import (
     authenticator,
     authorizer,
+    convert_errors_to_json,
     handle_get_existing,
     handle_get_new,
     handle_post,
@@ -94,6 +95,7 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
 
     public_to_private_scroll_ids = ExpiringDict(30)
     app = web.Application(middlewares=[
+        convert_errors_to_json(),
         authenticator(ip_whitelist, incoming_key_pairs, NONCE_EXPIRE),
         authorizer(),
     ])

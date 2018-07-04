@@ -124,6 +124,21 @@ def authorizer():
     return authorize
 
 
+def convert_errors_to_json():
+    app_logger = logging.getLogger(__name__)
+
+    @web.middleware
+    async def _convert_errors_to_json(request, handler):
+        try:
+            response = await handler(request)
+        except BaseException as exception:
+            app_logger.warning('Exception: %s', exception)
+            response = json_response({'details': UNKNOWN_ERROR}, status=500)
+        return response
+
+    return _convert_errors_to_json
+
+
 async def handle_post(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
