@@ -21,6 +21,7 @@ NOT_PROVIDED = 'Authentication credentials were not provided.'
 INCORRECT = 'Incorrect authentication credentials.'
 MISSING_CONTENT_TYPE = 'Content-Type header was not set. ' + \
                        'It must be set for authentication, even if as the empty string.'
+MISSING_X_FORWARDED_PROTO = 'The X-Forwarded-Proto header was not set.'
 NOT_AUTHORIZED = 'You are not authorized to perform this action.'
 UNKNOWN_ERROR = 'An unknown error occurred.'
 
@@ -60,7 +61,7 @@ def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
         return mohawk.Receiver(
             lookup_credentials,
             request.headers['Authorization'],
-            str(request.url),
+            str(request.url.with_scheme(request.headers['X-Forwarded-Proto'])),
             request.method,
             content=await request.read(),
             content_type=request.headers['Content-Type'],
@@ -83,6 +84,12 @@ def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
                 'start with an IP in the whitelist'
             )
             raise web.HTTPUnauthorized(text=INCORRECT)
+
+        if 'X-Forwarded-Proto' not in request.headers:
+            app_logger.warning(
+                'Failed authentication: no X-Forwarded-Proto header passed'
+            )
+            raise web.HTTPUnauthorized(text=MISSING_X_FORWARDED_PROTO)
 
         if 'Authorization' not in request.headers:
             raise web.HTTPUnauthorized(text=NOT_PROVIDED)

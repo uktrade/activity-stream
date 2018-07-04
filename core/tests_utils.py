@@ -34,6 +34,7 @@ async def _is_http_accepted_eventually():
                 await session.get(url, headers={
                     'Authorization': auth,
                     'X-Forwarded-For': '1.2.3.4',
+                    'X-Forwarded-Proto': 'http',
                     'Content-Type': '',
                 }, timeout=1)
             return True
@@ -100,6 +101,7 @@ async def get(url, auth, x_forwarded_for, body):
             'Authorization': auth,
             'Content-Type': 'application/json',
             'X-Forwarded-For': x_forwarded_for,
+            'X-Forwarded-Proto': 'http',
         }, data=body, timeout=1)
     return (await result.text(), result.status, result.headers)
 
@@ -123,6 +125,7 @@ async def post(url, auth, x_forwarded_for):
         'Authorization': auth,
         'Content-Type': '',
         'X-Forwarded-For': x_forwarded_for,
+        'X-Forwarded-Proto': 'http',
     })
 
 

@@ -95,6 +95,7 @@ class TestAuthentication(TestBase):
         text, status = self.loop.run_until_complete(post_with_headers(url, {
             'Content-Type': '',
             'X-Forwarded-For': '1.2.3.4',
+            'X-Forwarded-Proto': 'http',
         }))
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Authentication credentials were not provided."}')
@@ -176,9 +177,26 @@ class TestAuthentication(TestBase):
         text, status = self.loop.run_until_complete(post_with_headers(url, {
             'Authorization': auth,
             'X-Forwarded-For': x_forwarded_for,
+            'X-Forwarded-Proto': 'http',
         }))
         self.assertEqual(status, 401)
         self.assertIn('Content-Type header was not set.', text)
+
+    def test_no_proto_then_401(self):
+        self.setup_manual(env=mock_env(), mock_feed=read_file)
+        run_app_until_accepts_http()
+
+        url = 'http://127.0.0.1:8080/v1/'
+        auth = hawk_auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
+        )
+        text, status = self.loop.run_until_complete(post_with_headers(url, {
+            'Authorization': auth,
+            'Content-Type': '',
+            'X-Forwarded-For': '1.2.3.4',
+        }))
+        self.assertEqual(status, 401)
+        self.assertIn('The X-Forwarded-Proto header was not set.', text)
 
     def test_time_skew_then_401(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
