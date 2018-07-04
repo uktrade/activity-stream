@@ -156,8 +156,8 @@ def _handle_get(session, public_to_private_scroll_ids, es_endpoint, get_path_que
 
     async def handle(request):
         incoming_body = await request.read()
-        path, query = get_path_query(public_to_private_scroll_ids,
-                                     request.match_info, incoming_body)
+        path, query_string, body = get_path_query(public_to_private_scroll_ids,
+                                                  request.match_info, incoming_body)
 
         def to_public_scroll_url(private_scroll_id):
             public_scroll_id = uuid.uuid4().hex
@@ -167,7 +167,7 @@ def _handle_get(session, public_to_private_scroll_ids, es_endpoint, get_path_que
 
         succesful_http = False
         try:
-            results, status = await es_search(session, es_endpoint, path, query,
+            results, status = await es_search(session, es_endpoint, path, query_string, body,
                                               request.headers['Content-Type'],
                                               to_public_scroll_url)
             succesful_http = True

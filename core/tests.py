@@ -635,6 +635,48 @@ class TestApplication(TestBase):
                          ['type'][1], 'dit:exportOpportunities:Enquiry')
         self.assertEqual(es_bulk_request_dicts[3]['actor']['dit:companiesHouseNumber'], '82312')
 
+    def test_es_auth(self):
+        get_es_once, append_es = append_until(lambda results: len(results) == 1)
+
+        self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
+                          mock_feed=read_file)
+
+        async def return_200_and_callback(request):
+            print('HELLo')
+            content, headers = (await request.content.read(), request.headers)
+            asyncio.get_event_loop().call_soon(append_es, (content, headers))
+            return await respond_http('{}', 200)(request)
+
+        routes = [
+            web.get('/activities/_search', return_200_and_callback),
+        ]
+        es_runner = self.loop.run_until_complete(
+            run_es_application(port=9201, override_routes=routes))
+        run_app_until_accepts_http()
+
+        with \
+                freeze_time('2012-01-15 12:00:01'), \
+                patch('os.urandom', return_value=b'something-random'):
+            url = 'http://127.0.0.1:8080/v1/'
+            auth = hawk_auth_header(
+                'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
+            )
+            x_forwarded_for = '1.2.3.4'
+            self.loop.run_until_complete(get(url, auth, x_forwarded_for, b''))
+            self.loop.run_until_complete(es_runner.cleanup())
+
+            async def _test():
+                return await get_es_once
+
+            [[_, es_headers]] = self.loop.run_until_complete(_test())
+
+        self.assertEqual(es_headers['Authorization'],
+                         'AWS4-HMAC-SHA256 '
+                         'Credential=some-id/20120115/us-east-2/es/aws4_request, '
+                         'SignedHeaders=content-type;host;x-amz-date, '
+                         'Signature=5b6d0a3400a19730c1fcd359c77f605ae5a6bbb287dfa5'
+                         '04dfe05f37767c28d4')
+
     def test_es_401_is_proxied(self):
         self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                           mock_feed=read_file)

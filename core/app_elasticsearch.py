@@ -20,6 +20,7 @@ async def ensure_index(session, es_endpoint):
         endpoint=es_endpoint,
         method='PUT',
         path=path,
+        query_string='',
         content_type='application/json',
         payload=index_definition,
     )
@@ -56,6 +57,7 @@ async def ensure_mappings(session, es_endpoint):
         endpoint=es_endpoint,
         method='PUT',
         path=path,
+        query_string='',
         content_type='application/json',
         payload=mapping_definition,
     )
@@ -69,7 +71,7 @@ async def ensure_mappings(session, es_endpoint):
         raise Exception(await results.text())
 
 
-def es_auth_headers(endpoint, method, path, content_type, payload):
+def es_auth_headers(endpoint, method, path, query_string, content_type, payload):
     service = 'es'
     signed_headers = 'content-type;host;x-amz-date'
     algorithm = 'AWS4-HMAC-SHA256'
@@ -83,7 +85,7 @@ def es_auth_headers(endpoint, method, path, content_type, payload):
     def signature():
         def canonical_request():
             canonical_uri = path
-            canonical_querystring = ''
+            canonical_querystring = query_string
             canonical_headers = \
                 f'content-type:{content_type}\n' + \
                 f'host:{endpoint["host"]}\nx-amz-date:{amzdate}\n'
@@ -115,7 +117,7 @@ def es_auth_headers(endpoint, method, path, content_type, payload):
 
 
 def es_search_new_scroll(_, __, query):
-    return '/activities/_search?scroll=30s', query
+    return '/activities/_search', 'scroll=30s', query
 
 
 def es_search_existing_scroll(public_to_private_scroll_ids, match_info, _):
@@ -133,20 +135,22 @@ def es_search_existing_scroll(public_to_private_scroll_ids, match_info, _):
         # so KISS, and not introduce more layers unless needed
         raise HTTPNotFound(text='Scroll ID not found.')
 
-    return '/_search/scroll?scroll=30s', json.dumps({
+    return '/_search/scroll', 'scroll=30s', json.dumps({
         'scroll_id': private_scroll_id,
     }).encode('utf-8')
 
 
-async def es_search(session, es_endpoint, path, query, content_type, to_public_scroll_url):
-    url = es_endpoint['base_url'] + path
+async def es_search(session, es_endpoint, path, query_string, body,
+                    content_type, to_public_scroll_url):
+    url = es_endpoint['base_url'] + path + (('?' + query_string) if query_string != '' else '')
 
     auth_headers = es_auth_headers(
         endpoint=es_endpoint,
         method='GET',
         path=path,
+        query_string=query_string,
         content_type=content_type,
-        payload=query,
+        payload=body,
     )
 
     results = await session.get(
@@ -154,7 +158,7 @@ async def es_search(session, es_endpoint, path, query, content_type, to_public_s
         headers={**auth_headers, **{
             'Content-Type': content_type,
         }},
-        data=query,
+        data=body,
     )
 
     response = await results.json()
@@ -205,6 +209,7 @@ async def es_bulk(session, es_endpoint, items):
         endpoint=es_endpoint,
         method='POST',
         path='/_bulk',
+        query_string='',
         content_type='application/x-ndjson',
         payload=es_bulk_contents,
     )
