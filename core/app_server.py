@@ -73,9 +73,7 @@ def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
             app_logger.warning(
                 'Failed authentication: no X-Forwarded-For header passed'
             )
-            return json_response({
-                'details': INCORRECT,
-            }, status=401)
+            raise web.HTTPUnauthorized(text=INCORRECT)
 
         remote_address = request.headers['X-Forwarded-For'].split(',')[0].strip()
 
@@ -84,27 +82,19 @@ def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
                 'Failed authentication: the X-Forwarded-For header did not '
                 'start with an IP in the whitelist'
             )
-            return json_response({
-                'details': INCORRECT,
-            }, status=401)
+            raise web.HTTPUnauthorized(text=INCORRECT)
 
         if 'Authorization' not in request.headers:
-            return json_response({
-                'details': NOT_PROVIDED,
-            }, status=401)
+            raise web.HTTPUnauthorized(text=NOT_PROVIDED)
 
         if 'Content-Type' not in request.headers:
-            return json_response({
-                'details': MISSING_CONTENT_TYPE,
-            }, status=401)
+            raise web.HTTPUnauthorized(text=MISSING_CONTENT_TYPE)
 
         try:
             receiver = await authenticate_or_raise(request)
         except HawkFail as exception:
             app_logger.warning('Failed authentication %s', exception)
-            return json_response({
-                'details': INCORRECT,
-            }, status=401)
+            raise web.HTTPUnauthorized(text=INCORRECT)
 
         request['permissions'] = receiver.resource.credentials['permissions']
         return await handler(request)
@@ -116,9 +106,8 @@ def authorizer():
     @web.middleware
     async def authorize(request, handler):
         if request.method not in request['permissions']:
-            return json_response({
-                'details': NOT_AUTHORIZED,
-            }, status=403)
+            raise web.HTTPForbidden(text=NOT_AUTHORIZED)
+
         return await handler(request)
 
     return authorize
