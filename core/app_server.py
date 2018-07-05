@@ -34,13 +34,6 @@ def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
     # otherwise replay attacks could succeed by hitting another instance
     seen_nonces = ExpiringSet(nonce_expire)
 
-    def seen_nonce(access_key_id, nonce, _):
-        nonce_tuple = (access_key_id, nonce)
-        seen = nonce_tuple in seen_nonces
-        if not seen:
-            seen_nonces.add(nonce_tuple)
-        return seen
-
     async def authenticate_or_raise(request):
         return mohawk.Receiver(
             functools.partial(_lookup_credentials, incoming_key_pairs),
@@ -49,7 +42,7 @@ def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
             request.method,
             content=await request.read(),
             content_type=request.headers['Content-Type'],
-            seen_nonce=seen_nonce,
+            seen_nonce=functools.partial(_seen_nonce, seen_nonces),
         )
 
     @web.middleware
@@ -109,6 +102,14 @@ def _lookup_credentials(incoming_key_pairs, passed_access_key_id):
         'permissions': matching_key_pairs[0]['permissions'],
         'algorithm': 'sha256',
     }
+
+
+def _seen_nonce(seen_nonces, access_key_id, nonce, _):
+    nonce_tuple = (access_key_id, nonce)
+    seen = nonce_tuple in seen_nonces
+    if not seen:
+        seen_nonces.add(nonce_tuple)
+    return seen
 
 
 def authorizer():
