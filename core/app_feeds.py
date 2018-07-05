@@ -6,7 +6,7 @@ import mohawk
 from .app_utils import sub_dict_lower
 
 
-class ElasticsearchBulkFeed:
+class ActivityStreamFeed:
 
     polling_page_interval = 0
     polling_seed_interval = 5
@@ -22,7 +22,7 @@ class ElasticsearchBulkFeed:
 
     @staticmethod
     def next_href(feed):
-        return feed.get('next_url', None)
+        return feed.get('next', None)
 
     def auth_headers(self, url):
         method = 'GET'
@@ -36,7 +36,16 @@ class ElasticsearchBulkFeed:
 
     @staticmethod
     def convert_to_bulk_es(feed):
-        return feed['items']
+        return [{
+            'action_and_metadata': {
+                'index': {
+                    '_id': item['id'],
+                    '_index': 'activities',
+                    '_type': '_doc',
+                }
+            },
+            'source': item
+        } for item in feed['orderedItems']]
 
 
 class ZendeskFeed:
@@ -75,23 +84,60 @@ class ZendeskFeed:
             match = re.search(cls.company_number_regex, description)
             return [match[1]] if match else []
 
-        tickets_with_company_numbers = [
-            (ticket['id'], ticket['created_at'], company_number)
+        return [
+            _activity(
+                activity_id='dit:zendesk:Ticket:' + str(ticket['id']) + ':Create',
+                activity_type='Create',
+                object_id='dit:zendesk:Ticket:' + str(ticket['id']),
+                published_date=ticket['created_at'],
+                dit_application='zendesk',
+                object_type='dit:zendesk:Ticket',
+                actor=_company_actor(companies_house_number=company_number),
+            )
             for ticket in page['tickets']
             for company_number in company_numbers(ticket['description'])
         ]
 
-        return [{
-            'action_and_metadata': {
-                'index': {
-                    '_index': 'company_timeline',
-                    '_type': '_doc',
-                    '_id': 'contact-made-' + str(ticket_id),
-                },
+
+def _activity(
+        activity_id,
+        activity_type,
+        object_id,
+        published_date,
+        dit_application,
+        object_type,
+        actor,
+):
+    return {
+        'action_and_metadata': {
+            'index': {
+                '_index': 'activities',
+                '_type': '_doc',
+                '_id': activity_id,
             },
-            'source': {
-                'date': created_at,
-                'activity': 'contact-made',
-                'company_house_number': company_number,
-            }
-        } for ticket_id, created_at, company_number in tickets_with_company_numbers]
+        },
+        'source': {
+            'id': activity_id,
+            'type': activity_type,
+            'published': published_date,
+            'dit:application': dit_application,
+            'actor': actor,
+            'object': {
+                'type': [
+                    'Document',
+                    object_type,
+                ],
+                'id': object_id,
+            },
+        },
+    }
+
+
+def _company_actor(companies_house_number):
+    return {
+        'type': [
+            'Organization',
+            'dit:company',
+        ],
+        'dit:companiesHouseNumber': companies_house_number,
+    }

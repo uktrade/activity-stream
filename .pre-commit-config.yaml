@@ -34,7 +34,7 @@ repos:
       types: [python]
       args:
         - --include-naming-hint=yes
-        - --max-args=6
+        - --max-args=7
         - --disable=attribute-defined-outside-init
         - --disable=missing-docstring
         - --disable=too-many-instance-attributes

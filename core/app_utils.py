@@ -1,30 +1,48 @@
+import asyncio
 import itertools
+import logging
 import time
+
+
+class ExpiringDict:
+
+    def __init__(self, seconds):
+        self._seconds = seconds
+        self._store = {}
+
+    def _remove_old_keys(self, now):
+        self._store = {
+            key: (expires, value)
+            for key, (expires, value) in self._store.items()
+            if expires > now
+        }
+
+    def __getitem__(self, key):
+        now = int(time.time())
+        self._remove_old_keys(now)
+        return self._store[key][1]
+
+    def __setitem__(self, key, value):
+        now = int(time.time())
+        self._remove_old_keys(now)
+        self._store[key] = (now + self._seconds, value)
+
+    def __contains__(self, key):
+        now = int(time.time())
+        self._remove_old_keys(now)
+        return key in self._store
 
 
 class ExpiringSet:
 
     def __init__(self, seconds):
-        self._seconds = seconds
-        self._expiries = {}
-
-    def _remove_old_keys(self, now):
-        now = int(time.time())
-        self._expiries = {
-            key: expires
-            for key, expires in self._expiries.items()
-            if expires > now
-        }
+        self._store = ExpiringDict(seconds)
 
     def add(self, item):
-        now = int(time.time())
-        self._remove_old_keys(now)
-        self._expiries[item] = now + self._seconds
+        self._store[item] = True
 
     def __contains__(self, item):
-        now = int(time.time())
-        self._remove_old_keys(now)
-        return item in self._expiries
+        return item in self._store
 
 
 def flatten(list_to_flatten):
@@ -137,6 +155,25 @@ def normalise_environment(key_values):
     return \
         list_sorted_by_int_key() if all_keys_are_ints() else \
         nested_structured_dict
+
+
+async def repeat_even_on_exception(never_ending_coroutine, exception_interval, logging_title):
+    app_logger = logging.getLogger(__name__)
+
+    while True:
+        try:
+            await never_ending_coroutine()
+        except BaseException as exception:
+            app_logger.warning('%s raised exception: %s', logging_title, exception)
+        else:
+            app_logger.warning(
+                '%s finished without exception. '
+                'This is not expected: it should run forever.',
+                logging_title,
+            )
+        finally:
+            app_logger.warning('Waiting %s seconds until restarting', exception_interval)
+            await asyncio.sleep(exception_interval)
 
 
 def sub_dict_lower(super_dict, keys):

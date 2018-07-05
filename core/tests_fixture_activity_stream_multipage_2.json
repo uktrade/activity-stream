@@ -1,0 +1,32 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "dit": "https://www.trade.gov.uk/ns/activitystreams/v1"
+    }
+  ],
+  "orderedItems": [
+    {
+      "actor": {
+        "dit:companiesHouseNumber": "9999",
+        "type": [
+          "Organization",
+          "dit:Company"
+        ]
+      },
+      "dit:application": "exportOpportunities",
+      "id": "dit:exportOpportunities:Enquiry:4986999:Create",
+      "object": {
+        "id": "dit:exportOpportunities:Enquiry:4986999",
+        "type": [
+          "Document",
+          "dit:exportOpportunities:Enquiry"
+        ],
+        "url": "https://export-opportunities-continuous-deployment.cloudapps.digital/admin/enquiries/4986999"
+      },
+      "published": "2011-04-12T12:48:13+00:00",
+      "type": "Create"
+    }
+  ],
+  "type": "Collection"
+}
