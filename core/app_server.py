@@ -1,3 +1,4 @@
+import functools
 import hmac
 import logging
 import uuid
@@ -29,23 +30,6 @@ UNKNOWN_ERROR = 'An unknown error occurred.'
 def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
     app_logger = logging.getLogger(__name__)
 
-    def lookup_credentials(passed_access_key_id):
-        matching_key_pairs = [
-            key_pair
-            for key_pair in incoming_key_pairs
-            if hmac.compare_digest(key_pair['key_id'], passed_access_key_id)
-        ]
-
-        if not matching_key_pairs:
-            raise HawkFail(f'No Hawk ID of {passed_access_key_id}')
-
-        return {
-            'id': matching_key_pairs[0]['key_id'],
-            'key': matching_key_pairs[0]['secret_key'],
-            'permissions': matching_key_pairs[0]['permissions'],
-            'algorithm': 'sha256',
-        }
-
     # This would need to be stored externally if this was ever to be load balanced,
     # otherwise replay attacks could succeed by hitting another instance
     seen_nonces = ExpiringSet(nonce_expire)
@@ -59,7 +43,7 @@ def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
 
     async def authenticate_or_raise(request):
         return mohawk.Receiver(
-            lookup_credentials,
+            functools.partial(_lookup_credentials, incoming_key_pairs),
             request.headers['Authorization'],
             str(request.url.with_scheme(request.headers['X-Forwarded-Proto'])),
             request.method,
@@ -107,6 +91,24 @@ def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
         return await handler(request)
 
     return authenticate
+
+
+def _lookup_credentials(incoming_key_pairs, passed_access_key_id):
+    matching_key_pairs = [
+        key_pair
+        for key_pair in incoming_key_pairs
+        if hmac.compare_digest(key_pair['key_id'], passed_access_key_id)
+    ]
+
+    if not matching_key_pairs:
+        raise HawkFail(f'No Hawk ID of {passed_access_key_id}')
+
+    return {
+        'id': matching_key_pairs[0]['key_id'],
+        'key': matching_key_pairs[0]['secret_key'],
+        'permissions': matching_key_pairs[0]['permissions'],
+        'algorithm': 'sha256',
+    }
 
 
 def authorizer():
