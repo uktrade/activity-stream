@@ -72,8 +72,8 @@ def normalise_environment(key_values):
                 "BAR": "setting-1",
                 "BAZ": "setting-2",
             }, {
-                "BAR": "setting-1",
-                "BAZ": "setting-2",
+                "BAR": "setting-3",
+                "BAZ": "setting-4",
             }],
             "FIZZ": "setting-5",
         }
