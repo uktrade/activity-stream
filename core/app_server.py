@@ -53,7 +53,16 @@ def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
             )
             raise web.HTTPUnauthorized(text=INCORRECT)
 
-        remote_address = request.headers['X-Forwarded-For'].split(',')[0].strip()
+        # PaaS appends 2 IPs, where the IP connected from is the first of the two
+        ip_addesses = request.headers['X-Forwarded-For'].split(',')
+        if len(ip_addesses) < 2:
+            app_logger.warning(
+                'Failed authentication: the X-Forwarded-For header does not '
+                'contain enough IP addresses'
+            )
+            raise web.HTTPUnauthorized(text=INCORRECT)
+
+        remote_address = ip_addesses[-2].strip()
 
         if remote_address not in ip_whitelist:
             app_logger.warning(
