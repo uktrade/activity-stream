@@ -72,13 +72,13 @@ def normalise_environment(key_values):
                 "BAR": "setting-1",
                 "BAZ": "setting-2",
             }, {
-                "BAR": "setting-1",
-                "BAZ": "setting-2",
+                "BAR": "setting-3",
+                "BAZ": "setting-4",
             }],
             "FIZZ": "setting-5",
         }
 
-        If all the keys for that level parse as integers, then its treated as a list
+        If all the keys for that level parse as integers, then it's treated as a list
         with the actual keys only used for sorting
 
         This function is recursive, but it would be extremely difficult to hit a stack
