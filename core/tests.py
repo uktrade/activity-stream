@@ -655,7 +655,6 @@ class TestApplication(TestBase):
                           mock_feed=read_file)
 
         async def return_200_and_callback(request):
-            print('HELLo')
             content, headers = (await request.content.read(), request.headers)
             asyncio.get_event_loop().call_soon(append_es, (content, headers))
             return await respond_http('{}', 200)(request)
