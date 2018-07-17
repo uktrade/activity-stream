@@ -82,9 +82,10 @@ async def run_application():
         await create_incoming_application(
             port, ip_whitelist, incoming_key_pairs, session, es_endpoint,
         )
-        await create_outgoing_application(
+        feeds = await create_outgoing_application(
             session, feed_endpoints, es_endpoint,
         )
+        await feeds
 
 
 async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
@@ -125,7 +126,7 @@ async def create_outgoing_application(session, feed_endpoints, es_endpoint):
         ), exception_interval=EXCEPTION_INTERVAL, logging_title='Polling feed')
         for feed_endpoint in feed_endpoints
     ]
-    await asyncio.gather(*feeds)
+    return asyncio.gather(*feeds)
 
 
 async def ingest_feed(session, feed_endpoint, es_endpoint):
