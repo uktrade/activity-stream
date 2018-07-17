@@ -77,8 +77,6 @@ async def run_application():
     app_logger.debug('Examining environment: done')
 
     async with aiohttp.ClientSession() as session:
-        await ensure_index(session, es_endpoint)
-        await ensure_mappings(session, es_endpoint)
         feeds = await create_outgoing_application(
             session, feed_endpoints, es_endpoint,
         )
@@ -118,6 +116,9 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
 
 
 async def create_outgoing_application(session, feed_endpoints, es_endpoint):
+    await ensure_index(session, es_endpoint)
+    await ensure_mappings(session, es_endpoint)
+
     feeds = [
         repeat_even_on_exception(functools.partial(
             ingest_feed,
