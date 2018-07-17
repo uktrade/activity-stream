@@ -79,11 +79,11 @@ async def run_application():
     async with aiohttp.ClientSession() as session:
         await ensure_index(session, es_endpoint)
         await ensure_mappings(session, es_endpoint)
-        await create_incoming_application(
-            port, ip_whitelist, incoming_key_pairs, session, es_endpoint,
-        )
         feeds = await create_outgoing_application(
             session, feed_endpoints, es_endpoint,
+        )
+        await create_incoming_application(
+            port, ip_whitelist, incoming_key_pairs, session, es_endpoint,
         )
         await feeds
 
