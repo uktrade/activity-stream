@@ -10,7 +10,6 @@ from unittest.mock import Mock, patch
 from aiohttp import web
 from freezegun import freeze_time
 
-from core.app_utils import flatten
 from core.tests_utils import (
     append_until,
     async_test,
@@ -39,10 +38,15 @@ class TestBase(unittest.TestCase):
     async def setup_manual(self, env, mock_feed):
         ''' Test setUp function that can be customised on a per-test basis '''
 
-        self.add_async_cleanup(self.teardown_manual)
+        await delete_all_es_data()
 
-        self.os_environ_patcher = patch.dict(os.environ, env)
-        self.os_environ_patcher.start()
+        os_environ_patcher = patch.dict(os.environ, env)
+        os_environ_patcher.start()
+        self.addCleanup(os_environ_patcher.stop)
+
+        def add_async_cleanup(coroutine):
+            loop = asyncio.get_event_loop()
+            self.addCleanup(loop.run_until_complete, coroutine())
 
         self.feed_requested = [asyncio.Future(), asyncio.Future()]
 
@@ -55,19 +59,11 @@ class TestBase(unittest.TestCase):
             else:
                 first_not_done.set_result(request)
 
-        self.feed_runner_1 = await run_feed_application(mock_feed, feed_requested_callback, 8081)
-        await delete_all_es_data()
+        feed_runner = await run_feed_application(mock_feed, feed_requested_callback, 8081)
+        add_async_cleanup(feed_runner.cleanup)
 
-    async def teardown_manual(self):
-        await asyncio.gather(*flatten([
-            ([self.feed_runner_1.cleanup()] if hasattr(self, 'feed_runner_1') else [])
-        ]))
-        if hasattr(self, 'os_environ_patcher'):
-            self.os_environ_patcher.stop()
-
-    def add_async_cleanup(self, coroutine):
-        loop = asyncio.get_event_loop()
-        self.addCleanup(loop.run_until_complete, coroutine())
+        cleanup = await run_app_until_accepts_http()
+        add_async_cleanup(cleanup)
 
 
 class TestAuthentication(TestBase):
@@ -75,8 +71,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_no_auth_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         text, status = await post_with_headers(url, {
@@ -90,8 +84,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_bad_id_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -105,8 +97,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_bad_secret_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -120,8 +110,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_bad_method_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -135,8 +123,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_bad_content_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -150,8 +136,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_bad_content_type_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -165,8 +149,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_no_content_type_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -184,8 +166,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_no_proto_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -202,8 +182,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_time_skew_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         past = datetime.datetime.now() + datetime.timedelta(seconds=-61)
@@ -219,8 +197,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_repeat_auth_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -240,14 +216,12 @@ class TestAuthentication(TestBase):
             is shorter then the allowed Hawk skew. The second request succeeding gives
             evidence that the cache of nonces was cleared.
         '''
-        await self.setup_manual(env=mock_env(), mock_feed=read_file)
 
         now = datetime.datetime.now()
         past = now + datetime.timedelta(seconds=-45)
 
         with patch('core.app.NONCE_EXPIRE', 30):
-            cleanup = await run_app_until_accepts_http()
-            self.add_async_cleanup(cleanup)
+            await self.setup_manual(env=mock_env(), mock_feed=read_file)
 
             url = 'http://127.0.0.1:8080/v1/'
             x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -266,8 +240,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_no_x_fwd_for_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -283,8 +255,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_bad_x_fwd_for_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -298,8 +268,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_beginning_x_fwd_for_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -313,8 +281,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_too_few_x_fwd_for_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -328,8 +294,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_second_id_returns_object(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -343,8 +307,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_post_returns_object(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -358,8 +320,6 @@ class TestAuthentication(TestBase):
     @async_test
     async def test_post_creds_get_403(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -376,8 +336,6 @@ class TestApplication(TestBase):
     @async_test
     async def test_get_returns_feed_data(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
         await wait_until_get_working()
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -395,7 +353,6 @@ class TestApplication(TestBase):
     @async_test
     async def test_pagination(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        self.add_async_cleanup(await run_app_until_accepts_http())
         await wait_until_get_working()
 
         url_1 = 'http://127.0.0.1:8080/v1/'
@@ -432,7 +389,6 @@ class TestApplication(TestBase):
     @async_test
     async def test_pagination_expiry(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file)
-        self.add_async_cleanup(await run_app_until_accepts_http())
         await wait_until_get_working()
 
         url_1 = 'http://127.0.0.1:8080/v1/'
@@ -477,7 +433,6 @@ class TestApplication(TestBase):
             'FEEDS__2__API_KEY': 'some-key',
             'FEEDS__2__TYPE': 'zendesk',
         }
-        await self.setup_manual(env=env, mock_feed=read_file)
 
         original_sleep = asyncio.sleep
 
@@ -485,8 +440,7 @@ class TestApplication(TestBase):
             await original_sleep(0.2)
 
         with patch('asyncio.sleep', wraps=fast_sleep):
-            cleanup = await run_app_until_accepts_http()
-            self.add_async_cleanup(cleanup)
+            await self.setup_manual(env=env, mock_feed=read_file)
             await fetch_all_es_data_until(has_at_least(4), original_sleep)
 
         url = 'http://127.0.0.1:8080/v1/'
@@ -555,9 +509,6 @@ class TestApplication(TestBase):
     async def test_single_page(self, _):
         posted_to_es_once, append_es = append_until(lambda results: len(results) == 1)
 
-        await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
-                                mock_feed=read_file)
-
         async def return_200_and_callback(request):
             content, headers = (await request.content.read(), request.headers)
             asyncio.get_event_loop().call_soon(append_es, (content, headers))
@@ -567,8 +518,8 @@ class TestApplication(TestBase):
             web.post('/_bulk', return_200_and_callback),
         ]
         es_runner = await run_es_application(port=9201, override_routes=routes)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
+        await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
+                                mock_feed=read_file)
 
         [[es_bulk_content, es_bulk_headers]] = await posted_to_es_once
         es_bulk_request_dicts = [
@@ -621,9 +572,6 @@ class TestApplication(TestBase):
     async def test_es_auth(self):
         get_es_once, append_es = append_until(lambda results: len(results) == 1)
 
-        await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
-                                mock_feed=read_file)
-
         async def return_200_and_callback(request):
             content, headers = (await request.content.read(), request.headers)
             asyncio.get_event_loop().call_soon(append_es, (content, headers))
@@ -637,8 +585,8 @@ class TestApplication(TestBase):
         with \
                 freeze_time('2012-01-15 12:00:01'), \
                 patch('os.urandom', return_value=b'something-random'):
-            cleanup = await run_app_until_accepts_http()
-            self.add_async_cleanup(cleanup)
+            await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
+                                    mock_feed=read_file)
             await es_runner.cleanup()
             [[_, es_headers]] = await get_es_once
 
@@ -657,8 +605,6 @@ class TestApplication(TestBase):
         es_runner = await run_es_application(port=9201, override_routes=routes)
         await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                 mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
@@ -678,8 +624,6 @@ class TestApplication(TestBase):
             **mock_env(),
             'ELASTICSEARCH__PORT': '9201'
         }, mock_feed=read_file)
-        cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
 
         await es_runner.cleanup()
         url = 'http://127.0.0.1:8080/v1/'
@@ -708,8 +652,6 @@ class TestApplication(TestBase):
                 },
                 mock_feed=read_file,
             )
-            cleanup = await run_app_until_accepts_http()
-            self.add_async_cleanup(cleanup)
             mock_sleep.assert_not_called()
             results = await fetch_all_es_data_until(has_at_least(2), original_sleep)
             mock_sleep.assert_any_call(0)
@@ -734,8 +676,6 @@ class TestApplication(TestBase):
 
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=env, mock_feed=read_file)
-            cleanup = await run_app_until_accepts_http()
-            self.add_async_cleanup(cleanup)
             results = await fetch_all_es_data_until(has_at_least(4), original_sleep)
 
         self.assertIn('dit:exportOpportunities:Enquiry:49863:Create', str(results))
@@ -770,8 +710,6 @@ class TestApplication(TestBase):
 
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=env, mock_feed=read_file)
-            cleanup = await run_app_until_accepts_http()
-            self.add_async_cleanup(cleanup)
             results_dict = await fetch_all_es_data_until(has_two_zendesk_tickets, original_sleep)
 
         results = json.dumps(results_dict)
@@ -803,8 +741,6 @@ class TestApplication(TestBase):
 
         with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
             await self.setup_manual(env=mock_env(), mock_feed=read_file_broken_then_fixed)
-            cleanup = await run_app_until_accepts_http()
-            self.add_async_cleanup(cleanup)
             mock_sleep.assert_not_called()
             results = await fetch_all_es_data_until(has_at_least(1), original_sleep)
             mock_sleep.assert_any_call(60)
