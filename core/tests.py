@@ -31,6 +31,7 @@ from core.tests_utils import (
     run_app_until_accepts_http,
     run_es_application,
     run_feed_application,
+    wait_until_get_working,
 )
 
 
@@ -357,6 +358,7 @@ class TestApplication(TestBase):
     def test_get_returns_feed_data(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
         run_app_until_accepts_http()
+        wait_until_get_working()
 
         url = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -373,6 +375,7 @@ class TestApplication(TestBase):
     def test_pagination(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
         run_app_until_accepts_http()
+        wait_until_get_working()
 
         url_1 = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -411,6 +414,7 @@ class TestApplication(TestBase):
     def test_pagination_expiry(self):
         self.setup_manual(env=mock_env(), mock_feed=read_file)
         run_app_until_accepts_http()
+        wait_until_get_working()
 
         url_1 = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -443,52 +447,6 @@ class TestApplication(TestBase):
                 get(url_2, auth_2, x_forwarded_for, b''))
             self.assertEqual(json.loads(result_2)['details'], 'Scroll ID not found.')
             self.assertEqual(status_2, 404)
-
-    def test_bad_mapping_then_exception(self):
-        self.setup_manual(env=mock_env(), mock_feed=read_file)
-
-        async def put_incompatible_mapping():
-            headers = {
-                'Content-Type': 'application/json',
-            }
-
-            async with aiohttp.ClientSession() as session:
-                await session.put('http://127.0.0.1:9200/activities', headers=headers)
-                await session.put('http://127.0.0.1:9200/activities/_doc/1',
-                                  headers=headers, json={
-                                      'published_date': 'Something that is not a date'
-                                  })
-
-        self.loop.run_until_complete(put_incompatible_mapping())
-
-        app = asyncio.ensure_future(run_application())
-        done, pending = self.loop.run_until_complete(asyncio.wait([app], timeout=5))
-
-        self.assertFalse(pending)
-        self.assertIn('mapper [published_date] of different type',
-                      str(next(iter(done)).exception()))
-
-    def test_bad_ensure_index_exception(self):
-        self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
-                          mock_feed=read_file)
-
-        async def respond_401_with_message(_):
-            message = '{"error": "some message"}'
-            return web.Response(text=message, status=401, content_type='application/json')
-
-        routes = [
-            web.put('/activities', respond_401_with_message),
-        ]
-        es_runner = self.loop.run_until_complete(
-            run_es_application(port=9201, override_routes=routes))
-
-        app = asyncio.ensure_future(run_application())
-        done, pending = self.loop.run_until_complete(asyncio.wait([app], timeout=5))
-
-        self.loop.run_until_complete(es_runner.cleanup())
-        self.assertFalse(pending)
-        self.assertIn('some message"',
-                      str(next(iter(done)).exception()))
 
     def test_get_can_filter(self):
         env = {

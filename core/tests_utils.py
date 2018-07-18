@@ -48,6 +48,36 @@ async def _is_http_accepted_eventually():
     return False
 
 
+def wait_until_get_working():
+    loop = asyncio.get_event_loop()
+    get_working_future = asyncio.ensure_future(_wait_until_get_working())
+    return loop.run_until_complete(get_working_future)
+
+
+async def _wait_until_get_working():
+    # Assume can already connect on HTTP
+    attempts = 0
+    while attempts < 20:
+        async with aiohttp.ClientSession() as session:
+            url = 'http://127.0.0.1:8080/v1/'
+            auth = hawk_auth_header(
+                'incoming-some-id-3', 'incoming-some-secret-3', url,
+                'GET', '{}', 'application/json',
+            )
+            result = await session.get(url, headers={
+                'Authorization': auth,
+                'X-Forwarded-For': '1.2.3.4, 2.2.2.2',
+                'X-Forwarded-Proto': 'http',
+                'Content-Type': 'application/json',
+            }, data='{}', timeout=1)
+            content = await result.content.read()
+
+        if 'orderedItems' in json.loads(content):
+            return True
+        attempts += 1
+        await asyncio.sleep(0.2)
+
+
 def read_file(path):
     with open('core/' + path, 'rb') as file:
         return file.read().decode('utf-8')

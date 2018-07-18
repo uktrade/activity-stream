@@ -116,9 +116,6 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
 
 
 async def create_outgoing_application(session, feed_endpoints, es_endpoint):
-    await ensure_index(session, es_endpoint)
-    await ensure_mappings(session, es_endpoint)
-
     feeds = [
         repeat_even_on_exception(functools.partial(
             ingest_feed,
@@ -131,6 +128,9 @@ async def create_outgoing_application(session, feed_endpoints, es_endpoint):
 
 
 async def ingest_feed(session, feed_endpoint, es_endpoint):
+    await ensure_index(session, es_endpoint)
+    await ensure_mappings(session, es_endpoint)
+
     async for feed in poll(session, feed_endpoint):
         await es_bulk(session, es_endpoint, feed)
 
