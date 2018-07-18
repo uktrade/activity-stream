@@ -139,7 +139,7 @@ async def poll(session, feed):
     app_logger = logging.getLogger(__name__)
 
     href = feed.seed
-    while True:
+    while href:
         app_logger.debug('Polling')
         result = await session.get(href, headers=feed.auth_headers(href))
 
@@ -157,9 +157,9 @@ async def poll(session, feed):
         href = feed.next_href(feed_parsed)
         app_logger.debug('Finding next URL: done (%s)', href)
 
-        href, interval, message = \
-            (href, feed.polling_page_interval, 'Will poll next page in feed') if href else \
-            (feed.seed, feed.polling_seed_interval, 'Will poll seed page')
+        interval, message = \
+            (feed.polling_page_interval, 'Will poll next page in feed') if href else \
+            (feed.polling_seed_interval, 'Will poll seed page')
 
         app_logger.debug(message)
         app_logger.debug('Sleeping for %s seconds', interval)
