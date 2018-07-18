@@ -123,20 +123,22 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
 
 
 async def create_outgoing_application(session, feed_endpoints, es_endpoint):
-    asyncio.gather(*[
-        repeat_even_on_exception(functools.partial(
-            ingest_feed,
-            session, feed_endpoint,
-            es_endpoint,
-        ), exception_interval=EXCEPTION_INTERVAL, logging_title='Polling feed')
+    asyncio.ensure_future(repeat_even_on_exception(
+        functools.partial(ingest_feeds, session, feed_endpoints, es_endpoint),
+        exception_interval=EXCEPTION_INTERVAL, logging_title='Polling feed'))
+
+
+async def ingest_feeds(session, feed_endpoints, es_endpoint):
+    await ensure_index(session, es_endpoint)
+    await ensure_mappings(session, es_endpoint)
+
+    await asyncio.gather(*[
+        ingest_feed(session, feed_endpoint, es_endpoint)
         for feed_endpoint in feed_endpoints
     ])
 
 
 async def ingest_feed(session, feed_endpoint, es_endpoint):
-    await ensure_index(session, es_endpoint)
-    await ensure_mappings(session, es_endpoint)
-
     async for feed in poll(session, feed_endpoint):
         await es_bulk(session, es_endpoint, feed)
 
