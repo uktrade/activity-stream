@@ -17,8 +17,9 @@ def async_test(func):
 
 
 async def run_app_until_accepts_http():
-    asyncio.ensure_future(run_application())
+    cleanup = await run_application()
     await is_http_accepted_eventually()
+    return cleanup
 
 
 async def is_http_accepted_eventually():

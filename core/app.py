@@ -76,14 +76,19 @@ async def run_application():
 
     app_logger.debug('Examining environment: done')
 
-    async with aiohttp.ClientSession() as session:
-        feeds = await create_outgoing_application(
-            session, feed_endpoints, es_endpoint,
-        )
-        await create_incoming_application(
-            port, ip_whitelist, incoming_key_pairs, session, es_endpoint,
-        )
-        await feeds
+    session = aiohttp.ClientSession()
+    await create_outgoing_application(
+        session, feed_endpoints, es_endpoint,
+    )
+    runner = await create_incoming_application(
+        port, ip_whitelist, incoming_key_pairs, session, es_endpoint,
+    )
+
+    async def cleanup():
+        await runner.cleanup()
+        await session.close()
+
+    return cleanup
 
 
 async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
@@ -113,6 +118,8 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
     app_logger.debug('Creating listening web application: done')
+
+    return runner
 
 
 async def create_outgoing_application(session, feed_endpoints, es_endpoint):
