@@ -39,9 +39,7 @@ class TestBase(unittest.TestCase):
     async def setup_manual(self, env, mock_feed):
         ''' Test setUp function that can be customised on a per-test basis '''
 
-        def teardown():
-            asyncio.get_event_loop().run_until_complete(self.teardown_manual())
-        self.addCleanup(teardown)
+        self.add_async_cleanup(self.teardown_manual)
 
         self.os_environ_patcher = patch.dict(os.environ, env)
         self.os_environ_patcher.start()
