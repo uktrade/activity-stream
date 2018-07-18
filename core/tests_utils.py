@@ -48,8 +48,6 @@ async def is_http_accepted_eventually():
             if not is_connection_error(exception):
                 return True
 
-    return False
-
 
 async def wait_until_get_working():
     # Assume can already connect on HTTP
