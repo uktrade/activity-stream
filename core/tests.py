@@ -664,17 +664,11 @@ class TestApplication(TestBase):
         ]
         es_runner = self.loop.run_until_complete(
             run_es_application(port=9201, override_routes=routes))
-        run_app_until_accepts_http()
 
         with \
                 freeze_time('2012-01-15 12:00:01'), \
                 patch('os.urandom', return_value=b'something-random'):
-            url = 'http://127.0.0.1:8080/v1/'
-            auth = hawk_auth_header(
-                'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
-            )
-            x_forwarded_for = '1.2.3.4, 127.0.0.0'
-            self.loop.run_until_complete(get(url, auth, x_forwarded_for, b''))
+            run_app_until_accepts_http()
             self.loop.run_until_complete(es_runner.cleanup())
 
             async def _test():
@@ -686,8 +680,8 @@ class TestApplication(TestBase):
                          'AWS4-HMAC-SHA256 '
                          'Credential=some-id/20120115/us-east-2/es/aws4_request, '
                          'SignedHeaders=content-type;host;x-amz-date, '
-                         'Signature=5b6d0a3400a19730c1fcd359c77f605ae5a6bbb287dfa5'
-                         '04dfe05f37767c28d4')
+                         'Signature=210234795d8e908f10d6374144ae3ac9b49b2f84f10a8b'
+                         'a189a207ae8955c505')
 
     def test_es_401_is_proxied(self):
         self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
