@@ -653,12 +653,12 @@ class TestApplication(TestBase):
 
     @async_test
     async def test_es_401_is_proxied(self):
-        await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
-                                mock_feed=read_file)
         routes = [
             web.get('/activities/_search', respond_http('{"elasticsearch": "error"}', 401)),
         ]
         es_runner = await run_es_application(port=9201, override_routes=routes)
+        await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
+                                mock_feed=read_file)
         cleanup = await run_app_until_accepts_http()
         self.add_async_cleanup(cleanup)
 
@@ -675,11 +675,11 @@ class TestApplication(TestBase):
 
     @async_test
     async def test_es_no_connect_on_get_500(self):
+        es_runner = await run_es_application(port=9201, override_routes=[])
         await self.setup_manual({
             **mock_env(),
             'ELASTICSEARCH__PORT': '9201'
         }, mock_feed=read_file)
-        es_runner = await run_es_application(port=9201, override_routes=[])
         cleanup = await run_app_until_accepts_http()
         self.add_async_cleanup(cleanup)
 
@@ -696,21 +696,20 @@ class TestApplication(TestBase):
 
     @async_test
     async def test_multipage(self):
-        await self.setup_manual(
-            {**mock_env(), 'FEEDS__1__SEED': (
-                'http://localhost:8081/'
-                'tests_fixture_activity_stream_multipage_1.json'
-            )
-            },
-            mock_feed=read_file,
-        )
-
         original_sleep = asyncio.sleep
 
         async def fast_sleep(_):
             await original_sleep(0)
 
         with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
+            await self.setup_manual(
+                {**mock_env(), 'FEEDS__1__SEED': (
+                    'http://localhost:8081/'
+                    'tests_fixture_activity_stream_multipage_1.json'
+                )
+                },
+                mock_feed=read_file,
+            )
             cleanup = await run_app_until_accepts_http()
             self.add_async_cleanup(cleanup)
             mock_sleep.assert_not_called()
@@ -729,7 +728,6 @@ class TestApplication(TestBase):
             'FEEDS__2__SECRET_ACCESS_KEY': '?[!@$%^%',
             'FEEDS__2__TYPE': 'activity_stream',
         }
-        await self.setup_manual(env=env, mock_feed=read_file)
 
         original_sleep = asyncio.sleep
 
@@ -737,6 +735,7 @@ class TestApplication(TestBase):
             await original_sleep(0)
 
         with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_file)
             cleanup = await run_app_until_accepts_http()
             self.add_async_cleanup(cleanup)
             results = await fetch_all_es_data_until(has_at_least(4), original_sleep)
@@ -765,7 +764,6 @@ class TestApplication(TestBase):
             'FEEDS__2__API_KEY': 'some-key',
             'FEEDS__2__TYPE': 'zendesk',
         }
-        await self.setup_manual(env=env, mock_feed=read_file)
 
         original_sleep = asyncio.sleep
 
@@ -773,6 +771,7 @@ class TestApplication(TestBase):
             await original_sleep(0)
 
         with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_file)
             cleanup = await run_app_until_accepts_http()
             self.add_async_cleanup(cleanup)
             results_dict = await fetch_all_es_data_until(has_two_zendesk_tickets, original_sleep)
@@ -799,14 +798,13 @@ class TestApplication(TestBase):
             sent_broken = True
             return feed_contents_maybe_broken
 
-        await self.setup_manual(env=mock_env(), mock_feed=read_file_broken_then_fixed)
-
         original_sleep = asyncio.sleep
 
         async def fast_sleep(_):
             await original_sleep(0)
 
         with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
+            await self.setup_manual(env=mock_env(), mock_feed=read_file_broken_then_fixed)
             cleanup = await run_app_until_accepts_http()
             self.add_async_cleanup(cleanup)
             mock_sleep.assert_not_called()
