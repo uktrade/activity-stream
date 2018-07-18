@@ -8,18 +8,20 @@ import mohawk
 from core.app import run_application
 
 
-def run_app_until_accepts_http():
+def async_test(func):
+    def wrapper(*args, **kwargs):
+        future = func(*args, **kwargs)
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(future)
+    return wrapper
+
+
+async def run_app_until_accepts_http():
     asyncio.ensure_future(run_application())
-    is_http_accepted_eventually()
+    await is_http_accepted_eventually()
 
 
-def is_http_accepted_eventually():
-    loop = asyncio.get_event_loop()
-    connected_future = asyncio.ensure_future(_is_http_accepted_eventually())
-    return loop.run_until_complete(connected_future)
-
-
-async def _is_http_accepted_eventually():
+async def is_http_accepted_eventually():
     def is_connection_error(exception):
         return 'Cannot connect to host' in str(exception)
 
@@ -48,13 +50,7 @@ async def _is_http_accepted_eventually():
     return False
 
 
-def wait_until_get_working():
-    loop = asyncio.get_event_loop()
-    get_working_future = asyncio.ensure_future(_wait_until_get_working())
-    return loop.run_until_complete(get_working_future)
-
-
-async def _wait_until_get_working():
+async def wait_until_get_working():
     # Assume can already connect on HTTP
     attempts = 0
     while attempts < 20:
