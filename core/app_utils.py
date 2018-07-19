@@ -164,7 +164,7 @@ async def repeat_even_on_exception(never_ending_coroutine, exception_interval, l
         try:
             await never_ending_coroutine()
         except BaseException as exception:
-            app_logger.warning('%s raised exception: %s', logging_title, exception)
+            app_logger.exception('%s raised exception: %s', logging_title, exception)
         finally:
             app_logger.warning('Waiting %s seconds until restarting', exception_interval)
             await asyncio.sleep(exception_interval)
