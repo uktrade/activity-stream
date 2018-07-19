@@ -15,21 +15,16 @@ from .app_utils import (
 
 async def ensure_index(session, es_endpoint):
     index_definition = json.dumps({}).encode('utf-8')
-    path = '/activities'
-    auth_headers = es_auth_headers(
+    results = await es_request(
+        session=session,
         endpoint=es_endpoint,
         method='PUT',
-        path=path,
+        path='/activities',
         query_string='',
         content_type='application/json',
         payload=index_definition,
     )
-    headers = {
-        'Content-Type': 'application/json',
-    }
-    url = es_endpoint['base_url'] + path
-    results = await session.put(
-        url, data=index_definition, headers={**headers, **auth_headers})
+
     data = await results.json()
     index_exists = (
         results.status == 400 and data['error']['type'] == 'resource_already_exists_exception'
@@ -52,21 +47,15 @@ async def ensure_mappings(session, es_endpoint):
             },
         },
     }).encode('utf-8')
-    path = '/activities/_mapping/_doc'
-    auth_headers = es_auth_headers(
+    results = await es_request(
+        session=session,
         endpoint=es_endpoint,
         method='PUT',
-        path=path,
+        path='/activities/_mapping/_doc',
         query_string='',
         content_type='application/json',
         payload=mapping_definition,
     )
-    headers = {
-        'Content-Type': 'application/json',
-    }
-    url = es_endpoint['base_url'] + path
-    results = await session.put(
-        url, data=mapping_definition, headers={**headers, **auth_headers})
     if results.status != 200:
         raise Exception(await results.text())
 
@@ -97,23 +86,14 @@ def es_search_existing_scroll(public_to_private_scroll_ids, match_info, _):
 
 async def es_search(session, es_endpoint, path, query_string, body,
                     content_type, to_public_scroll_url):
-    url = es_endpoint['base_url'] + path + (('?' + query_string) if query_string != '' else '')
-
-    auth_headers = es_auth_headers(
+    results = await es_request(
+        session=session,
         endpoint=es_endpoint,
         method='GET',
         path=path,
         query_string=query_string,
         content_type=content_type,
         payload=body,
-    )
-
-    results = await session.get(
-        url,
-        headers={**auth_headers, **{
-            'Content-Type': content_type,
-        }},
-        data=body,
     )
 
     response = await results.json()
@@ -156,23 +136,26 @@ async def es_bulk(session, es_endpoint, items):
     app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
 
     app_logger.debug('POSTing bulk import to ES...')
-    headers = {
-        'Content-Type': 'application/x-ndjson'
-    }
-    path = '/_bulk'
-    auth_headers = es_auth_headers(
-        endpoint=es_endpoint,
-        method='POST',
-        path='/_bulk',
-        query_string='',
-        content_type='application/x-ndjson',
-        payload=es_bulk_contents,
+    es_result = await es_request(
+        session=session, endpoint=es_endpoint,
+        method='POST', path='/_bulk', query_string='',
+        content_type='application/x-ndjson', payload=es_bulk_contents,
     )
-    url = es_endpoint['base_url'] + path
-    es_result = await session.post(
-        url, data=es_bulk_contents, headers={**headers, **auth_headers})
-
     app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
+
+
+async def es_request(session, endpoint, method, path, query_string, content_type, payload):
+    auth_headers = es_auth_headers(
+        endpoint=endpoint, method=method,
+        path=path, query_string=query_string,
+        content_type=content_type, payload=payload,
+    )
+
+    url = endpoint['base_url'] + path + (('?' + query_string) if query_string != '' else '')
+    return await session.request(
+        method, url,
+        data=payload, headers={**{'Content-Type': content_type}, **auth_headers}
+    )
 
 
 def es_auth_headers(endpoint, method, path, query_string, content_type, payload):
