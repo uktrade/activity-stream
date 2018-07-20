@@ -157,10 +157,10 @@ def normalise_environment(key_values):
         nested_structured_dict
 
 
-async def repeat_even_on_exception(never_ending_coroutine, exception_interval, logging_title):
+async def repeat_while(never_ending_coroutine, predicate, exception_interval, logging_title):
     app_logger = logging.getLogger(__name__)
 
-    while True:
+    while predicate():
         try:
             await never_ending_coroutine()
         except BaseException as exception:

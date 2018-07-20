@@ -35,7 +35,7 @@ from .app_server import (
 from .app_utils import (
     ExpiringDict,
     normalise_environment,
-    repeat_even_on_exception,
+    repeat_while,
 )
 
 EXCEPTION_INTERVAL = 60
@@ -83,14 +83,22 @@ async def run_application():
     app_logger.debug('Examining environment: done')
 
     session = aiohttp.ClientSession()
+    running = True
+
+    def is_running():
+        nonlocal running
+        return running
+
     await create_outgoing_application(
-        session, feed_endpoints, es_endpoint,
+        is_running, session, feed_endpoints, es_endpoint,
     )
     runner = await create_incoming_application(
         port, ip_whitelist, incoming_key_pairs, session, es_endpoint,
     )
 
     async def cleanup():
+        nonlocal running
+        running = False
         await runner.cleanup()
         await session.close()
 
@@ -128,9 +136,10 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
     return runner
 
 
-async def create_outgoing_application(session, feed_endpoints, es_endpoint):
-    asyncio.ensure_future(repeat_even_on_exception(
+async def create_outgoing_application(is_running, session, feed_endpoints, es_endpoint):
+    asyncio.ensure_future(repeat_while(
         functools.partial(ingest_feeds, session, feed_endpoints, es_endpoint),
+        predicate=is_running,
         exception_interval=EXCEPTION_INTERVAL, logging_title='Polling feed'))
 
 
