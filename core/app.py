@@ -11,9 +11,15 @@ from aiohttp import web
 
 from .app_elasticsearch import (
     es_bulk,
-    ensure_index,
-    ensure_mappings,
+    create_index,
+    create_mappings,
+    get_new_index_name,
+    get_old_index_names,
+    set_alias,
+    delete_indexes,
+    refresh_index,
 )
+
 from .app_feeds import (
     ActivityStreamFeed,
     ZendeskFeed,
@@ -129,21 +135,28 @@ async def create_outgoing_application(session, feed_endpoints, es_endpoint):
 
 
 async def ingest_feeds(session, feed_endpoints, es_endpoint):
-    await ensure_index(session, es_endpoint)
-    await ensure_mappings(session, es_endpoint)
+    new_index_name = get_new_index_name()
+    old_index_names = await get_old_index_names(session, es_endpoint)
+
+    await create_index(session, es_endpoint, new_index_name)
+    await create_mappings(session, es_endpoint, new_index_name)
 
     await asyncio.gather(*[
-        ingest_feed(session, feed_endpoint, es_endpoint)
+        ingest_feed(session, feed_endpoint, es_endpoint, new_index_name)
         for feed_endpoint in feed_endpoints
     ])
 
+    await refresh_index(session, es_endpoint, new_index_name)
+    await set_alias(session, es_endpoint, new_index_name)
+    await delete_indexes(session, es_endpoint, old_index_names)
 
-async def ingest_feed(session, feed_endpoint, es_endpoint):
-    async for feed in poll(session, feed_endpoint):
+
+async def ingest_feed(session, feed_endpoint, es_endpoint, index_name):
+    async for feed in poll(session, feed_endpoint, index_name):
         await es_bulk(session, es_endpoint, feed)
 
 
-async def poll(session, feed):
+async def poll(session, feed, index_name):
     app_logger = logging.getLogger(__name__)
 
     href = feed.seed
@@ -159,7 +172,7 @@ async def poll(session, feed):
         feed_parsed = json.loads(feed_contents)
         app_logger.debug('Parsed')
 
-        yield feed.convert_to_bulk_es(feed_parsed)
+        yield feed.convert_to_bulk_es(feed_parsed, index_name)
 
         app_logger.debug('Finding next URL...')
         href = feed.next_href(feed_parsed)
@@ -171,6 +184,7 @@ async def poll(session, feed):
 
         app_logger.debug(message)
         app_logger.debug('Sleeping for %s seconds', interval)
+
         await asyncio.sleep(interval)
 
 

@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 
 from aiohttp.web import (
     HTTPNotFound,
@@ -13,27 +14,104 @@ from .app_utils import (
 )
 
 
-async def ensure_index(session, es_endpoint):
+ALIAS = 'activities'
+
+
+def get_new_index_name():
+    # Index name to be both unique and useful
+    today = datetime.date.today().isoformat()
+    now = str(datetime.datetime.now().timestamp()).split('.')[0]
+    unique = ''.join(os.urandom(5).hex())
+    return f'{ALIAS}_{today}_{now}_{unique}'
+
+
+async def get_old_index_names(session, es_endpoint):
+    results = await es_request(
+        session=session,
+        endpoint=es_endpoint,
+        method='GET',
+        path=f'/_aliases',
+        query_string='',
+        content_type='application/json',
+        payload=b'',
+    )
+    indexes = await results.json()
+    return [
+        index_name
+        for index_name in indexes.keys()
+        if index_name.startswith(f'{ALIAS}_')
+    ]
+
+
+async def set_alias(session, es_endpoint, index_name):
+    actions = json.dumps({
+        'actions': [
+            {'remove': {'index': f'{ALIAS}_*', 'alias': ALIAS}},
+            {'add': {'index': index_name, 'alias': ALIAS}},
+        ]
+    }).encode('utf-8')
+
+    results_post = await es_request(
+        session=session,
+        endpoint=es_endpoint,
+        method='POST',
+        path=f'/_aliases',
+        query_string='',
+        content_type='application/json',
+        payload=actions,
+    )
+    if results_post.status != 200:
+        raise Exception(await results_post.text())
+
+
+async def delete_indexes(session, es_endpoint, index_names):
+    if not index_names:
+        return
+
+    index_names_string = ','.join(index_names)
+    results = await es_request(
+        session=session,
+        endpoint=es_endpoint,
+        method='DELETE',
+        path=f'/{index_names_string}',
+        query_string='',
+        content_type='application/json',
+        payload=b'',
+    )
+    if results.status != 200:
+        raise Exception(await results.text())
+
+
+async def create_index(session, es_endpoint, index_name):
     index_definition = json.dumps({}).encode('utf-8')
     results = await es_request(
         session=session,
         endpoint=es_endpoint,
         method='PUT',
-        path='/activities',
+        path=f'/{index_name}',
         query_string='',
         content_type='application/json',
         payload=index_definition,
     )
-
-    data = await results.json()
-    index_exists = (
-        results.status == 400 and data['error']['type'] == 'resource_already_exists_exception'
-    )
-    if (results.status != 200 and not index_exists):
+    if results.status != 200:
         raise Exception(await results.text())
 
 
-async def ensure_mappings(session, es_endpoint):
+async def refresh_index(session, es_endpoint, index_name):
+    results = await es_request(
+        session=session,
+        endpoint=es_endpoint,
+        method='POST',
+        path=f'/{index_name}/_refresh',
+        query_string='',
+        content_type='application/json',
+        payload=b'',
+    )
+    if results.status != 200:
+        raise Exception(await results.text())
+
+
+async def create_mappings(session, es_endpoint, index_name):
     mapping_definition = json.dumps({
         'properties': {
             'published_date': {
@@ -51,7 +129,7 @@ async def ensure_mappings(session, es_endpoint):
         session=session,
         endpoint=es_endpoint,
         method='PUT',
-        path='/activities/_mapping/_doc',
+        path=f'/{index_name}/_mapping/_doc',
         query_string='',
         content_type='application/json',
         payload=mapping_definition,
@@ -61,7 +139,7 @@ async def ensure_mappings(session, es_endpoint):
 
 
 def es_search_new_scroll(_, __, query):
-    return '/activities/_search', 'scroll=30s', query
+    return f'/{ALIAS}/_search', 'scroll=30s', query
 
 
 def es_search_existing_scroll(public_to_private_scroll_ids, match_info, _):
@@ -141,7 +219,7 @@ async def es_bulk(session, es_endpoint, items):
         method='POST', path='/_bulk', query_string='',
         content_type='application/x-ndjson', payload=es_bulk_contents,
     )
-    app_logger.debug('Pushing to ES: done (%s)', await es_result.content.read())
+    app_logger.debug('Pushing to ES: done (%s)', await es_result.text())
 
 
 async def es_request(session, endpoint, method, path, query_string, content_type, payload):

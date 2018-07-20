@@ -87,14 +87,14 @@ async def fetch_all_es_data_until(condition, sleep):
 
     async def fetch_all_es_data():
         async with aiohttp.ClientSession() as session:
-            results = await session.get('http://127.0.0.1:9200/_search')
+            results = await session.get('http://127.0.0.1:9200/activities/_search')
             return json.loads(await results.text())
 
     while True:
         all_es_data = await fetch_all_es_data()
         if condition(all_es_data):
             break
-        await sleep(0.05)
+        await sleep(0.2)
 
     return all_es_data
 
@@ -170,10 +170,13 @@ def respond_http(text, status):
 
 async def run_es_application(port, override_routes):
     default_routes = [
-        web.put('/activities/_mapping/_doc', respond_http('{}', 200)),
-        web.put('/activities', respond_http('{}', 200)),
+        web.put('/{index_name}/_mapping/_doc', respond_http('{}', 200)),
+        web.put('/{index_name}', respond_http('{}', 200)),
+        web.delete('/{index_names}', respond_http('{}', 200)),
         web.get('/_search', respond_http('{}', 200)),
         web.post('/_bulk', respond_http('{}', 200)),
+        web.get('/*/_alias/{index_name}', respond_http('{}', 200)),
+        web.get('/_aliases', respond_http('{}', 200)),
     ]
 
     routes_no_duplicates = {
