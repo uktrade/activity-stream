@@ -638,6 +638,57 @@ class TestApplication(TestBase):
         self.assertEqual(text, '{"elasticsearch": "error"}')
 
     @async_test
+    async def test_es_503_recovered_from(self):
+        modifiy_called = 0
+        max_modifications = 8
+
+        http_200 = b'HTTP/1.1 200 OK'
+        http_500 = b'HTTP/1.1 503 Service Unavailable'
+
+        def modify(data):
+            nonlocal modifiy_called
+            modifiy_called += 1
+            return data.replace(http_200, http_500) if modifiy_called < max_modifications else \
+                data
+
+        async def handle_client(local_reader, local_writer):
+            try:
+                remote_reader, remote_writer = await asyncio.open_connection('127.0.0.1', 9200)
+                await asyncio.gather(
+                    pipe(local_reader, remote_writer),  # Upstream
+                    pipe(remote_reader, local_writer),  # Downstream
+                )
+            finally:
+                local_writer.close()
+
+        async def pipe(reader, writer):
+            try:
+                while not reader.at_eof():
+                    writer.write(modify(await reader.read(2048)))
+            finally:
+                writer.close()
+
+        server = await asyncio.start_server(handle_client, '0.0.0.0', 9201)
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
+                                    mock_feed=read_file)
+            while modifiy_called < max_modifications:
+                await ORIGINAL_SLEEP(0.1)
+
+            await wait_until_get_working()
+
+        url = 'http://127.0.0.1:8080/v1/'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+        result, status, _ = await get_until(url, x_forwarded_for,
+                                            has_at_least_ordered_items(2), asyncio.sleep)
+        server.close()
+        await server.wait_closed()
+        self.assertEqual(status, 200)
+        self.assertEqual(result['orderedItems'][0]['id'],
+                         'dit:exportOpportunities:Enquiry:49863:Create')
+
+    @async_test
     async def test_es_no_connect_on_get_500(self):
         es_runner = await run_es_application(port=9201, override_routes=[])
         await self.setup_manual({
