@@ -26,7 +26,7 @@ def get_new_index_name():
 
 
 async def get_old_index_names(session, es_endpoint):
-    results = await es_request(
+    results = await es_request_non_200_exception(
         session=session,
         endpoint=es_endpoint,
         method='GET',
@@ -51,7 +51,7 @@ async def set_alias(session, es_endpoint, index_name):
         ]
     }).encode('utf-8')
 
-    results_post = await es_request(
+    await es_request_non_200_exception(
         session=session,
         endpoint=es_endpoint,
         method='POST',
@@ -60,8 +60,6 @@ async def set_alias(session, es_endpoint, index_name):
         content_type='application/json',
         payload=actions,
     )
-    if results_post.status != 200:
-        raise Exception(await results_post.text())
 
 
 async def delete_indexes(session, es_endpoint, index_names):
@@ -69,7 +67,7 @@ async def delete_indexes(session, es_endpoint, index_names):
         return
 
     index_names_string = ','.join(index_names)
-    results = await es_request(
+    await es_request_non_200_exception(
         session=session,
         endpoint=es_endpoint,
         method='DELETE',
@@ -78,13 +76,11 @@ async def delete_indexes(session, es_endpoint, index_names):
         content_type='application/json',
         payload=b'',
     )
-    if results.status != 200:
-        raise Exception(await results.text())
 
 
 async def create_index(session, es_endpoint, index_name):
     index_definition = json.dumps({}).encode('utf-8')
-    results = await es_request(
+    await es_request_non_200_exception(
         session=session,
         endpoint=es_endpoint,
         method='PUT',
@@ -93,12 +89,10 @@ async def create_index(session, es_endpoint, index_name):
         content_type='application/json',
         payload=index_definition,
     )
-    if results.status != 200:
-        raise Exception(await results.text())
 
 
 async def refresh_index(session, es_endpoint, index_name):
-    results = await es_request(
+    await es_request_non_200_exception(
         session=session,
         endpoint=es_endpoint,
         method='POST',
@@ -107,8 +101,6 @@ async def refresh_index(session, es_endpoint, index_name):
         content_type='application/json',
         payload=b'',
     )
-    if results.status != 200:
-        raise Exception(await results.text())
 
 
 async def create_mappings(session, es_endpoint, index_name):
@@ -125,7 +117,7 @@ async def create_mappings(session, es_endpoint, index_name):
             },
         },
     }).encode('utf-8')
-    results = await es_request(
+    await es_request_non_200_exception(
         session=session,
         endpoint=es_endpoint,
         method='PUT',
@@ -134,8 +126,6 @@ async def create_mappings(session, es_endpoint, index_name):
         content_type='application/json',
         payload=mapping_definition,
     )
-    if results.status != 200:
-        raise Exception(await results.text())
 
 
 def es_search_new_scroll(_, __, query):
@@ -214,12 +204,21 @@ async def es_bulk(session, es_endpoint, items):
     app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
 
     app_logger.debug('POSTing bulk import to ES...')
-    es_result = await es_request(
+    es_result = await es_request_non_200_exception(
         session=session, endpoint=es_endpoint,
         method='POST', path='/_bulk', query_string='',
         content_type='application/x-ndjson', payload=es_bulk_contents,
     )
     app_logger.debug('Pushing to ES: done (%s)', await es_result.text())
+
+
+async def es_request_non_200_exception(session, endpoint, method, path, query_string,
+                                       content_type, payload):
+    results = await es_request(session, endpoint, method, path, query_string,
+                               content_type, payload)
+    if results.status != 200:
+        raise Exception(await results.text())
+    return results
 
 
 async def es_request(session, endpoint, method, path, query_string, content_type, payload):
