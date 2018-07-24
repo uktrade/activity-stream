@@ -242,4 +242,5 @@ def mock_env():
         'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__1': 'GET',
         'INCOMING_IP_WHITELIST__1': '1.2.3.4',
         'INCOMING_IP_WHITELIST__2': '2.3.4.5',
+        'SENTRY_DSN': 'http://abc:cvb@localhost:9872/123',
     }

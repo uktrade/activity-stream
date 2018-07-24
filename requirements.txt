@@ -12,5 +12,7 @@ idna-ssl==1.0.1           # via aiohttp
 idna==2.6                 # via idna-ssl, yarl
 mohawk==0.3.4
 multidict==4.3.1          # via aiohttp, yarl
+raven-aiohttp==0.7.0
+raven==6.9.0
 six==1.11.0               # via mohawk
 yarl==1.2.4               # via aiohttp

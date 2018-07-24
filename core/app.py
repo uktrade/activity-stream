@@ -8,6 +8,8 @@ import sys
 
 import aiohttp
 from aiohttp import web
+from raven import Client
+from raven_aiohttp import QueuedAioHttpTransport
 
 from .app_elasticsearch import (
     es_bulk,
@@ -73,8 +75,13 @@ async def run_application():
         'port': env['ELASTICSEARCH']['PORT'],
     }
 
+    sentry_dsn = env['SENTRY_DSN']
+
     app_logger.debug('Examining environment: done')
 
+    raven_client = Client(
+        dns=sentry_dsn,
+        transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
     session = aiohttp.ClientSession()
     running = True
 
@@ -83,7 +90,7 @@ async def run_application():
         return running
 
     await create_outgoing_application(
-        is_running, session, feed_endpoints, es_endpoint,
+        is_running, raven_client, session, feed_endpoints, es_endpoint,
     )
     runner = await create_incoming_application(
         port, ip_whitelist, incoming_key_pairs, session, es_endpoint,
@@ -129,10 +136,11 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
     return runner
 
 
-async def create_outgoing_application(is_running, session, feed_endpoints, es_endpoint):
+async def create_outgoing_application(is_running, raven_client, session,
+                                      feed_endpoints, es_endpoint):
     asyncio.ensure_future(repeat_while(
         functools.partial(ingest_feeds, session, feed_endpoints, es_endpoint),
-        predicate=is_running,
+        predicate=is_running, raven_client=raven_client,
         exception_interval=EXCEPTION_INTERVAL, logging_title='Polling feed'))
 
 

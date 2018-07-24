@@ -1,2 +1,4 @@
 aiohttp==3.2.1
 mohawk==0.3.4
+raven-aiohttp==0.7.0
+raven==6.9.0
