@@ -50,13 +50,6 @@ async def run_application():
 
     port = env['PORT']
 
-    def parse_feed_config(feed_config):
-        by_feed_type = {
-            'activity_stream': ActivityStreamFeed,
-            'zendesk': ZendeskFeed,
-        }
-        return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
-
     feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
     incoming_key_pairs = [{
@@ -195,6 +188,14 @@ async def poll(session, feed, index_name):
         app_logger.debug('Sleeping for %s seconds', interval)
 
         await asyncio.sleep(interval)
+
+
+def parse_feed_config(feed_config):
+    by_feed_type = {
+        'activity_stream': ActivityStreamFeed,
+        'zendesk': ZendeskFeed,
+    }
+    return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
 
 def setup_logging():
