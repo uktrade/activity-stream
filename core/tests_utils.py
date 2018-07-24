@@ -243,4 +243,5 @@ def mock_env():
         'INCOMING_IP_WHITELIST__1': '1.2.3.4',
         'INCOMING_IP_WHITELIST__2': '2.3.4.5',
         'SENTRY_DSN': 'http://abc:cvb@localhost:9872/123',
+        'SENTRY_ENVIRONMENT': 'test',
     }
