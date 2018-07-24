@@ -61,16 +61,15 @@ async def run_application():
     } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
     ip_whitelist = env['INCOMING_IP_WHITELIST']
 
-    es_host = env['ELASTICSEARCH']['HOST']
     es_endpoint = {
-        'host': es_host,
+        'host': env['ELASTICSEARCH']['HOST'],
         'access_key_id': env['ELASTICSEARCH']['AWS_ACCESS_KEY_ID'],
         'secret_key': env['ELASTICSEARCH']['AWS_SECRET_ACCESS_KEY'],
         'region': env['ELASTICSEARCH']['REGION'],
         'protocol': env['ELASTICSEARCH']['PROTOCOL'],
         'base_url': (
             env['ELASTICSEARCH']['PROTOCOL'] + '://' +
-            es_host + ':' + env['ELASTICSEARCH']['PORT']
+            env['ELASTICSEARCH']['HOST'] + ':' + env['ELASTICSEARCH']['PORT']
         ),
         'port': env['ELASTICSEARCH']['PORT'],
     }
