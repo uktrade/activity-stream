@@ -3,7 +3,6 @@ import hmac
 import logging
 import uuid
 
-import aiohttp
 from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
@@ -186,8 +185,6 @@ def handle_get_existing(session, public_to_private_scroll_ids, es_endpoint):
 
 
 def _handle_get(session, public_to_private_scroll_ids, es_endpoint, get_path_query):
-    app_logger = logging.getLogger(__name__)
-
     async def handle(request):
         incoming_body = await request.read()
         path, query_string, body = get_path_query(public_to_private_scroll_ids,
@@ -199,18 +196,11 @@ def _handle_get(session, public_to_private_scroll_ids, es_endpoint, get_path_que
             return str(request.url.join(
                 request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)))
 
-        succesful_http = False
-        try:
-            results, status = await es_search(session, es_endpoint, path, query_string, body,
-                                              request.headers['Content-Type'],
-                                              to_public_scroll_url)
-            succesful_http = True
-        except aiohttp.ClientError as exception:
-            app_logger.warning('Error connecting to Elasticsearch: %s', exception)
+        results, status = await es_search(session, es_endpoint, path, query_string, body,
+                                          request.headers['Content-Type'],
+                                          to_public_scroll_url)
 
-        return \
-            json_response(results, status=status) if succesful_http else \
-            json_response({'details': UNKNOWN_ERROR}, status=500)
+        return json_response(results, status=status)
 
     return handle
 
