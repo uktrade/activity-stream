@@ -232,5 +232,5 @@ if __name__ == '__main__':
     LOOP = asyncio.get_event_loop()
     LOOP.add_signal_handler(signal.SIGINT, exit_gracefully)
     LOOP.add_signal_handler(signal.SIGTERM, exit_gracefully)
-    asyncio.ensure_future(run_application(), loop=LOOP)
+    LOOP.run_until_complete(run_application())
     LOOP.run_forever()
