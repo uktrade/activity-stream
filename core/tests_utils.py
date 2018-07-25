@@ -81,13 +81,19 @@ def read_file(path):
 async def delete_all_es_data():
     async with aiohttp.ClientSession() as session:
         await session.delete('http://127.0.0.1:9200/*')
+        await session.post('http://127.0.0.1:9200/_refresh')
+
+    await fetch_until('http://127.0.0.1:9200/_search', has_exactly(0), asyncio.sleep)
 
 
 async def fetch_all_es_data_until(condition, sleep):
+    return await fetch_until('http://127.0.0.1:9200/activities/_search', condition, sleep)
 
+
+async def fetch_until(url, condition, sleep):
     async def fetch_all_es_data():
         async with aiohttp.ClientSession() as session:
-            results = await session.get('http://127.0.0.1:9200/activities/_search')
+            results = await session.get(url)
             return json.loads(await results.text())
 
     while True:
@@ -211,6 +217,13 @@ def has_at_least(num_results):
     return lambda results: (
         'hits' in results and 'hits' in results['hits'] and
         len(results['hits']['hits']) >= num_results
+    )
+
+
+def has_exactly(num_results):
+    return lambda results: (
+        'hits' in results and 'hits' in results['hits'] and
+        len(results['hits']['hits']) == num_results
     )
 
 
