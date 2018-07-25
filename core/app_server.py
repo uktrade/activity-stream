@@ -132,6 +132,28 @@ def authorizer():
     return authorize
 
 
+def raven_reporter(raven_client):
+    @web.middleware
+    async def _raven_reporter(request, handler):
+        try:
+            return await handler(request)
+        except (web.HTTPSuccessful, web.HTTPRedirection, web.HTTPClientError):
+            raise
+        except BaseException:
+            raven_client.captureException(data={
+                'request': {
+                    'url': str(request.url.with_scheme(request.headers['X-Forwarded-Proto'])),
+                    'query_string': request.query_string,
+                    'method': request.method,
+                    'data': await request.read(),
+                    'headers':  dict(request.headers),
+                }
+            })
+            raise
+
+    return _raven_reporter
+
+
 def convert_errors_to_json():
     app_logger = logging.getLogger(__name__)
 

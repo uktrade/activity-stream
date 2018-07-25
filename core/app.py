@@ -33,6 +33,7 @@ from .app_server import (
     handle_get_existing,
     handle_get_new,
     handle_post,
+    raven_reporter,
 )
 from .app_utils import (
     ExpiringDict,
@@ -94,7 +95,7 @@ async def run_application():
         is_running, raven_client, session, feed_endpoints, es_endpoint,
     )
     runner = await create_incoming_application(
-        port, ip_whitelist, incoming_key_pairs, session, es_endpoint,
+        port, ip_whitelist, incoming_key_pairs, raven_client, session, es_endpoint,
     )
 
     async def cleanup():
@@ -107,7 +108,7 @@ async def run_application():
 
 
 async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
-                                      session, es_endpoint):
+                                      raven_client, session, es_endpoint):
     app_logger = logging.getLogger(__name__)
 
     app_logger.debug('Creating listening web application...')
@@ -115,6 +116,7 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
     public_to_private_scroll_ids = ExpiringDict(30)
     app = web.Application(middlewares=[
         convert_errors_to_json(),
+        raven_reporter(raven_client),
         authenticator(ip_whitelist, incoming_key_pairs, NONCE_EXPIRE),
         authorizer(),
     ])
