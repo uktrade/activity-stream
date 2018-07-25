@@ -102,6 +102,7 @@ async def run_application():
         nonlocal running
         running = False
         await runner.cleanup()
+        await raven_client.remote.get_transport().close()
         await session.close()
 
     return cleanup
