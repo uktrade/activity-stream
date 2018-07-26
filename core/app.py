@@ -84,7 +84,7 @@ async def run_application():
         dns=sentry_dsn,
         environment=sentry_environment,
         transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
-    session = aiohttp.ClientSession()
+    session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
     running = True
 
     def is_running():
