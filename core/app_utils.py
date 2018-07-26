@@ -159,7 +159,7 @@ def normalise_environment(key_values):
 
 async def repeat_while(never_ending_coroutine, predicate, raven_client,
                        exception_interval, logging_title):
-    app_logger = logging.getLogger(__name__)
+    app_logger = logging.getLogger('activity-stream')
 
     while predicate():
         try:

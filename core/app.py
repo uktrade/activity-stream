@@ -46,7 +46,7 @@ NONCE_EXPIRE = 120
 
 
 async def run_application():
-    app_logger = logging.getLogger(__name__)
+    app_logger = logging.getLogger('activity-stream')
 
     app_logger.debug('Examining environment...')
     env = normalise_environment(os.environ)
@@ -110,7 +110,7 @@ async def run_application():
 
 async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
                                       raven_client, session, es_endpoint):
-    app_logger = logging.getLogger(__name__)
+    app_logger = logging.getLogger('activity-stream')
 
     app_logger.debug('Creating listening web application...')
 
@@ -171,7 +171,7 @@ async def ingest_feed(session, feed_endpoint, es_endpoint, index_name):
 
 
 async def poll(session, feed, index_name):
-    app_logger = logging.getLogger(__name__)
+    app_logger = logging.getLogger('activity-stream')
 
     href = feed.seed
     while href:
@@ -216,7 +216,7 @@ def main():
     aiohttp_log.setLevel(logging.DEBUG)
     aiohttp_log.addHandler(stdout_handler)
 
-    app_logger = logging.getLogger(__name__)
+    app_logger = logging.getLogger('activity-stream')
     app_logger.setLevel(logging.DEBUG)
     app_logger.addHandler(stdout_handler)
 

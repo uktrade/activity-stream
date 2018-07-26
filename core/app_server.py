@@ -27,7 +27,7 @@ UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
 def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
-    app_logger = logging.getLogger(__name__)
+    app_logger = logging.getLogger('activity-stream')
 
     # This would need to be stored externally if this was ever to be load balanced,
     # otherwise replay attacks could succeed by hitting another instance
@@ -154,7 +154,7 @@ def raven_reporter(raven_client):
 
 
 def convert_errors_to_json():
-    app_logger = logging.getLogger(__name__)
+    app_logger = logging.getLogger('activity-stream')
 
     @web.middleware
     async def _convert_errors_to_json(request, handler):

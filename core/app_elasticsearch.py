@@ -193,7 +193,7 @@ def activities(elasticsearch_reponse, to_public_scroll_url):
 
 
 async def es_bulk(session, es_endpoint, items):
-    app_logger = logging.getLogger(__name__)
+    app_logger = logging.getLogger('activity-stream')
 
     app_logger.debug('Converting feed to ES bulk ingest commands...')
     es_bulk_contents = ('\n'.join(flatten([
