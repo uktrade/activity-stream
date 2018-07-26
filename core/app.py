@@ -152,6 +152,7 @@ async def ingest_feeds(session, feed_endpoints, es_endpoint):
     new_index_name = get_new_index_name()
     old_index_names = await get_old_index_names(session, es_endpoint)
 
+    await delete_indexes(session, es_endpoint, old_index_names)
     await create_index(session, es_endpoint, new_index_name)
     await create_mappings(session, es_endpoint, new_index_name)
 
@@ -162,7 +163,6 @@ async def ingest_feeds(session, feed_endpoints, es_endpoint):
 
     await refresh_index(session, es_endpoint, new_index_name)
     await set_alias(session, es_endpoint, new_index_name)
-    await delete_indexes(session, es_endpoint, old_index_names)
 
 
 async def ingest_feed(session, feed_endpoint, es_endpoint, index_name):

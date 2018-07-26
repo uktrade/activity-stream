@@ -90,6 +90,12 @@ async def fetch_all_es_data_until(condition, sleep):
     return await fetch_until('http://127.0.0.1:9200/activities/_search', condition, sleep)
 
 
+async def fetch_es_index_names():
+    async with aiohttp.ClientSession() as session:
+        response = await session.get('http://127.0.0.1:9200/_alias')
+        return json.loads(await response.text()).keys()
+
+
 async def fetch_until(url, condition, sleep):
     async def fetch_all_es_data():
         async with aiohttp.ClientSession() as session:

@@ -36,10 +36,11 @@ async def get_old_index_names(session, es_endpoint):
         payload=b'',
     )
     indexes = await results.json()
+
     return [
         index_name
-        for index_name in indexes.keys()
-        if index_name.startswith(f'{ALIAS}_')
+        for index_name, index_details in indexes.items()
+        if index_name.startswith(f'{ALIAS}_') and not index_details['aliases']
     ]
 
 

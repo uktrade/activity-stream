@@ -15,6 +15,7 @@ from core.tests_utils import (
     async_test,
     delete_all_es_data,
     fetch_all_es_data_until,
+    fetch_es_index_names,
     get,
     get_until,
     has_at_least,
@@ -639,17 +640,19 @@ class TestApplication(TestBase):
 
     @async_test
     async def test_es_503_recovered_from(self):
-        modifiy_called = 0
-        max_modifications = 8
+        modified = 0
+        max_modifications = 2
 
         http_200 = b'HTTP/1.1 200 OK'
         http_500 = b'HTTP/1.1 503 Service Unavailable'
 
         def modify(data):
-            nonlocal modifiy_called
-            modifiy_called += 1
-            return data.replace(http_200, http_500) if modifiy_called < max_modifications else \
-                data
+            nonlocal modified
+            should_modify = modified < max_modifications and b'"status":201' in data
+            data, modified = \
+                (data.replace(http_200, http_500), modified + 1) if should_modify else \
+                (data, modified)
+            return data
 
         async def handle_client(local_reader, local_writer):
             try:
@@ -664,7 +667,7 @@ class TestApplication(TestBase):
         async def pipe(reader, writer):
             try:
                 while not reader.at_eof():
-                    writer.write(modify(await reader.read(2048)))
+                    writer.write(modify(await reader.read(16384)))
             finally:
                 writer.close()
 
@@ -673,7 +676,7 @@ class TestApplication(TestBase):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                     mock_feed=read_file)
-            while modifiy_called < max_modifications:
+            while modified < max_modifications:
                 await ORIGINAL_SLEEP(0.1)
 
             await wait_until_get_working()
@@ -687,6 +690,8 @@ class TestApplication(TestBase):
         self.assertEqual(status, 200)
         self.assertEqual(result['orderedItems'][0]['id'],
                          'dit:exportOpportunities:Enquiry:49863:Create')
+
+        self.assertEqual(len(await fetch_es_index_names()), 1)
 
     @async_test
     async def test_es_no_connect_on_get_500(self):
