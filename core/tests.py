@@ -454,6 +454,7 @@ class TestApplication(TestBase):
                 'http://localhost:8081/'
                 'tests_fixture_activity_stream_multipage_1.json'
             ),
+            'FEEDS__2__UNIQUE_ID': 'second_feed',
             'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
             'FEEDS__2__API_EMAIL': 'test@test.com',
             'FEEDS__2__API_KEY': 'some-key',
@@ -565,7 +566,7 @@ class TestApplication(TestBase):
             'AWS4-HMAC-SHA256 '
             'Credential=some-id/20120114/us-east-2/es/aws4_request, '
             'SignedHeaders=content-type;host;x-amz-date, '
-            'Signature=8dcf816d7d97f9811a05c3d59814646908359f9aa3d994d9d96eb597b3da34b8')
+            'Signature=173a43a70c8614ef6e265a2509937d41471e0911156d4d29eb0aa7bb004ae41e')
         self.assertEqual(es_bulk_content.decode('utf-8')[-1], '\n')
         self.assertEqual(es_bulk_headers['Content-Type'], 'application/x-ndjson')
 
@@ -733,6 +734,7 @@ class TestApplication(TestBase):
     async def test_two_feeds(self):
         env = {
             **mock_env(),
+            'FEEDS__2__UNIQUE_ID': 'second_feed',
             'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_activity_stream_2.json',
             'FEEDS__2__ACCESS_KEY_ID': 'feed-some-id',
             'FEEDS__2__SECRET_ACCESS_KEY': '?[!@$%^%',
@@ -762,6 +764,7 @@ class TestApplication(TestBase):
 
         env = {
             **mock_env(),
+            'FEEDS__2__UNIQUE_ID': 'second_feed',
             'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
             'FEEDS__2__API_EMAIL': 'test@test.com',
             'FEEDS__2__API_KEY': 'some-key',

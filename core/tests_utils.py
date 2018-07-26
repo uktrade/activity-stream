@@ -246,6 +246,7 @@ def mock_env():
         'ELASTICSEARCH__PORT': '9200',
         'ELASTICSEARCH__PROTOCOL': 'http',
         'ELASTICSEARCH__REGION': 'us-east-2',
+        'FEEDS__1__UNIQUE_ID': 'first_feed',
         'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_activity_stream_1.json',
         'FEEDS__1__ACCESS_KEY_ID': 'feed-some-id',
         'FEEDS__1__SECRET_ACCESS_KEY': '?[!@$%^%',

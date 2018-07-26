@@ -13,13 +13,13 @@ from raven_aiohttp import QueuedAioHttpTransport
 
 from .app_elasticsearch import (
     es_bulk,
-    create_index,
+    create_indexes,
     create_mappings,
-    get_new_index_name,
+    get_new_index_names,
     get_old_index_names,
     set_alias,
     delete_indexes,
-    refresh_index,
+    refresh_indexes,
 )
 
 from .app_feeds import (
@@ -149,20 +149,24 @@ async def create_outgoing_application(is_running, raven_client, session,
 
 
 async def ingest_feeds(session, feed_endpoints, es_endpoint):
-    new_index_name = get_new_index_name()
+    new_index_names = get_new_index_names(feed_unique_ids(feed_endpoints))
     old_index_names = await get_old_index_names(session, es_endpoint)
 
     await delete_indexes(session, es_endpoint, old_index_names)
-    await create_index(session, es_endpoint, new_index_name)
-    await create_mappings(session, es_endpoint, new_index_name)
+    await create_indexes(session, es_endpoint, new_index_names)
+    await create_mappings(session, es_endpoint, new_index_names)
 
     await asyncio.gather(*[
-        ingest_feed(session, feed_endpoint, es_endpoint, new_index_name)
-        for feed_endpoint in feed_endpoints
+        ingest_feed(session, feed_endpoint, es_endpoint, new_index_names[i])
+        for i, feed_endpoint in enumerate(feed_endpoints)
     ])
 
-    await refresh_index(session, es_endpoint, new_index_name)
-    await set_alias(session, es_endpoint, new_index_name)
+    await refresh_indexes(session, es_endpoint, new_index_names)
+    await set_alias(session, es_endpoint, new_index_names)
+
+
+def feed_unique_ids(feed_endpoints):
+    return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
 async def ingest_feed(session, feed_endpoint, es_endpoint, index_name):

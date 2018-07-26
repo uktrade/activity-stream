@@ -17,12 +17,16 @@ from .app_utils import (
 ALIAS = 'activities'
 
 
-def get_new_index_name():
+def get_new_index_names(feed_unique_ids):
     # Index name to be both unique and useful
     today = datetime.date.today().isoformat()
     now = str(datetime.datetime.now().timestamp()).split('.')[0]
     unique = ''.join(os.urandom(5).hex())
-    return f'{ALIAS}_{today}_{now}_{unique}'
+
+    return [
+        f'{ALIAS}_{feed_unique_id}_{today}_{now}_{unique}'
+        for feed_unique_id in feed_unique_ids
+    ]
 
 
 async def get_old_index_names(session, es_endpoint):
@@ -44,11 +48,13 @@ async def get_old_index_names(session, es_endpoint):
     ]
 
 
-async def set_alias(session, es_endpoint, index_name):
+async def set_alias(session, es_endpoint, index_names):
     actions = json.dumps({
         'actions': [
             {'remove': {'index': f'{ALIAS}_*', 'alias': ALIAS}},
-            {'add': {'index': index_name, 'alias': ALIAS}},
+        ] + [
+            {'add': {'index': index_name, 'alias': ALIAS}}
+            for index_name in index_names
         ]
     }).encode('utf-8')
 
@@ -76,32 +82,34 @@ async def delete_indexes(session, es_endpoint, index_names):
         )
 
 
-async def create_index(session, es_endpoint, index_name):
+async def create_indexes(session, es_endpoint, index_names):
     index_definition = json.dumps({}).encode('utf-8')
-    await es_request_non_200_exception(
-        session=session,
-        endpoint=es_endpoint,
-        method='PUT',
-        path=f'/{index_name}',
-        query_string='',
-        content_type='application/json',
-        payload=index_definition,
-    )
+    for index_name in index_names:
+        await es_request_non_200_exception(
+            session=session,
+            endpoint=es_endpoint,
+            method='PUT',
+            path=f'/{index_name}',
+            query_string='',
+            content_type='application/json',
+            payload=index_definition,
+        )
 
 
-async def refresh_index(session, es_endpoint, index_name):
-    await es_request_non_200_exception(
-        session=session,
-        endpoint=es_endpoint,
-        method='POST',
-        path=f'/{index_name}/_refresh',
-        query_string='',
-        content_type='application/json',
-        payload=b'',
-    )
+async def refresh_indexes(session, es_endpoint, index_names):
+    for index_name in index_names:
+        await es_request_non_200_exception(
+            session=session,
+            endpoint=es_endpoint,
+            method='POST',
+            path=f'/{index_name}/_refresh',
+            query_string='',
+            content_type='application/json',
+            payload=b'',
+        )
 
 
-async def create_mappings(session, es_endpoint, index_name):
+async def create_mappings(session, es_endpoint, index_names):
     mapping_definition = json.dumps({
         'properties': {
             'published_date': {
@@ -115,15 +123,16 @@ async def create_mappings(session, es_endpoint, index_name):
             },
         },
     }).encode('utf-8')
-    await es_request_non_200_exception(
-        session=session,
-        endpoint=es_endpoint,
-        method='PUT',
-        path=f'/{index_name}/_mapping/_doc',
-        query_string='',
-        content_type='application/json',
-        payload=mapping_definition,
-    )
+    for index_name in index_names:
+        await es_request_non_200_exception(
+            session=session,
+            endpoint=es_endpoint,
+            method='PUT',
+            path=f'/{index_name}/_mapping/_doc',
+            query_string='',
+            content_type='application/json',
+            payload=mapping_definition,
+        )
 
 
 def es_search_new_scroll(_, __, query):
