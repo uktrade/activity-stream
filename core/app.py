@@ -221,18 +221,22 @@ def setup_logging():
     app_logger.addHandler(stdout_handler)
 
 
-if __name__ == '__main__':
+def main():
     setup_logging()
-    LOOP = asyncio.get_event_loop()
-    CLEANUP = LOOP.run_until_complete(run_application())
+    loop = asyncio.get_event_loop()
+    cleanup = loop.run_until_complete(run_application())
 
     async def cleanup_then_stop_loop():
-        await CLEANUP()
+        await cleanup()
         asyncio.get_event_loop().stop()
         return 'anything-to-avoid-pylint-assignment-from-none-error'
 
-    CLEANUP_THEN_STOP = cleanup_then_stop_loop()
-    LOOP.add_signal_handler(signal.SIGINT, asyncio.ensure_future, CLEANUP_THEN_STOP)
-    LOOP.add_signal_handler(signal.SIGTERM, asyncio.ensure_future, CLEANUP_THEN_STOP)
-    LOOP.run_forever()
+    cleanup_then_stop = cleanup_then_stop_loop()
+    loop.add_signal_handler(signal.SIGINT, asyncio.ensure_future, cleanup_then_stop)
+    loop.add_signal_handler(signal.SIGTERM, asyncio.ensure_future, cleanup_then_stop)
+    loop.run_forever()
     print('Reached end of main. Exiting now.')
+
+
+if __name__ == '__main__':
+    main()
