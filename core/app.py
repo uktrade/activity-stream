@@ -232,7 +232,7 @@ def main():
     loop.add_signal_handler(signal.SIGINT, asyncio.ensure_future, cleanup_then_stop)
     loop.add_signal_handler(signal.SIGTERM, asyncio.ensure_future, cleanup_then_stop)
     loop.run_forever()
-    print('Reached end of main. Exiting now.')
+    app_logger.info('Reached end of main. Exiting now.')
 
 
 if __name__ == '__main__':
