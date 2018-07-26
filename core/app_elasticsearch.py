@@ -63,19 +63,16 @@ async def set_alias(session, es_endpoint, index_name):
 
 
 async def delete_indexes(session, es_endpoint, index_names):
-    if not index_names:
-        return
-
-    index_names_string = ','.join(index_names)
-    await es_request_non_200_exception(
-        session=session,
-        endpoint=es_endpoint,
-        method='DELETE',
-        path=f'/{index_names_string}',
-        query_string='',
-        content_type='application/json',
-        payload=b'',
-    )
+    for index_name in index_names:
+        await es_request_non_200_exception(
+            session=session,
+            endpoint=es_endpoint,
+            method='DELETE',
+            path=f'/{index_name}',
+            query_string='',
+            content_type='application/json',
+            payload=b'',
+        )
 
 
 async def create_index(session, es_endpoint, index_name):
