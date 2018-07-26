@@ -3,7 +3,6 @@ import hmac
 import logging
 import uuid
 
-import aiohttp
 from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
@@ -28,7 +27,7 @@ UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
 def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
-    app_logger = logging.getLogger(__name__)
+    app_logger = logging.getLogger('activity-stream')
 
     # This would need to be stored externally if this was ever to be load balanced,
     # otherwise replay attacks could succeed by hitting another instance
@@ -132,8 +131,30 @@ def authorizer():
     return authorize
 
 
+def raven_reporter(raven_client):
+    @web.middleware
+    async def _raven_reporter(request, handler):
+        try:
+            return await handler(request)
+        except (web.HTTPSuccessful, web.HTTPRedirection, web.HTTPClientError):
+            raise
+        except BaseException:
+            raven_client.captureException(data={
+                'request': {
+                    'url': str(request.url.with_scheme(request.headers['X-Forwarded-Proto'])),
+                    'query_string': request.query_string,
+                    'method': request.method,
+                    'data': await request.read(),
+                    'headers':  dict(request.headers),
+                }
+            })
+            raise
+
+    return _raven_reporter
+
+
 def convert_errors_to_json():
-    app_logger = logging.getLogger(__name__)
+    app_logger = logging.getLogger('activity-stream')
 
     @web.middleware
     async def _convert_errors_to_json(request, handler):
@@ -164,8 +185,6 @@ def handle_get_existing(session, public_to_private_scroll_ids, es_endpoint):
 
 
 def _handle_get(session, public_to_private_scroll_ids, es_endpoint, get_path_query):
-    app_logger = logging.getLogger(__name__)
-
     async def handle(request):
         incoming_body = await request.read()
         path, query_string, body = get_path_query(public_to_private_scroll_ids,
@@ -177,18 +196,11 @@ def _handle_get(session, public_to_private_scroll_ids, es_endpoint, get_path_que
             return str(request.url.join(
                 request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)))
 
-        succesful_http = False
-        try:
-            results, status = await es_search(session, es_endpoint, path, query_string, body,
-                                              request.headers['Content-Type'],
-                                              to_public_scroll_url)
-            succesful_http = True
-        except aiohttp.ClientError as exception:
-            app_logger.warning('Error connecting to Elasticsearch: %s', exception)
+        results, status = await es_search(session, es_endpoint, path, query_string, body,
+                                          request.headers['Content-Type'],
+                                          to_public_scroll_url)
 
-        return \
-            json_response(results, status=status) if succesful_http else \
-            json_response({'details': UNKNOWN_ERROR}, status=500)
+        return json_response(results, status=status)
 
     return handle
 

@@ -8,18 +8,21 @@ import mohawk
 from core.app import run_application
 
 
-def run_app_until_accepts_http():
-    asyncio.ensure_future(run_application())
-    is_http_accepted_eventually()
+def async_test(func):
+    def wrapper(*args, **kwargs):
+        future = func(*args, **kwargs)
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(future)
+    return wrapper
 
 
-def is_http_accepted_eventually():
-    loop = asyncio.get_event_loop()
-    connected_future = asyncio.ensure_future(_is_http_accepted_eventually())
-    return loop.run_until_complete(connected_future)
+async def run_app_until_accepts_http():
+    cleanup = await run_application()
+    await is_http_accepted_eventually()
+    return cleanup
 
 
-async def _is_http_accepted_eventually():
+async def is_http_accepted_eventually():
     def is_connection_error(exception):
         return 'Cannot connect to host' in str(exception)
 
@@ -27,16 +30,17 @@ async def _is_http_accepted_eventually():
     while attempts < 20:
         try:
             async with aiohttp.ClientSession() as session:
-                url = 'http://127.0.0.1:8080/'
+                url = 'http://127.0.0.1:8080/v1/'
                 auth = hawk_auth_header(
-                    'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', '',
+                    'incoming-some-id-3', 'incoming-some-secret-3', url,
+                    'GET', '{}', 'application/json',
                 )
                 await session.get(url, headers={
                     'Authorization': auth,
-                    'X-Forwarded-For': '1.2.3.4',
+                    'X-Forwarded-For': '1.2.3.4, 2.2.2.2',
                     'X-Forwarded-Proto': 'http',
-                    'Content-Type': '',
-                }, timeout=1)
+                    'Content-Type': 'application/json',
+                }, data='{}', timeout=1)
             return True
         except aiohttp.client_exceptions.ClientConnectorError as exception:
             attempts += 1
@@ -44,7 +48,29 @@ async def _is_http_accepted_eventually():
             if not is_connection_error(exception):
                 return True
 
-    return False
+
+async def wait_until_get_working():
+    # Assume can already connect on HTTP
+    attempts = 0
+    while attempts < 20:
+        async with aiohttp.ClientSession() as session:
+            url = 'http://127.0.0.1:8080/v1/'
+            auth = hawk_auth_header(
+                'incoming-some-id-3', 'incoming-some-secret-3', url,
+                'GET', '{}', 'application/json',
+            )
+            result = await session.get(url, headers={
+                'Authorization': auth,
+                'X-Forwarded-For': '1.2.3.4, 2.2.2.2',
+                'X-Forwarded-Proto': 'http',
+                'Content-Type': 'application/json',
+            }, data='{}', timeout=1)
+            content = await result.content.read()
+
+        if 'orderedItems' in json.loads(content):
+            return True
+        attempts += 1
+        await asyncio.sleep(0.2)
 
 
 def read_file(path):
@@ -55,20 +81,26 @@ def read_file(path):
 async def delete_all_es_data():
     async with aiohttp.ClientSession() as session:
         await session.delete('http://127.0.0.1:9200/*')
+        await session.post('http://127.0.0.1:9200/_refresh')
+
+    await fetch_until('http://127.0.0.1:9200/_search', has_exactly(0), asyncio.sleep)
 
 
 async def fetch_all_es_data_until(condition, sleep):
+    return await fetch_until('http://127.0.0.1:9200/activities/_search', condition, sleep)
 
+
+async def fetch_until(url, condition, sleep):
     async def fetch_all_es_data():
         async with aiohttp.ClientSession() as session:
-            results = await session.get('http://127.0.0.1:9200/_search')
+            results = await session.get(url)
             return json.loads(await results.text())
 
     while True:
         all_es_data = await fetch_all_es_data()
         if condition(all_es_data):
             break
-        await sleep(0.05)
+        await sleep(0.2)
 
     return all_es_data
 
@@ -144,10 +176,13 @@ def respond_http(text, status):
 
 async def run_es_application(port, override_routes):
     default_routes = [
-        web.put('/activities/_mapping/_doc', respond_http('{}', 200)),
-        web.put('/activities', respond_http('{}', 200)),
+        web.put('/{index_name}/_mapping/_doc', respond_http('{}', 200)),
+        web.put('/{index_name}', respond_http('{}', 200)),
+        web.delete('/{index_names}', respond_http('{}', 200)),
         web.get('/_search', respond_http('{}', 200)),
         web.post('/_bulk', respond_http('{}', 200)),
+        web.get('/*/_alias/{index_name}', respond_http('{}', 200)),
+        web.get('/_aliases', respond_http('{}', 200)),
     ]
 
     routes_no_duplicates = {
@@ -185,6 +220,13 @@ def has_at_least(num_results):
     )
 
 
+def has_exactly(num_results):
+    return lambda results: (
+        'hits' in results and 'hits' in results['hits'] and
+        len(results['hits']['hits']) == num_results
+    )
+
+
 def has_at_least_ordered_items(num_results):
     return lambda results: len(results['orderedItems']) >= num_results
 
@@ -213,4 +255,6 @@ def mock_env():
         'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__1': 'GET',
         'INCOMING_IP_WHITELIST__1': '1.2.3.4',
         'INCOMING_IP_WHITELIST__2': '2.3.4.5',
+        'SENTRY_DSN': 'http://abc:cvb@localhost:9872/123',
+        'SENTRY_ENVIRONMENT': 'test',
     }

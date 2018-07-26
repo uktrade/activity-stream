@@ -157,20 +157,16 @@ def normalise_environment(key_values):
         nested_structured_dict
 
 
-async def repeat_even_on_exception(never_ending_coroutine, exception_interval, logging_title):
-    app_logger = logging.getLogger(__name__)
+async def repeat_while(never_ending_coroutine, predicate, raven_client,
+                       exception_interval, logging_title):
+    app_logger = logging.getLogger('activity-stream')
 
-    while True:
+    while predicate():
         try:
             await never_ending_coroutine()
         except BaseException as exception:
-            app_logger.warning('%s raised exception: %s', logging_title, exception)
-        else:
-            app_logger.warning(
-                '%s finished without exception. '
-                'This is not expected: it should run forever.',
-                logging_title,
-            )
+            app_logger.exception('%s raised exception: %s', logging_title, exception)
+            raven_client.captureException()
         finally:
             app_logger.warning('Waiting %s seconds until restarting', exception_interval)
             await asyncio.sleep(exception_interval)

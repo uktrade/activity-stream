@@ -35,12 +35,12 @@ class ActivityStreamFeed:
         }
 
     @staticmethod
-    def convert_to_bulk_es(feed):
+    def convert_to_bulk_es(feed, index_name):
         return [{
             'action_and_metadata': {
                 'index': {
                     '_id': item['id'],
-                    '_index': 'activities',
+                    '_index': index_name,
                     '_type': '_doc',
                 }
             },
@@ -79,56 +79,63 @@ class ZendeskFeed:
         }
 
     @classmethod
-    def convert_to_bulk_es(cls, page):
+    def convert_to_bulk_es(cls, page, index_name):
         def company_numbers(description):
             match = re.search(cls.company_number_regex, description)
             return [match[1]] if match else []
 
         return [
-            _activity(
-                activity_id='dit:zendesk:Ticket:' + str(ticket['id']) + ':Create',
-                activity_type='Create',
-                object_id='dit:zendesk:Ticket:' + str(ticket['id']),
-                published_date=ticket['created_at'],
-                dit_application='zendesk',
-                object_type='dit:zendesk:Ticket',
-                actor=_company_actor(companies_house_number=company_number),
-            )
+            {
+                'action_and_metadata': _action_and_metadata(
+                    index_name=index_name,
+                    activity_id=activity_id),
+                'source': _source(
+                    activity_id=activity_id,
+                    activity_type='Create',
+                    object_id='dit:zendesk:Ticket:' + str(ticket['id']),
+                    published_date=ticket['created_at'],
+                    dit_application='zendesk',
+                    object_type='dit:zendesk:Ticket',
+                    actor=_company_actor(companies_house_number=company_number)),
+            }
             for ticket in page['tickets']
             for company_number in company_numbers(ticket['description'])
+            for activity_id in ['dit:zendesk:Ticket:' + str(ticket['id']) + ':Create']
         ]
 
 
-def _activity(
+def _action_and_metadata(
+        index_name,
+        activity_id):
+    return {
+        'index': {
+            '_index': index_name,
+            '_type': '_doc',
+            '_id': activity_id,
+        },
+    }
+
+
+def _source(
         activity_id,
         activity_type,
         object_id,
         published_date,
         dit_application,
         object_type,
-        actor,
-):
+        actor):
     return {
-        'action_and_metadata': {
-            'index': {
-                '_index': 'activities',
-                '_type': '_doc',
-                '_id': activity_id,
-            },
-        },
-        'source': {
-            'id': activity_id,
-            'type': activity_type,
-            'published': published_date,
-            'dit:application': dit_application,
-            'actor': actor,
-            'object': {
-                'type': [
-                    'Document',
-                    object_type,
-                ],
-                'id': object_id,
-            },
+        'id': activity_id,
+        'type': activity_type,
+        'published': published_date,
+        'dit:application': dit_application,
+        'actor': actor,
+        'object': {
+            'type': [
+                'Document',
+                object_type,
+            ],
+            'id': object_id,
         },
     }
 

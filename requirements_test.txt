@@ -20,6 +20,8 @@ mohawk==0.3.4
 multidict==4.3.1          # via aiohttp, yarl
 pylint==1.9.1
 python-dateutil==2.7.3    # via freezegun
+raven-aiohttp==0.7.0
+raven==6.9.0
 six==1.11.0               # via astroid, freezegun, mohawk, pylint, python-dateutil
 wrapt==1.10.11            # via astroid
 yarl==1.2.6               # via aiohttp

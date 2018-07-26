@@ -8,12 +8,20 @@ import sys
 
 import aiohttp
 from aiohttp import web
+from raven import Client
+from raven_aiohttp import QueuedAioHttpTransport
 
 from .app_elasticsearch import (
     es_bulk,
-    ensure_index,
-    ensure_mappings,
+    create_index,
+    create_mappings,
+    get_new_index_name,
+    get_old_index_names,
+    set_alias,
+    delete_indexes,
+    refresh_index,
 )
+
 from .app_feeds import (
     ActivityStreamFeed,
     ZendeskFeed,
@@ -25,11 +33,12 @@ from .app_server import (
     handle_get_existing,
     handle_get_new,
     handle_post,
+    raven_reporter,
 )
 from .app_utils import (
     ExpiringDict,
     normalise_environment,
-    repeat_even_on_exception,
+    repeat_while,
 )
 
 EXCEPTION_INTERVAL = 60
@@ -37,19 +46,12 @@ NONCE_EXPIRE = 120
 
 
 async def run_application():
-    app_logger = logging.getLogger(__name__)
+    app_logger = logging.getLogger('activity-stream')
 
     app_logger.debug('Examining environment...')
     env = normalise_environment(os.environ)
 
     port = env['PORT']
-
-    def parse_feed_config(feed_config):
-        by_feed_type = {
-            'activity_stream': ActivityStreamFeed,
-            'zendesk': ZendeskFeed,
-        }
-        return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
     feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
@@ -60,42 +62,62 @@ async def run_application():
     } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
     ip_whitelist = env['INCOMING_IP_WHITELIST']
 
-    es_host = env['ELASTICSEARCH']['HOST']
     es_endpoint = {
-        'host': es_host,
+        'host': env['ELASTICSEARCH']['HOST'],
         'access_key_id': env['ELASTICSEARCH']['AWS_ACCESS_KEY_ID'],
         'secret_key': env['ELASTICSEARCH']['AWS_SECRET_ACCESS_KEY'],
         'region': env['ELASTICSEARCH']['REGION'],
         'protocol': env['ELASTICSEARCH']['PROTOCOL'],
         'base_url': (
             env['ELASTICSEARCH']['PROTOCOL'] + '://' +
-            es_host + ':' + env['ELASTICSEARCH']['PORT']
+            env['ELASTICSEARCH']['HOST'] + ':' + env['ELASTICSEARCH']['PORT']
         ),
         'port': env['ELASTICSEARCH']['PORT'],
     }
 
+    sentry_dsn = env['SENTRY_DSN']
+    sentry_environment = env['SENTRY_ENVIRONMENT']
+
     app_logger.debug('Examining environment: done')
 
-    async with aiohttp.ClientSession() as session:
-        await ensure_index(session, es_endpoint)
-        await ensure_mappings(session, es_endpoint)
-        await create_incoming_application(
-            port, ip_whitelist, incoming_key_pairs, session, es_endpoint,
-        )
-        await create_outgoing_application(
-            session, feed_endpoints, es_endpoint,
-        )
+    raven_client = Client(
+        dns=sentry_dsn,
+        environment=sentry_environment,
+        transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
+    session = aiohttp.ClientSession()
+    running = True
+
+    def is_running():
+        nonlocal running
+        return running
+
+    await create_outgoing_application(
+        is_running, raven_client, session, feed_endpoints, es_endpoint,
+    )
+    runner = await create_incoming_application(
+        port, ip_whitelist, incoming_key_pairs, raven_client, session, es_endpoint,
+    )
+
+    async def cleanup():
+        nonlocal running
+        running = False
+        await runner.cleanup()
+        await raven_client.remote.get_transport().close()
+        await session.close()
+
+    return cleanup
 
 
 async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
-                                      session, es_endpoint):
-    app_logger = logging.getLogger(__name__)
+                                      raven_client, session, es_endpoint):
+    app_logger = logging.getLogger('activity-stream')
 
     app_logger.debug('Creating listening web application...')
 
     public_to_private_scroll_ids = ExpiringDict(30)
     app = web.Application(middlewares=[
         convert_errors_to_json(),
+        raven_reporter(raven_client),
         authenticator(ip_whitelist, incoming_key_pairs, NONCE_EXPIRE),
         authorizer(),
     ])
@@ -115,29 +137,44 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
     await site.start()
     app_logger.debug('Creating listening web application: done')
 
+    return runner
 
-async def create_outgoing_application(session, feed_endpoints, es_endpoint):
-    feeds = [
-        repeat_even_on_exception(functools.partial(
-            ingest_feed,
-            session, feed_endpoint,
-            es_endpoint,
-        ), exception_interval=EXCEPTION_INTERVAL, logging_title='Polling feed')
+
+async def create_outgoing_application(is_running, raven_client, session,
+                                      feed_endpoints, es_endpoint):
+    asyncio.ensure_future(repeat_while(
+        functools.partial(ingest_feeds, session, feed_endpoints, es_endpoint),
+        predicate=is_running, raven_client=raven_client,
+        exception_interval=EXCEPTION_INTERVAL, logging_title='Polling feed'))
+
+
+async def ingest_feeds(session, feed_endpoints, es_endpoint):
+    new_index_name = get_new_index_name()
+    old_index_names = await get_old_index_names(session, es_endpoint)
+
+    await create_index(session, es_endpoint, new_index_name)
+    await create_mappings(session, es_endpoint, new_index_name)
+
+    await asyncio.gather(*[
+        ingest_feed(session, feed_endpoint, es_endpoint, new_index_name)
         for feed_endpoint in feed_endpoints
-    ]
-    await asyncio.gather(*feeds)
+    ])
+
+    await refresh_index(session, es_endpoint, new_index_name)
+    await set_alias(session, es_endpoint, new_index_name)
+    await delete_indexes(session, es_endpoint, old_index_names)
 
 
-async def ingest_feed(session, feed_endpoint, es_endpoint):
-    async for feed in poll(session, feed_endpoint):
+async def ingest_feed(session, feed_endpoint, es_endpoint, index_name):
+    async for feed in poll(session, feed_endpoint, index_name):
         await es_bulk(session, es_endpoint, feed)
 
 
-async def poll(session, feed):
-    app_logger = logging.getLogger(__name__)
+async def poll(session, feed, index_name):
+    app_logger = logging.getLogger('activity-stream')
 
     href = feed.seed
-    while True:
+    while href:
         app_logger.debug('Polling')
         result = await session.get(href, headers=feed.auth_headers(href))
 
@@ -149,42 +186,54 @@ async def poll(session, feed):
         feed_parsed = json.loads(feed_contents)
         app_logger.debug('Parsed')
 
-        yield feed.convert_to_bulk_es(feed_parsed)
+        yield feed.convert_to_bulk_es(feed_parsed, index_name)
 
         app_logger.debug('Finding next URL...')
         href = feed.next_href(feed_parsed)
         app_logger.debug('Finding next URL: done (%s)', href)
 
-        href, interval, message = \
-            (href, feed.polling_page_interval, 'Will poll next page in feed') if href else \
-            (feed.seed, feed.polling_seed_interval, 'Will poll seed page')
+        interval, message = \
+            (feed.polling_page_interval, 'Will poll next page in feed') if href else \
+            (feed.polling_seed_interval, 'Will poll seed page')
 
         app_logger.debug(message)
         app_logger.debug('Sleeping for %s seconds', interval)
+
         await asyncio.sleep(interval)
 
 
-def setup_logging():
+def parse_feed_config(feed_config):
+    by_feed_type = {
+        'activity_stream': ActivityStreamFeed,
+        'zendesk': ZendeskFeed,
+    }
+    return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
+
+
+def main():
     stdout_handler = logging.StreamHandler(sys.stdout)
     aiohttp_log = logging.getLogger('aiohttp.access')
     aiohttp_log.setLevel(logging.DEBUG)
     aiohttp_log.addHandler(stdout_handler)
 
-    app_logger = logging.getLogger(__name__)
+    app_logger = logging.getLogger('activity-stream')
     app_logger.setLevel(logging.DEBUG)
     app_logger.addHandler(stdout_handler)
 
+    loop = asyncio.get_event_loop()
+    cleanup = loop.run_until_complete(run_application())
 
-def exit_gracefully():
-    asyncio.get_event_loop().stop()
-    sys.exit(0)
+    async def cleanup_then_stop_loop():
+        await cleanup()
+        asyncio.get_event_loop().stop()
+        return 'anything-to-avoid-pylint-assignment-from-none-error'
+
+    cleanup_then_stop = cleanup_then_stop_loop()
+    loop.add_signal_handler(signal.SIGINT, asyncio.ensure_future, cleanup_then_stop)
+    loop.add_signal_handler(signal.SIGTERM, asyncio.ensure_future, cleanup_then_stop)
+    loop.run_forever()
+    app_logger.info('Reached end of main. Exiting now.')
 
 
 if __name__ == '__main__':
-    setup_logging()
-
-    LOOP = asyncio.get_event_loop()
-    LOOP.add_signal_handler(signal.SIGINT, exit_gracefully)
-    LOOP.add_signal_handler(signal.SIGTERM, exit_gracefully)
-    asyncio.ensure_future(run_application(), loop=LOOP)
-    LOOP.run_forever()
+    main()
