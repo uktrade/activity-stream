@@ -210,7 +210,7 @@ def parse_feed_config(feed_config):
     return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
 
-def setup_logging():
+def main():
     stdout_handler = logging.StreamHandler(sys.stdout)
     aiohttp_log = logging.getLogger('aiohttp.access')
     aiohttp_log.setLevel(logging.DEBUG)
@@ -220,9 +220,6 @@ def setup_logging():
     app_logger.setLevel(logging.DEBUG)
     app_logger.addHandler(stdout_handler)
 
-
-def main():
-    setup_logging()
     loop = asyncio.get_event_loop()
     cleanup = loop.run_until_complete(run_application())
 
