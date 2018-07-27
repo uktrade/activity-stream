@@ -124,16 +124,21 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
     app = web.Application(middlewares=[
         convert_errors_to_json(),
         raven_reporter(raven_client),
+    ])
+    private_app = web.Application(middlewares=[
         authenticator(ip_whitelist, incoming_key_pairs, NONCE_EXPIRE),
         authorizer(),
     ])
-    app.add_routes([
-        web.post('/v1/', handle_post),
-        web.get('/v1/', handle_get_new(session, public_to_private_scroll_ids, es_endpoint)),
+    private_app.add_routes([
+        web.post('/', handle_post),
+        web.get('/', handle_get_new(session, public_to_private_scroll_ids, es_endpoint)),
         web.get(
-            '/v1/{public_scroll_id}',
+            '/{public_scroll_id}',
             handle_get_existing(session, public_to_private_scroll_ids, es_endpoint), name='scroll',
         ),
+    ])
+    app.add_subapp('/v1/', private_app)
+    app.add_routes([
         web.get('/metrics', handle_get_metrics(generate_latest)),
     ])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
