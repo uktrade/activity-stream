@@ -18,13 +18,18 @@ ALIAS = 'activities'
 
 
 def get_new_index_names(feed_unique_ids):
-    # Index name to be both unique and useful
     today = datetime.date.today().isoformat()
     now = str(datetime.datetime.now().timestamp()).split('.')[0]
     unique = ''.join(os.urandom(5).hex())
 
     return [
-        f'{ALIAS}_{feed_unique_id}_{today}_{now}_{unique}'
+        # Storing metadata in index name allows operations to match on
+        # them, both by elasticsearch itself, and by regex in Python
+        f'{ALIAS}__' \
+        f'feed_id_{feed_unique_id}__' \
+        f'date_{today}__' \
+        f'timestamp_{now}__' \
+        f'batch_id_{unique}__'
         for feed_unique_id in feed_unique_ids
     ]
 
