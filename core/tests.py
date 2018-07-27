@@ -749,6 +749,23 @@ class TestApplication(TestBase):
         self.assertIn('dit:exportOpportunities:Enquiry:42863:Create', str(results))
 
     @async_test
+    async def test_two_feeds_one_fails(self):
+        env = {
+            **mock_env(),
+            'FEEDS__2__UNIQUE_ID': 'failing_feed',
+            'FEEDS__2__SEED': 'http://localhost:1223/',
+            'FEEDS__2__ACCESS_KEY_ID': 'feed-some-id',
+            'FEEDS__2__SECRET_ACCESS_KEY': '?[!@$%^%',
+            'FEEDS__2__TYPE': 'activity_stream',
+        }
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_file)
+            results = await fetch_all_es_data_until(has_at_least(2), ORIGINAL_SLEEP)
+
+        self.assertIn('dit:exportOpportunities:Enquiry:49863:Create', str(results))
+
+    @async_test
     async def test_zendesk(self):
         def has_two_zendesk_tickets(results):
             if 'hits' not in results or 'hits' not in results['hits']:

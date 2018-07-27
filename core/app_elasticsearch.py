@@ -34,6 +34,30 @@ def get_new_index_names(feed_unique_ids):
     ]
 
 
+def indexes_matching_feeds(index_names, feed_unique_ids):
+    return flatten([
+        _indexes_matching_feed(index_names, feed_unique_id)
+        for feed_unique_id in feed_unique_ids
+    ])
+
+
+def _indexes_matching_feed(index_names, feed_unique_id):
+    return [
+        index_name
+        for index_name in index_names
+        if f'{ALIAS}__feed_id_{feed_unique_id}__' in index_name
+    ]
+
+
+def indexes_matching_no_feeds(index_names, feed_unique_ids):
+    indexes_matching = indexes_matching_feeds(index_names, feed_unique_ids)
+    return [
+        index_name
+        for index_name in index_names
+        if index_name not in indexes_matching
+    ]
+
+
 async def get_old_index_names(session, es_endpoint):
     results = await es_request_non_200_exception(
         session=session,
@@ -61,6 +85,9 @@ async def get_old_index_names(session, es_endpoint):
 
 
 async def add_remove_aliases_atomically(session, es_endpoint, indexes_to_add, indexes_to_remove):
+    if not indexes_to_add and not indexes_to_remove:
+        return
+
     actions = json.dumps({
         'actions': [
             {'remove': {'index': index_name, 'alias': ALIAS}}
