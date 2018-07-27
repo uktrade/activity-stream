@@ -3,6 +3,7 @@ import time
 from prometheus_client import (
     Summary,
     PlatformCollector,
+    ProcessCollector,
 )
 
 
@@ -14,6 +15,7 @@ METRICS_CONF = [
 
 def get_metrics(registry):
     PlatformCollector(registry=registry)
+    ProcessCollector(registry=registry)
     return {
         # The metric classes are constructed via decorators which
         # result in pylint giving a false positive
