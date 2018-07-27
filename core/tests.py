@@ -828,11 +828,16 @@ class TestApplication(TestBase):
 
     @async_test
     async def test_returns_some_metrics(self):
-        await self.setup_manual(env=mock_env(), mock_feed=read_file)
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=mock_env(), mock_feed=read_file)
+            await fetch_all_es_data_until(has_at_least(2), ORIGINAL_SLEEP)
+
         async with aiohttp.ClientSession() as session:
             url = 'http://127.0.0.1:8080/metrics'
             result = await session.get(url)
         self.assertIn('python_info', await result.text())
+        self.assertIn('ingest_single_feed_duration_seconds_count', await result.text())
+        self.assertIn('feed_unique_id="first_feed"', await result.text())
 
 
 class TestProcess(unittest.TestCase):

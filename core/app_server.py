@@ -6,6 +6,7 @@ import uuid
 from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
+from prometheus_client import generate_latest
 
 from .app_elasticsearch import (
     es_search,
@@ -205,9 +206,9 @@ def _handle_get(session, public_to_private_scroll_ids, es_endpoint, get_path_que
     return handle
 
 
-def handle_get_metrics(generate_latest):
+def handle_get_metrics(registry):
     async def handle(_):
-        return web.Response(body=generate_latest(), status=200, headers={
+        return web.Response(body=generate_latest(registry), status=200, headers={
             'Content-Type': 'text/plain; charset=utf-8',
         })
 

@@ -9,7 +9,7 @@ import sys
 import aiohttp
 from aiohttp import web
 from prometheus_client import (
-    generate_latest,
+    CollectorRegistry,
 )
 from raven import Client
 from raven_aiohttp import QueuedAioHttpTransport
@@ -30,6 +30,10 @@ from .app_elasticsearch import (
 from .app_feeds import (
     ActivityStreamFeed,
     ZendeskFeed,
+)
+from .app_metrics import (
+    async_timer,
+    get_metrics,
 )
 from .app_server import (
     authenticator,
@@ -93,11 +97,14 @@ async def run_application():
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
     running = True
 
+    metrics_registry = CollectorRegistry()
     await create_outgoing_application(
-        lambda: running, raven_client, session, feed_endpoints, es_endpoint,
+        lambda: running, get_metrics(metrics_registry), raven_client, session,
+        feed_endpoints, es_endpoint,
     )
     runner = await create_incoming_application(
-        port, ip_whitelist, incoming_key_pairs, raven_client, session, es_endpoint,
+        port, ip_whitelist, incoming_key_pairs, metrics_registry,
+        raven_client, session, es_endpoint,
     )
 
     async def cleanup():
@@ -111,7 +118,7 @@ async def run_application():
 
 
 async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
-                                      raven_client, session, es_endpoint):
+                                      metrics_registry, raven_client, session, es_endpoint):
     app_logger = logging.getLogger('activity-stream')
 
     app_logger.debug('Creating listening web application...')
@@ -135,7 +142,7 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
     ])
     app.add_subapp('/v1/', private_app)
     app.add_routes([
-        web.get('/metrics', handle_get_metrics(generate_latest)),
+        web.get('/metrics', handle_get_metrics(metrics_registry)),
     ])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 
@@ -148,15 +155,15 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
     return runner
 
 
-async def create_outgoing_application(is_running, raven_client, session,
+async def create_outgoing_application(is_running, metrics, raven_client, session,
                                       feed_endpoints, es_endpoint):
     asyncio.ensure_future(repeat_while(
-        functools.partial(ingest_feeds, session, feed_endpoints, es_endpoint),
+        functools.partial(ingest_feeds, metrics, session, feed_endpoints, es_endpoint),
         predicate=is_running, raven_client=raven_client,
         exception_interval=EXCEPTION_INTERVAL, logging_title='Polling feed'))
 
 
-async def ingest_feeds(session, feed_endpoints, es_endpoint):
+async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint):
     all_feed_ids = feed_unique_ids(feed_endpoints)
     new_index_names = get_new_index_names(all_feed_ids)
     old_index_names = await get_old_index_names(session, es_endpoint)
@@ -166,7 +173,7 @@ async def ingest_feeds(session, feed_endpoints, es_endpoint):
     await create_mappings(session, es_endpoint, new_index_names)
 
     ingest_results = await asyncio.gather(*[
-        ingest_feed(session, feed_endpoint, es_endpoint, new_index_names[i])
+        ingest_feed(metrics, session, feed_endpoint, es_endpoint, new_index_names[i])
         for i, feed_endpoint in enumerate(feed_endpoints)
     ], return_exceptions=True)
 
@@ -190,9 +197,14 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-async def ingest_feed(session, feed_endpoint, es_endpoint, index_name):
-    async for feed in poll(session, feed_endpoint, index_name):
-        await es_bulk(session, es_endpoint, feed)
+async def ingest_feed(metrics, session, feed_endpoint, es_endpoint, index_name):
+
+    @async_timer(metrics['ingest_single_feed_duration_seconds'], [feed_endpoint.unique_id])
+    async def _ingest_feed():
+        async for feed in poll(session, feed_endpoint, index_name):
+            await es_bulk(session, es_endpoint, feed)
+
+    await _ingest_feed()
 
 
 async def poll(session, feed, index_name):
