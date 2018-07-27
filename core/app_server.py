@@ -207,7 +207,9 @@ def _handle_get(session, public_to_private_scroll_ids, es_endpoint, get_path_que
 
 def handle_get_metrics(generate_latest):
     async def handle(_):
-        return web.Response(body=generate_latest(), status=200)
+        return web.Response(body=generate_latest(), status=200, headers={
+            'Content-Type': 'text/plain; charset=utf-8',
+        })
 
     return handle
 
