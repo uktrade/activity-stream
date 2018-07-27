@@ -25,7 +25,7 @@ def get_metrics(registry):
     }
 
 
-def async_timer(metric, labels):
+def async_timer(is_running, metric, labels):
 
     def async_timer_decorator(coroutine):
 
@@ -40,7 +40,8 @@ def async_timer(metric, labels):
                 raise
             finally:
                 end_counter = time.perf_counter()
-                metric.labels(*(labels + [status])).observe(end_counter - start_counter)
+                if is_running():
+                    metric.labels(*(labels + [status])).observe(end_counter - start_counter)
 
         return wrapper
 

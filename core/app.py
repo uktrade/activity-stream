@@ -158,12 +158,12 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
 async def create_outgoing_application(is_running, metrics, raven_client, session,
                                       feed_endpoints, es_endpoint):
     asyncio.ensure_future(repeat_while(
-        functools.partial(ingest_feeds, metrics, session, feed_endpoints, es_endpoint),
+        functools.partial(ingest_feeds, is_running, metrics, session, feed_endpoints, es_endpoint),
         predicate=is_running, raven_client=raven_client,
         exception_interval=EXCEPTION_INTERVAL, logging_title='Polling feed'))
 
 
-async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint):
+async def ingest_feeds(is_running, metrics, session, feed_endpoints, es_endpoint):
     all_feed_ids = feed_unique_ids(feed_endpoints)
     new_index_names = get_new_index_names(all_feed_ids)
     old_index_names = await get_old_index_names(session, es_endpoint)
@@ -173,7 +173,7 @@ async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint):
     await create_mappings(session, es_endpoint, new_index_names)
 
     ingest_results = await asyncio.gather(*[
-        ingest_feed(metrics, session, feed_endpoint, es_endpoint, new_index_names[i])
+        ingest_feed(is_running, metrics, session, feed_endpoint, es_endpoint, new_index_names[i])
         for i, feed_endpoint in enumerate(feed_endpoints)
     ], return_exceptions=True)
 
@@ -197,9 +197,10 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-async def ingest_feed(metrics, session, feed_endpoint, es_endpoint, index_name):
+async def ingest_feed(is_running, metrics, session, feed_endpoint, es_endpoint, index_name):
 
-    @async_timer(metrics['ingest_single_feed_duration_seconds'], [feed_endpoint.unique_id])
+    @async_timer(is_running, metrics['ingest_single_feed_duration_seconds'],
+                 [feed_endpoint.unique_id])
     async def _ingest_feed():
         async for feed in poll(session, feed_endpoint, index_name):
             await es_bulk(session, es_endpoint, feed)
