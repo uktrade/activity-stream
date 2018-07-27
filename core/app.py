@@ -149,7 +149,8 @@ async def create_outgoing_application(is_running, raven_client, session,
 
 
 async def ingest_feeds(session, feed_endpoints, es_endpoint):
-    new_index_names = get_new_index_names(feed_unique_ids(feed_endpoints))
+    all_feed_ids = feed_unique_ids(feed_endpoints)
+    new_index_names = get_new_index_names(all_feed_ids)
     old_index_names = await get_old_index_names(session, es_endpoint)
 
     await delete_indexes(session, es_endpoint, old_index_names['without-alias'])
