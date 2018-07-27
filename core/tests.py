@@ -838,6 +838,7 @@ class TestApplication(TestBase):
         self.assertIn('python_info', await result.text())
         self.assertIn('ingest_single_feed_duration_seconds_count', await result.text())
         self.assertIn('feed_unique_id="first_feed"', await result.text())
+        self.assertIn('status="success"', await result.text())
 
 
 class TestProcess(unittest.TestCase):

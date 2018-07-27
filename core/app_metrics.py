@@ -9,7 +9,7 @@ from prometheus_client import (
 
 METRICS_CONF = [
     (Summary, 'ingest_single_feed_duration_seconds',
-     'Time to ingest a single feed in seconds', ['feed_unique_id'])
+     'Time to ingest a single feed in seconds', ['feed_unique_id', 'status'])
 ]
 
 
@@ -32,10 +32,15 @@ def async_timer(metric, labels):
         async def wrapper(*args, **kwargs):
             start_counter = time.perf_counter()
             try:
-                return await coroutine(*args, **kwargs)
+                response = await coroutine(*args, **kwargs)
+                status = 'success'
+                return response
+            except BaseException:
+                status = 'failure'
+                raise
             finally:
                 end_counter = time.perf_counter()
-                metric.labels(*labels).observe(end_counter - start_counter)
+                metric.labels(*(labels + [status])).observe(end_counter - start_counter)
 
         return wrapper
 
