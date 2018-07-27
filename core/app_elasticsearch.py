@@ -51,14 +51,20 @@ async def get_old_index_names(session, es_endpoint):
             index_name
             for index_name, index_details in indexes.items()
             if index_name.startswith(f'{ALIAS}_') and not index_details['aliases']
-        ]
+        ],
+        'with-alias': [
+            index_name
+            for index_name, index_details in indexes.items()
+            if index_name.startswith(f'{ALIAS}_') and index_details['aliases']
+        ],
     }
 
 
-async def set_alias(session, es_endpoint, indexes_to_add):
+async def set_alias(session, es_endpoint, indexes_to_add, indexes_to_remove):
     actions = json.dumps({
         'actions': [
-            {'remove': {'index': f'{ALIAS}_*', 'alias': ALIAS}},
+            {'remove': {'index': index_name, 'alias': ALIAS}}
+            for index_name in indexes_to_remove
         ] + [
             {'add': {'index': index_name, 'alias': ALIAS}}
             for index_name in indexes_to_add

@@ -162,7 +162,7 @@ async def ingest_feeds(session, feed_endpoints, es_endpoint):
     ])
 
     await refresh_indexes(session, es_endpoint, new_index_names)
-    await set_alias(session, es_endpoint, new_index_names)
+    await set_alias(session, es_endpoint, new_index_names, old_index_names['with-alias'])
 
 
 def feed_unique_ids(feed_endpoints):
