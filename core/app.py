@@ -17,7 +17,7 @@ from .app_elasticsearch import (
     create_mappings,
     get_new_index_names,
     get_old_index_names,
-    set_alias,
+    add_remove_aliases_atomically,
     delete_indexes,
     refresh_indexes,
 )
@@ -162,7 +162,8 @@ async def ingest_feeds(session, feed_endpoints, es_endpoint):
     ])
 
     await refresh_indexes(session, es_endpoint, new_index_names)
-    await set_alias(session, es_endpoint, new_index_names, old_index_names['with-alias'])
+    await add_remove_aliases_atomically(session, es_endpoint,
+                                        new_index_names, old_index_names['with-alias'])
 
 
 def feed_unique_ids(feed_endpoints):

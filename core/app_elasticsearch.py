@@ -60,7 +60,7 @@ async def get_old_index_names(session, es_endpoint):
     }
 
 
-async def set_alias(session, es_endpoint, indexes_to_add, indexes_to_remove):
+async def add_remove_aliases_atomically(session, es_endpoint, indexes_to_add, indexes_to_remove):
     actions = json.dumps({
         'actions': [
             {'remove': {'index': index_name, 'alias': ALIAS}}
