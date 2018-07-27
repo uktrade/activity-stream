@@ -161,9 +161,12 @@ async def ingest_feeds(session, feed_endpoints, es_endpoint):
         for i, feed_endpoint in enumerate(feed_endpoints)
     ])
 
+    indexes_to_add_to_alias = new_index_names
+    indexes_to_remove_from_alias = old_index_names['with-alias']
+
     await refresh_indexes(session, es_endpoint, new_index_names)
     await add_remove_aliases_atomically(session, es_endpoint,
-                                        new_index_names, old_index_names['with-alias'])
+                                        indexes_to_add_to_alias, indexes_to_remove_from_alias)
 
 
 def feed_unique_ids(feed_endpoints):
