@@ -7,6 +7,7 @@ import sys
 import unittest
 from unittest.mock import Mock, patch
 
+import aiohttp
 from aiohttp import web
 from freezegun import freeze_time
 
@@ -824,6 +825,23 @@ class TestApplication(TestBase):
             'dit:exportOpportunities:Enquiry:49863:Create',
             str(results),
         )
+
+    @async_test
+    async def test_returns_some_metrics(self):
+        await self.setup_manual(env=mock_env(), mock_feed=read_file)
+        async with aiohttp.ClientSession() as session:
+            url = 'http://127.0.0.1:8080/metrics'
+            auth = hawk_auth_header(
+                'incoming-some-id-3', 'incoming-some-secret-3', url,
+                'GET', '', '',
+            )
+            result = await session.get(url, headers={
+                'Authorization': auth,
+                'X-Forwarded-For': '1.2.3.4, 2.2.2.2',
+                'X-Forwarded-Proto': 'http',
+                'Content-Type': '',
+            })
+        self.assertIn('python_info', await result.text())
 
 
 class TestProcess(unittest.TestCase):

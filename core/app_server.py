@@ -205,6 +205,13 @@ def _handle_get(session, public_to_private_scroll_ids, es_endpoint, get_path_que
     return handle
 
 
+def handle_get_metrics(generate_latest):
+    async def handle(_):
+        return web.Response(body=generate_latest(), status=200)
+
+    return handle
+
+
 def json_response(data, status):
     return web.json_response(data, status=status, headers={
         'Server': 'activity-stream'

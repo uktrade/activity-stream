@@ -8,6 +8,9 @@ import sys
 
 import aiohttp
 from aiohttp import web
+from prometheus_client import (
+    generate_latest,
+)
 from raven import Client
 from raven_aiohttp import QueuedAioHttpTransport
 
@@ -34,6 +37,7 @@ from .app_server import (
     convert_errors_to_json,
     handle_get_existing,
     handle_get_new,
+    handle_get_metrics,
     handle_post,
     raven_reporter,
 )
@@ -130,6 +134,7 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
             '/v1/{public_scroll_id}',
             handle_get_existing(session, public_to_private_scroll_ids, es_endpoint), name='scroll',
         ),
+        web.get('/metrics', handle_get_metrics(generate_latest)),
     ])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 
