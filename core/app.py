@@ -93,12 +93,8 @@ async def run_application():
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
     running = True
 
-    def is_running():
-        nonlocal running
-        return running
-
     await create_outgoing_application(
-        is_running, raven_client, session, feed_endpoints, es_endpoint,
+        lambda: running, raven_client, session, feed_endpoints, es_endpoint,
     )
     runner = await create_incoming_application(
         port, ip_whitelist, incoming_key_pairs, raven_client, session, es_endpoint,
