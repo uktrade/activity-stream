@@ -23,9 +23,6 @@ async def run_app_until_accepts_http():
 
 
 async def is_http_accepted_eventually():
-    def is_connection_error(exception):
-        return 'Cannot connect to host' in str(exception)
-
     attempts = 0
     while attempts < 20:
         try:
@@ -42,11 +39,9 @@ async def is_http_accepted_eventually():
                     'Content-Type': 'application/json',
                 }, data='{}', timeout=1)
             return True
-        except aiohttp.client_exceptions.ClientConnectorError as exception:
+        except aiohttp.client_exceptions.ClientConnectorError:
             attempts += 1
             await asyncio.sleep(0.2)
-            if not is_connection_error(exception):
-                return True
 
 
 async def wait_until_get_working():
