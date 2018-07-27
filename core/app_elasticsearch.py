@@ -53,13 +53,13 @@ async def get_old_index_names(session, es_endpoint):
     ]
 
 
-async def set_alias(session, es_endpoint, index_names):
+async def set_alias(session, es_endpoint, indexes_to_add):
     actions = json.dumps({
         'actions': [
             {'remove': {'index': f'{ALIAS}_*', 'alias': ALIAS}},
         ] + [
             {'add': {'index': index_name, 'alias': ALIAS}}
-            for index_name in index_names
+            for index_name in indexes_to_add
         ]
     }).encode('utf-8')
 
