@@ -34,8 +34,8 @@ class ActivityStreamFeed:
             }, url, method, content_type='', content='').request_header,
         }
 
-    @staticmethod
-    def convert_to_bulk_es(feed, index_name):
+    @classmethod
+    def convert_to_bulk_es(cls, feed, index_name):
         return [{
             'action_and_metadata': {
                 'index': {
