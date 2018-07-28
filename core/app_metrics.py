@@ -25,6 +25,8 @@ METRICS_CONF = [
      'The number of inprogress ingests', []),
     (Counter, 'ingest_activities_nonunique_total',
      'The number of nonunique activities ingested', ['feed_unique_id']),
+    (Gauge, 'elasticsearch_activities_total',
+     'The number of activites stored in Elasticsearch', ['searchable']),
 ]
 
 

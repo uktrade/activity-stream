@@ -16,6 +16,7 @@ from raven_aiohttp import QueuedAioHttpTransport
 
 from .app_elasticsearch import (
     es_bulk,
+    es_activities_total,
     create_indexes,
     create_mappings,
     get_new_index_names,
@@ -54,6 +55,7 @@ from .app_utils import (
 
 EXCEPTION_INTERVAL = 60
 NONCE_EXPIRE = 120
+STATS_INTERVAL = 3
 
 
 async def run_application():
@@ -101,13 +103,17 @@ async def run_application():
     running = True
 
     metrics_registry = CollectorRegistry()
+    metrics = get_metrics(metrics_registry)
     await create_outgoing_application(
-        lambda: running, get_metrics(metrics_registry), raven_client, session,
+        lambda: running, metrics, raven_client, session,
         feed_endpoints, es_endpoint,
     )
     runner = await create_incoming_application(
         port, ip_whitelist, incoming_key_pairs, metrics_registry,
         raven_client, session, es_endpoint,
+    )
+    await create_es_metrics_application(
+        lambda: running, metrics, raven_client, session, es_endpoint,
     )
 
     async def cleanup():
@@ -286,6 +292,25 @@ def parse_feed_config(feed_config):
         'zendesk': ZendeskFeed,
     }
     return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
+
+
+async def create_es_metrics_application(
+        is_running, metrics, raven_client, session, es_endpoint):
+
+    @async_repeat_while
+    async def poll_metrics(**_):
+        searchable, nonsearchable = await es_activities_total(session, es_endpoint)
+        metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
+        metrics['elasticsearch_activities_total'].labels('nonsearchable').set(nonsearchable)
+
+        await asyncio.sleep(STATS_INTERVAL)
+
+    asyncio.ensure_future(poll_metrics(
+        _async_repeat_while=is_running,
+        _async_repeat_while_raven_client=raven_client,
+        _async_repeat_while_exception_interval=STATS_INTERVAL,
+        _async_repeat_while_logging_title='Elasticsearch polling',
+    ))
 
 
 def main():

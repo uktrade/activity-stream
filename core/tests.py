@@ -832,6 +832,8 @@ class TestApplication(TestBase):
             await self.setup_manual(env=mock_env(), mock_feed=read_file)
             await fetch_all_es_data_until(has_at_least(2), ORIGINAL_SLEEP)
 
+        # Might be a bit flaky
+        await ORIGINAL_SLEEP(4)
         async with aiohttp.ClientSession() as session:
             url = 'http://127.0.0.1:8080/metrics'
             result = await session.get(url)
@@ -844,6 +846,7 @@ class TestApplication(TestBase):
                       text)
         self.assertIn('ingest_page_duration_seconds_bucket'
                       '{feed_unique_id="first_feed",le="0.005",stage="push"', text)
+        self.assertIn('elasticsearch_activities_total{searchable="searchable"} 2.0', text)
 
     @async_test
     async def test_empty_feed_is_success(self):

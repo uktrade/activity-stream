@@ -270,6 +270,31 @@ async def es_bulk(session, es_endpoint, items, **_):
     app_logger.debug('Pushing to ES: done (%s)', await es_result.text())
 
 
+async def es_activities_total(session, es_endpoint):
+    searchable_result = await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='GET',
+        path=f'/{ALIAS}/_count',
+        query_string='ignore_unavailable=true',
+        content_type='application/json',
+        payload=b'',
+    )
+    searchable = (await searchable_result.json())['count']
+    nonsearchable_result = await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='GET',
+        path=f'/{ALIAS}_*,-*{ALIAS}/_count',
+        query_string='ignore_unavailable=true',
+        content_type='application/json',
+        payload=b'',
+    )
+    nonsearchable = (await nonsearchable_result.json())['count']
+
+    return searchable, nonsearchable
+
+
 async def es_request_non_200_exception(session, endpoint, method, path, query_string,
                                        content_type, payload):
     results = await es_request(session, endpoint, method, path, query_string,
