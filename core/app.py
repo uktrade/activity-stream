@@ -32,6 +32,7 @@ from .app_feeds import (
     ZendeskFeed,
 )
 from .app_metrics import (
+    async_inprogress,
     async_timer,
     get_metrics,
 )
@@ -178,6 +179,7 @@ async def ingest_feeds(is_running, metrics, session, feed_endpoints, es_endpoint
             _async_timer=metrics['ingest_single_feed_duration_seconds'],
             _async_timer_labels=[feed_endpoint.unique_id],
             _async_timer_is_running=is_running,
+            _async_inprogress=metrics['ingest_inprogress_ingests_total'],
         )
         for i, feed_endpoint in enumerate(feed_endpoints)
     ], return_exceptions=True)
@@ -202,6 +204,7 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
+@async_inprogress
 @async_timer
 async def ingest_feed(session, feed_endpoint, es_endpoint, index_name, **_):
     async for feed in poll(session, feed_endpoint, index_name):

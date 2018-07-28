@@ -1,6 +1,7 @@
 import time
 
 from prometheus_client import (
+    Gauge,
     Summary,
     PlatformCollector,
     ProcessCollector,
@@ -13,7 +14,9 @@ from .app_utils import (
 
 METRICS_CONF = [
     (Summary, 'ingest_single_feed_duration_seconds',
-     'Time to ingest a single feed in seconds', ['feed_unique_id', 'status'])
+     'Time to ingest a single feed in seconds', ['feed_unique_id', 'status']),
+    (Gauge, 'ingest_inprogress_ingests_total',
+     'The number of inprogress ingests', []),
 ]
 
 
@@ -27,6 +30,23 @@ def get_metrics(registry):
         name: metric_class(name, description, labels, registry=registry)
         for metric_class, name, description, labels in METRICS_CONF
     }
+
+
+def async_inprogress(coroutine):
+
+    async def wrapper(*args, **kwargs):
+        kwargs_to_pass, (metric, ) = extract_keys(
+            kwargs,
+            ['_async_inprogress'],
+        )
+
+        try:
+            metric.inc()
+            return await coroutine(*args, **kwargs_to_pass)
+        finally:
+            metric.dec()
+
+    return wrapper
 
 
 def async_timer(coroutine):
