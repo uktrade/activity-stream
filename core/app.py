@@ -92,7 +92,7 @@ async def run_application():
     app_logger.debug('Examining environment: done')
 
     raven_client = Client(
-        dns=sentry_dsn,
+        sentry_dsn,
         environment=sentry_environment,
         transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
