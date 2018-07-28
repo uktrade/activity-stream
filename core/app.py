@@ -257,6 +257,9 @@ async def get_feed_contents(session, href, headers, **_):
     result = await session.get(href, headers=headers)
     app_logger.debug('Fetching feed: done')
 
+    if result.status != 200:
+        raise Exception(await result.text())
+
     app_logger.debug('Fetching feed contents...')
     contents = await result.content.read()
     app_logger.debug('Fetched feed contents: done')
