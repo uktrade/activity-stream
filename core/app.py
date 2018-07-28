@@ -217,11 +217,7 @@ async def poll(session, feed, index_name):
     href = feed.seed
     while href:
         app_logger.debug('Polling')
-        result = await session.get(href, headers=feed.auth_headers(href))
-
-        app_logger.debug('Fetching contents of feed...')
-        feed_contents = await result.content.read()
-        app_logger.debug('Fetching contents of feed: done (%s)', feed_contents)
+        feed_contents = await get_feed_contents(session, href, feed.auth_headers(href))
 
         app_logger.debug('Parsing JSON...')
         feed_parsed = json.loads(feed_contents)
@@ -241,6 +237,20 @@ async def poll(session, feed, index_name):
         app_logger.debug('Sleeping for %s seconds', interval)
 
         await asyncio.sleep(interval)
+
+
+async def get_feed_contents(session, href, headers):
+    app_logger = logging.getLogger('activity-stream')
+
+    app_logger.debug('Fetching feed...')
+    result = await session.get(href, headers=headers)
+    app_logger.debug('Fetching feed: done')
+
+    app_logger.debug('Fetching feed contents...')
+    contents = await result.content.read()
+    app_logger.debug('Fetched feed contents: done')
+
+    return contents
 
 
 def parse_feed_config(feed_config):
