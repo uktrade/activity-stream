@@ -9,6 +9,9 @@ from aiohttp.web import (
     HTTPNotFound,
 )
 
+from .app_metrics import (
+    async_counter,
+)
 from .app_utils import (
     flatten,
 )
@@ -239,7 +242,8 @@ def activities(elasticsearch_reponse, to_public_scroll_url):
     }, **next_dict}
 
 
-async def es_bulk(session, es_endpoint, items):
+@async_counter
+async def es_bulk(session, es_endpoint, items, **_):
     app_logger = logging.getLogger('activity-stream')
 
     if not items:

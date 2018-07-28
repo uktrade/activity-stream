@@ -1,6 +1,7 @@
 import time
 
 from prometheus_client import (
+    Counter,
     Gauge,
     Histogram,
     Summary,
@@ -20,6 +21,8 @@ METRICS_CONF = [
      'Time for outgoing ingest requests to complete', ['feed_unique_id', 'status']),
     (Gauge, 'ingest_inprogress_ingests_total',
      'The number of inprogress ingests', []),
+    (Counter, 'ingest_activities_nonunique_total',
+     'The number of nonunique activities ingested', ['feed_unique_id']),
 ]
 
 
@@ -72,5 +75,20 @@ def async_timer(coroutine):
             end_counter = time.perf_counter()
             if is_running():
                 metric.labels(*(labels + [status])).observe(end_counter - start_counter)
+
+    return wrapper
+
+
+def async_counter(coroutine):
+
+    async def wrapper(*args, **kwargs):
+        kwargs_to_pass, (metric, labels, increment_by) = extract_keys(
+            kwargs,
+            ['_async_counter', '_async_counter_labels', '_async_counter_increment_by'],
+        )
+
+        response = await coroutine(*args, **kwargs_to_pass)
+        metric.labels(*labels).inc(increment_by)
+        return response
 
     return wrapper

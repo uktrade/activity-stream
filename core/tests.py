@@ -835,10 +835,13 @@ class TestApplication(TestBase):
         async with aiohttp.ClientSession() as session:
             url = 'http://127.0.0.1:8080/metrics'
             result = await session.get(url)
-        self.assertIn('python_info', await result.text())
-        self.assertIn('ingest_single_feed_duration_seconds_count', await result.text())
-        self.assertIn('feed_unique_id="first_feed"', await result.text())
-        self.assertIn('status="success"', await result.text())
+        text = await result.text()
+        self.assertIn('python_info', text)
+        self.assertIn('ingest_single_feed_duration_seconds_count', text)
+        self.assertIn('feed_unique_id="first_feed"', text)
+        self.assertIn('status="success"', text)
+        self.assertIn('ingest_activities_nonunique_total{feed_unique_id="first_feed"}',
+                      text)
 
     @async_test
     async def test_empty_feed_is_success(self):
