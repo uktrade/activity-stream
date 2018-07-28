@@ -175,7 +175,7 @@ async def ingest_feeds(is_running, metrics, session, feed_endpoints, es_endpoint
 
     ingest_results = await asyncio.gather(*[
         ingest_feed(
-            session, feed_endpoint, es_endpoint, new_index_names[i],
+            is_running, metrics, session, feed_endpoint, es_endpoint, new_index_names[i],
             _async_timer=metrics['ingest_single_feed_duration_seconds'],
             _async_timer_labels=[feed_endpoint.unique_id],
             _async_timer_is_running=is_running,
@@ -206,18 +206,23 @@ def feed_unique_ids(feed_endpoints):
 
 @async_inprogress
 @async_timer
-async def ingest_feed(session, feed_endpoint, es_endpoint, index_name, **_):
-    async for feed in poll(session, feed_endpoint, index_name):
+async def ingest_feed(is_running, metrics, session, feed_endpoint, es_endpoint, index_name, **_):
+    async for feed in poll(is_running, metrics, session, feed_endpoint, index_name):
         await es_bulk(session, es_endpoint, feed)
 
 
-async def poll(session, feed, index_name):
+async def poll(is_running, metrics, session, feed, index_name):
     app_logger = logging.getLogger('activity-stream')
 
     href = feed.seed
     while href:
         app_logger.debug('Polling')
-        feed_contents = await get_feed_contents(session, href, feed.auth_headers(href))
+        feed_contents = await get_feed_contents(
+            session, href, feed.auth_headers(href),
+            _async_timer=metrics['ingest_outgoing_requests_duration_seconds'],
+            _async_timer_labels=[feed.unique_id],
+            _async_timer_is_running=is_running,
+        )
 
         app_logger.debug('Parsing JSON...')
         feed_parsed = json.loads(feed_contents)
@@ -239,7 +244,8 @@ async def poll(session, feed, index_name):
         await asyncio.sleep(interval)
 
 
-async def get_feed_contents(session, href, headers):
+@async_timer
+async def get_feed_contents(session, href, headers, **_):
     app_logger = logging.getLogger('activity-stream')
 
     app_logger.debug('Fetching feed...')
