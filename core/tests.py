@@ -840,6 +840,26 @@ class TestApplication(TestBase):
         self.assertIn('feed_unique_id="first_feed"', await result.text())
         self.assertIn('status="success"', await result.text())
 
+    @async_test
+    async def test_empty_feed_is_success(self):
+        env = {
+            **mock_env(),
+            'FEEDS__1__SEED': (
+                'http://localhost:8081/'
+                'tests_fixture_activity_stream_empty.json'
+            ),
+        }
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_file)
+            await ORIGINAL_SLEEP(2)
+
+            async with aiohttp.ClientSession() as session:
+                url = 'http://127.0.0.1:8080/metrics'
+                result = await session.get(url)
+
+        self.assertIn('status="success"', await result.text())
+
 
 class TestProcess(unittest.TestCase):
 

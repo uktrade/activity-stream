@@ -242,6 +242,10 @@ def activities(elasticsearch_reponse, to_public_scroll_url):
 async def es_bulk(session, es_endpoint, items):
     app_logger = logging.getLogger('activity-stream')
 
+    if not items:
+        app_logger.debug('No ES items. Skipping')
+        return
+
     app_logger.debug('Converting feed to ES bulk ingest commands...')
     es_bulk_contents = ('\n'.join(flatten([
         [json.dumps(item['action_and_metadata'], sort_keys=True),
