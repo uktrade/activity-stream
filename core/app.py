@@ -159,11 +159,17 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
 async def create_outgoing_application(is_running, metrics, raven_client, session,
                                       feed_endpoints, es_endpoint):
     asyncio.ensure_future(repeat_while(
-        functools.partial(ingest_feeds, is_running, metrics, session, feed_endpoints, es_endpoint),
+        functools.partial(
+            ingest_feeds, is_running, metrics, session, feed_endpoints, es_endpoint,
+            _async_timer=metrics['ingest_feeds_duration_seconds'],
+            _async_timer_labels=[],
+            _async_timer_is_running=is_running,
+        ),
         predicate=is_running, raven_client=raven_client,
         exception_interval=EXCEPTION_INTERVAL, logging_title='Polling feed'))
 
 
+@async_timer
 async def ingest_feeds(is_running, metrics, session, feed_endpoints, es_endpoint):
     all_feed_ids = feed_unique_ids(feed_endpoints)
     new_index_names = get_new_index_names(all_feed_ids)
