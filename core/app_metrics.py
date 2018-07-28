@@ -87,8 +87,14 @@ def async_counter(coroutine):
             ['_async_counter', '_async_counter_labels', '_async_counter_increment_by'],
         )
 
-        response = await coroutine(*args, **kwargs_to_pass)
-        metric.labels(*labels).inc(increment_by)
-        return response
+        try:
+            response = await coroutine(*args, **kwargs_to_pass)
+            increment_by_value = increment_by
+            return response
+        except BaseException:
+            increment_by_value = 0
+            raise
+        finally:
+            metric.labels(*labels).inc(increment_by_value)
 
     return wrapper
