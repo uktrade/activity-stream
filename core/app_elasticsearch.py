@@ -4,6 +4,7 @@ import hmac
 import json
 import logging
 import os
+import urllib.parse
 
 from aiohttp.web import (
     HTTPNotFound,
@@ -305,7 +306,7 @@ def es_auth_headers(endpoint, method, path, query_string, content_type, payload)
 
     def signature():
         def canonical_request():
-            canonical_uri = path
+            canonical_uri = urllib.parse.quote(path)
             canonical_querystring = query_string
             canonical_headers = \
                 f'content-type:{content_type}\n' + \
