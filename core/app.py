@@ -207,12 +207,12 @@ def feed_unique_ids(feed_endpoints):
 @async_inprogress
 @async_timer
 async def ingest_feed(is_running, metrics, session, feed_endpoint, es_endpoint, index_name, **_):
-    async for feed in poll(is_running, metrics, session, feed_endpoint, index_name):
+    async for es_bulk_items in poll(is_running, metrics, session, feed_endpoint, index_name):
         await es_bulk(
-            session, es_endpoint, feed,
+            session, es_endpoint, es_bulk_items,
             _async_counter=metrics['ingest_activities_nonunique_total'],
             _async_counter_labels=[feed_endpoint.unique_id],
-            _async_counter_increment_by=len(feed),
+            _async_counter_increment_by=len(es_bulk_items),
         )
 
 
