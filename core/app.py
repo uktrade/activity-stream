@@ -17,6 +17,7 @@ from raven_aiohttp import QueuedAioHttpTransport
 from .app_elasticsearch import (
     es_bulk,
     es_activities_total,
+    es_feed_activities_total,
     create_indexes,
     create_mappings,
     get_new_index_names,
@@ -113,7 +114,7 @@ async def run_application():
         raven_client, session, es_endpoint,
     )
     await create_es_metrics_application(
-        lambda: running, metrics, raven_client, session, es_endpoint,
+        lambda: running, metrics, raven_client, session, feed_endpoints, es_endpoint,
     )
 
     async def cleanup():
@@ -295,13 +296,19 @@ def parse_feed_config(feed_config):
 
 
 async def create_es_metrics_application(
-        is_running, metrics, raven_client, session, es_endpoint):
+        is_running, metrics, raven_client, session, feed_endpoints, es_endpoint):
 
     @async_repeat_while
     async def poll_metrics(**_):
         searchable, nonsearchable = await es_activities_total(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
         metrics['elasticsearch_activities_total'].labels('nonsearchable').set(nonsearchable)
+
+        feed_ids = feed_unique_ids(feed_endpoints)
+        for feed_id in feed_ids:
+            nonsearchable = await es_feed_activities_total(session, es_endpoint, feed_id)
+            metrics['elasticsearch_feed_activities_total'].labels(
+                feed_id, 'nonsearchable').set(nonsearchable)
 
         await asyncio.sleep(STATS_INTERVAL)
 
