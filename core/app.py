@@ -224,8 +224,8 @@ async def poll(is_running, metrics, session, feed, index_name):
         app_logger.debug('Polling')
         feed_contents = await get_feed_contents(
             session, href, feed.auth_headers(href),
-            _async_timer=metrics['ingest_outgoing_requests_duration_seconds'],
-            _async_timer_labels=[feed.unique_id],
+            _async_timer=metrics['ingest_page_duration_seconds'],
+            _async_timer_labels=[feed.unique_id, 'pull'],
             _async_timer_is_running=is_running,
         )
 
