@@ -307,7 +307,18 @@ async def es_feed_activities_total(session, es_endpoint, feed_id):
     )
     nonsearchable = (await nonsearchable_result.json())['count']
 
-    return nonsearchable
+    total_result = await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='GET',
+        path=f'/{ALIAS}__feed_id_{feed_id}__*/_count',
+        query_string='ignore_unavailable=true',
+        content_type='application/json',
+        payload=b'',
+    )
+    searchable = max((await total_result.json())['count'] - nonsearchable, 0)
+
+    return searchable, nonsearchable
 
 
 async def es_request_non_200_exception(session, endpoint, method, path, query_string,

@@ -306,7 +306,10 @@ async def create_es_metrics_application(
 
         feed_ids = feed_unique_ids(feed_endpoints)
         for feed_id in feed_ids:
-            nonsearchable = await es_feed_activities_total(session, es_endpoint, feed_id)
+            searchable, nonsearchable = await es_feed_activities_total(session,
+                                                                       es_endpoint, feed_id)
+            metrics['elasticsearch_feed_activities_total'].labels(
+                feed_id, 'searchable').set(searchable)
             metrics['elasticsearch_feed_activities_total'].labels(
                 feed_id, 'nonsearchable').set(nonsearchable)
 

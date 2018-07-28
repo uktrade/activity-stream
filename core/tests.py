@@ -847,6 +847,8 @@ class TestApplication(TestBase):
         self.assertIn('ingest_page_duration_seconds_bucket'
                       '{feed_unique_id="first_feed",le="0.005",stage="push"', text)
         self.assertIn('elasticsearch_activities_total{searchable="searchable"} 2.0', text)
+        self.assertIn('elasticsearch_feed_activities_total'
+                      '{feed_unique_id="first_feed",searchable="searchable"} 2.0', text)
 
     @async_test
     async def test_empty_feed_is_success(self):
