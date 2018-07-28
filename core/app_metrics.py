@@ -6,6 +6,10 @@ from prometheus_client import (
     ProcessCollector,
 )
 
+from .app_utils import (
+    extract_keys,
+)
+
 
 METRICS_CONF = [
     (Summary, 'ingest_single_feed_duration_seconds',
@@ -25,24 +29,25 @@ def get_metrics(registry):
     }
 
 
-def async_timer(is_running, metric, labels):
+def async_timer(coroutine):
 
-    def async_timer_decorator(coroutine):
+    async def wrapper(*args, **kwargs):
+        kwargs_to_pass, (metric, labels, is_running) = extract_keys(
+            kwargs,
+            ['_async_timer', '_async_timer_labels', '_async_timer_is_running'],
+        )
 
-        async def wrapper(*args, **kwargs):
-            start_counter = time.perf_counter()
-            try:
-                response = await coroutine(*args, **kwargs)
-                status = 'success'
-                return response
-            except BaseException:
-                status = 'failure'
-                raise
-            finally:
-                end_counter = time.perf_counter()
-                if is_running():
-                    metric.labels(*(labels + [status])).observe(end_counter - start_counter)
+        start_counter = time.perf_counter()
+        try:
+            response = await coroutine(*args, **kwargs_to_pass)
+            status = 'success'
+            return response
+        except BaseException:
+            status = 'failure'
+            raise
+        finally:
+            end_counter = time.perf_counter()
+            if is_running():
+                metric.labels(*(labels + [status])).observe(end_counter - start_counter)
 
-        return wrapper
-
-    return async_timer_decorator
+    return wrapper

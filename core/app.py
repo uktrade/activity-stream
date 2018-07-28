@@ -173,7 +173,12 @@ async def ingest_feeds(is_running, metrics, session, feed_endpoints, es_endpoint
     await create_mappings(session, es_endpoint, new_index_names)
 
     ingest_results = await asyncio.gather(*[
-        ingest_feed(is_running, metrics, session, feed_endpoint, es_endpoint, new_index_names[i])
+        ingest_feed(
+            session, feed_endpoint, es_endpoint, new_index_names[i],
+            _async_timer=metrics['ingest_single_feed_duration_seconds'],
+            _async_timer_labels=[feed_endpoint.unique_id],
+            _async_timer_is_running=is_running,
+        )
         for i, feed_endpoint in enumerate(feed_endpoints)
     ], return_exceptions=True)
 
@@ -197,15 +202,10 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-async def ingest_feed(is_running, metrics, session, feed_endpoint, es_endpoint, index_name):
-
-    @async_timer(is_running, metrics['ingest_single_feed_duration_seconds'],
-                 [feed_endpoint.unique_id])
-    async def _ingest_feed():
-        async for feed in poll(session, feed_endpoint, index_name):
-            await es_bulk(session, es_endpoint, feed)
-
-    await _ingest_feed()
+@async_timer
+async def ingest_feed(session, feed_endpoint, es_endpoint, index_name, **_):
+    async for feed in poll(session, feed_endpoint, index_name):
+        await es_bulk(session, es_endpoint, feed)
 
 
 async def poll(session, feed, index_name):
