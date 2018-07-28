@@ -2,6 +2,7 @@ import time
 
 from prometheus_client import (
     Gauge,
+    Histogram,
     Summary,
     PlatformCollector,
     ProcessCollector,
@@ -15,7 +16,7 @@ from .app_utils import (
 METRICS_CONF = [
     (Summary, 'ingest_single_feed_duration_seconds',
      'Time to ingest a single feed in seconds', ['feed_unique_id', 'status']),
-    (Summary, 'ingest_outgoing_requests_duration_seconds',
+    (Histogram, 'ingest_outgoing_requests_duration_seconds',
      'Time for outgoing ingest requests to complete', ['feed_unique_id', 'status']),
     (Gauge, 'ingest_inprogress_ingests_total',
      'The number of inprogress ingests', []),
