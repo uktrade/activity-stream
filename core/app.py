@@ -176,7 +176,7 @@ async def ingest_feeds(is_running, metrics, session, feed_endpoints, es_endpoint
     ingest_results = await asyncio.gather(*[
         ingest_feed(
             is_running, metrics, session, feed_endpoint, es_endpoint, new_index_names[i],
-            _async_timer=metrics['ingest_single_feed_duration_seconds'],
+            _async_timer=metrics['ingest_feed_duration_seconds'],
             _async_timer_labels=[feed_endpoint.unique_id],
             _async_timer_is_running=is_running,
             _async_inprogress=metrics['ingest_inprogress_ingests_total'],

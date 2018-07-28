@@ -15,8 +15,8 @@ from .app_utils import (
 
 
 METRICS_CONF = [
-    (Summary, 'ingest_single_feed_duration_seconds',
-     'Time to ingest a single feed in seconds', ['feed_unique_id', 'status']),
+    (Summary, 'ingest_feed_duration_seconds',
+     'Time to ingest all pages of a feed in seconds', ['feed_unique_id', 'status']),
     (Histogram, 'ingest_page_duration_seconds',
      'Time for a page of data to be ingested in seconds', ['feed_unique_id', 'stage', 'status']),
     (Gauge, 'ingest_inprogress_ingests_total',

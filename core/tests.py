@@ -837,7 +837,7 @@ class TestApplication(TestBase):
             result = await session.get(url)
         text = await result.text()
         self.assertIn('python_info', text)
-        self.assertIn('ingest_single_feed_duration_seconds_count', text)
+        self.assertIn('ingest_feed_duration_seconds_count', text)
         self.assertIn('feed_unique_id="first_feed"', text)
         self.assertIn('status="success"', text)
         self.assertIn('ingest_activities_nonunique_total{feed_unique_id="first_feed"}',
