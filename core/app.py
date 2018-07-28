@@ -86,14 +86,16 @@ async def run_application():
         'port': env['ELASTICSEARCH']['PORT'],
     }
 
-    sentry_dsn = env['SENTRY_DSN']
-    sentry_environment = env['SENTRY_ENVIRONMENT']
+    sentry = {
+        'dsn': env['SENTRY_DSN'],
+        'environment': env['SENTRY_ENVIRONMENT'],
+    }
 
     app_logger.debug('Examining environment: done')
 
     raven_client = Client(
-        sentry_dsn,
-        environment=sentry_environment,
+        sentry['dsn'],
+        environment=sentry['environment'],
         transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
     running = True
