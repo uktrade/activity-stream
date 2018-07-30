@@ -223,15 +223,15 @@ def feed_unique_ids(feed_endpoints):
 
 @async_inprogress
 @async_timer
-async def ingest_feed(is_running, metrics, session, feed_endpoint, es_endpoint, index_name, **_):
-    async for es_bulk_items in feed_pages(is_running, metrics, session, feed_endpoint, index_name):
+async def ingest_feed(is_running, metrics, session, feed, es_endpoint, index_name, **_):
+    async for es_bulk_items in feed_pages(is_running, metrics, session, feed, index_name):
         await es_bulk(
             session, es_endpoint, es_bulk_items,
             _async_timer=metrics['ingest_page_duration_seconds'],
-            _async_timer_labels=[feed_endpoint.unique_id, 'push'],
+            _async_timer_labels=[feed.unique_id, 'push'],
             _async_timer_is_running=is_running,
             _async_counter=metrics['ingest_activities_nonunique_total'],
-            _async_counter_labels=[feed_endpoint.unique_id],
+            _async_counter_labels=[feed.unique_id],
             _async_counter_increment_by=len(es_bulk_items),
         )
 
