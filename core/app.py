@@ -224,11 +224,6 @@ def feed_unique_ids(feed_endpoints):
 @async_inprogress
 @async_timer
 async def ingest_feed(is_running, metrics, session, feed, es_endpoint, index_name, **_):
-    async for _ in feed_pages(is_running, metrics, session, feed, es_endpoint, index_name):
-        pass
-
-
-async def feed_pages(is_running, metrics, session, feed, es_endpoint, index_name):
     app_logger = logging.getLogger('activity-stream')
 
     href = feed.seed
@@ -255,7 +250,6 @@ async def feed_pages(is_running, metrics, session, feed, es_endpoint, index_name
             _async_counter_labels=[feed.unique_id],
             _async_counter_increment_by=len(es_bulk_items),
         )
-        yield None
 
         app_logger.debug('Finding next URL...')
         href = feed.next_href(feed_parsed)
