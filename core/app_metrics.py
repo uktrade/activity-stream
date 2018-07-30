@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 from prometheus_client import (
@@ -65,9 +66,9 @@ def async_inprogress(coroutine):
 def async_timer(coroutine):
 
     async def wrapper(*args, **kwargs):
-        kwargs_to_pass, (metric, labels, is_running) = extract_keys(
+        kwargs_to_pass, (metric, labels) = extract_keys(
             kwargs,
-            ['_async_timer', '_async_timer_labels', '_async_timer_is_running'],
+            ['_async_timer', '_async_timer_labels'],
         )
 
         start_counter = time.perf_counter()
@@ -75,13 +76,15 @@ def async_timer(coroutine):
             response = await coroutine(*args, **kwargs_to_pass)
             status = 'success'
             return response
+        except asyncio.CancelledError:
+            status = 'cancelled'
+            raise
         except BaseException:
             status = 'failure'
             raise
         finally:
             end_counter = time.perf_counter()
-            if is_running():
-                metric.labels(*(labels + [status])).observe(end_counter - start_counter)
+            metric.labels(*(labels + [status])).observe(end_counter - start_counter)
 
     return wrapper
 
