@@ -228,10 +228,14 @@ async def ingest_feed(is_running, metrics, session, feed, es_endpoint, index_nam
     while href:
         href = await ingest_feed_page(
             is_running, metrics, session, feed, es_endpoint, index_name, href,
+            _async_timer=metrics['ingest_page_duration_seconds'],
+            _async_timer_labels=[feed.unique_id, 'total'],
+            _async_timer_is_running=is_running,
         )
 
 
-async def ingest_feed_page(is_running, metrics, session, feed, es_endpoint, index_name, href):
+@async_timer
+async def ingest_feed_page(is_running, metrics, session, feed, es_endpoint, index_name, href, **_):
     app_logger = logging.getLogger('activity-stream')
 
     app_logger.debug('Polling')
