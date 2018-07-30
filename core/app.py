@@ -175,20 +175,19 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
 async def create_outgoing_application(is_running, metrics, raven_client, session,
                                       feed_endpoints, es_endpoint):
     asyncio.ensure_future(ingest_feeds(
-        is_running, metrics, session, feed_endpoints, es_endpoint,
+        metrics, session, feed_endpoints, es_endpoint,
         _async_repeat_while=is_running,
         _async_repeat_while_raven_client=raven_client,
         _async_repeat_while_exception_interval=EXCEPTION_INTERVAL,
         _async_repeat_while_logging_title='Polling feed',
         _async_timer=metrics['ingest_feeds_duration_seconds'],
         _async_timer_labels=[],
-        _async_timer_is_running=is_running,
     ))
 
 
 @async_repeat_while
 @async_timer
-async def ingest_feeds(is_running, metrics, session, feed_endpoints, es_endpoint, **_):
+async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint, **_):
     all_feed_ids = feed_unique_ids(feed_endpoints)
     new_index_names = get_new_index_names(all_feed_ids)
     old_index_names = await get_old_index_names(session, es_endpoint)
@@ -199,10 +198,9 @@ async def ingest_feeds(is_running, metrics, session, feed_endpoints, es_endpoint
 
     ingest_results = await asyncio.gather(*[
         ingest_feed(
-            is_running, metrics, session, feed_endpoint, es_endpoint, new_index_names[i],
+            metrics, session, feed_endpoint, es_endpoint, new_index_names[i],
             _async_timer=metrics['ingest_feed_duration_seconds'],
             _async_timer_labels=[feed_endpoint.unique_id],
-            _async_timer_is_running=is_running,
             _async_inprogress=metrics['ingest_inprogress_ingests_total'],
         )
         for i, feed_endpoint in enumerate(feed_endpoints)
@@ -230,19 +228,18 @@ def feed_unique_ids(feed_endpoints):
 
 @async_inprogress
 @async_timer
-async def ingest_feed(is_running, metrics, session, feed, es_endpoint, index_name, **_):
+async def ingest_feed(metrics, session, feed, es_endpoint, index_name, **_):
     href = feed.seed
     while href:
         href = await ingest_feed_page(
-            is_running, metrics, session, feed, es_endpoint, index_name, href,
+            metrics, session, feed, es_endpoint, index_name, href,
             _async_timer=metrics['ingest_page_duration_seconds'],
             _async_timer_labels=[feed.unique_id, 'total'],
-            _async_timer_is_running=is_running,
         )
 
 
 @async_timer
-async def ingest_feed_page(is_running, metrics, session, feed, es_endpoint, index_name, href, **_):
+async def ingest_feed_page(metrics, session, feed, es_endpoint, index_name, href, **_):
     app_logger = logging.getLogger('activity-stream')
 
     app_logger.debug('Polling')
@@ -250,7 +247,6 @@ async def ingest_feed_page(is_running, metrics, session, feed, es_endpoint, inde
         session, href, feed.auth_headers(href),
         _async_timer=metrics['ingest_page_duration_seconds'],
         _async_timer_labels=[feed.unique_id, 'pull'],
-        _async_timer_is_running=is_running,
     )
 
     app_logger.debug('Parsing JSON...')
@@ -262,7 +258,6 @@ async def ingest_feed_page(is_running, metrics, session, feed, es_endpoint, inde
         session, es_endpoint, es_bulk_items,
         _async_timer=metrics['ingest_page_duration_seconds'],
         _async_timer_labels=[feed.unique_id, 'push'],
-        _async_timer_is_running=is_running,
         _async_counter=metrics['ingest_activities_nonunique_total'],
         _async_counter_labels=[feed.unique_id],
         _async_counter_increment_by=len(es_bulk_items),
