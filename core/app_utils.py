@@ -174,7 +174,6 @@ def async_repeat_while(coroutine):
             except BaseException as exception:
                 app_logger.exception('%s raised exception: %s', logging_title, exception)
                 raven_client.captureException()
-            finally:
                 app_logger.warning('Waiting %s seconds until restarting', exception_interval)
                 await asyncio.sleep(exception_interval)
 

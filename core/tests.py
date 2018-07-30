@@ -693,7 +693,7 @@ class TestApplication(TestBase):
         self.assertEqual(result['orderedItems'][0]['id'],
                          'dit:exportOpportunities:Enquiry:49863:Create')
 
-        self.assertEqual(len(await fetch_es_index_names()), 1)
+        self.assertLessEqual(len(await fetch_es_index_names()), 2)
 
     @async_test
     async def test_es_no_connect_on_get_500(self):
