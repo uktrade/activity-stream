@@ -933,6 +933,7 @@ class TestProcess(unittest.TestCase):
 
         async def tear_down():
             self.server.terminate()
+            await asyncio.sleep(1)
             await self.feed_runner_1.cleanup()
 
         add_async_cleanup(tear_down)
