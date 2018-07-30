@@ -124,6 +124,8 @@ async def run_application():
         await runner.cleanup()
         await raven_client.remote.get_transport().close()
         await session.close()
+        # https://github.com/aio-libs/aiohttp/issues/1925
+        await asyncio.sleep(0.250)
 
     return cleanup
 
