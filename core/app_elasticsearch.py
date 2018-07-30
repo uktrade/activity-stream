@@ -17,12 +17,45 @@ from .app_utils import (
 ALIAS = 'activities'
 
 
-def get_new_index_name():
-    # Index name to be both unique and useful
+def get_new_index_names(feed_unique_ids):
     today = datetime.date.today().isoformat()
     now = str(datetime.datetime.now().timestamp()).split('.')[0]
     unique = ''.join(os.urandom(5).hex())
-    return f'{ALIAS}_{today}_{now}_{unique}'
+
+    return [
+        # Storing metadata in index name allows operations to match on
+        # them, both by elasticsearch itself, and by regex in Python
+        f'{ALIAS}__' \
+        f'feed_id_{feed_unique_id}__' \
+        f'date_{today}__' \
+        f'timestamp_{now}__' \
+        f'batch_id_{unique}__'
+        for feed_unique_id in feed_unique_ids
+    ]
+
+
+def indexes_matching_feeds(index_names, feed_unique_ids):
+    return flatten([
+        _indexes_matching_feed(index_names, feed_unique_id)
+        for feed_unique_id in feed_unique_ids
+    ])
+
+
+def _indexes_matching_feed(index_names, feed_unique_id):
+    return [
+        index_name
+        for index_name in index_names
+        if f'{ALIAS}__feed_id_{feed_unique_id}__' in index_name
+    ]
+
+
+def indexes_matching_no_feeds(index_names, feed_unique_ids):
+    indexes_matching = indexes_matching_feeds(index_names, feed_unique_ids)
+    return [
+        index_name
+        for index_name in index_names
+        if index_name not in indexes_matching
+    ]
 
 
 async def get_old_index_names(session, es_endpoint):
@@ -36,18 +69,32 @@ async def get_old_index_names(session, es_endpoint):
         payload=b'',
     )
     indexes = await results.json()
-    return [
-        index_name
-        for index_name in indexes.keys()
-        if index_name.startswith(f'{ALIAS}_')
-    ]
+
+    return {
+        'without-alias': [
+            index_name
+            for index_name, index_details in indexes.items()
+            if index_name.startswith(f'{ALIAS}_') and not index_details['aliases']
+        ],
+        'with-alias': [
+            index_name
+            for index_name, index_details in indexes.items()
+            if index_name.startswith(f'{ALIAS}_') and index_details['aliases']
+        ],
+    }
 
 
-async def set_alias(session, es_endpoint, index_name):
+async def add_remove_aliases_atomically(session, es_endpoint, indexes_to_add, indexes_to_remove):
+    if not indexes_to_add and not indexes_to_remove:
+        return
+
     actions = json.dumps({
         'actions': [
-            {'remove': {'index': f'{ALIAS}_*', 'alias': ALIAS}},
-            {'add': {'index': index_name, 'alias': ALIAS}},
+            {'remove': {'index': index_name, 'alias': ALIAS}}
+            for index_name in indexes_to_remove
+        ] + [
+            {'add': {'index': index_name, 'alias': ALIAS}}
+            for index_name in indexes_to_add
         ]
     }).encode('utf-8')
 
@@ -63,47 +110,46 @@ async def set_alias(session, es_endpoint, index_name):
 
 
 async def delete_indexes(session, es_endpoint, index_names):
-    if not index_names:
-        return
-
-    index_names_string = ','.join(index_names)
-    await es_request_non_200_exception(
-        session=session,
-        endpoint=es_endpoint,
-        method='DELETE',
-        path=f'/{index_names_string}',
-        query_string='',
-        content_type='application/json',
-        payload=b'',
-    )
+    for index_name in index_names:
+        await es_request_non_200_exception(
+            session=session,
+            endpoint=es_endpoint,
+            method='DELETE',
+            path=f'/{index_name}',
+            query_string='',
+            content_type='application/json',
+            payload=b'',
+        )
 
 
-async def create_index(session, es_endpoint, index_name):
+async def create_indexes(session, es_endpoint, index_names):
     index_definition = json.dumps({}).encode('utf-8')
-    await es_request_non_200_exception(
-        session=session,
-        endpoint=es_endpoint,
-        method='PUT',
-        path=f'/{index_name}',
-        query_string='',
-        content_type='application/json',
-        payload=index_definition,
-    )
+    for index_name in index_names:
+        await es_request_non_200_exception(
+            session=session,
+            endpoint=es_endpoint,
+            method='PUT',
+            path=f'/{index_name}',
+            query_string='',
+            content_type='application/json',
+            payload=index_definition,
+        )
 
 
-async def refresh_index(session, es_endpoint, index_name):
-    await es_request_non_200_exception(
-        session=session,
-        endpoint=es_endpoint,
-        method='POST',
-        path=f'/{index_name}/_refresh',
-        query_string='',
-        content_type='application/json',
-        payload=b'',
-    )
+async def refresh_indexes(session, es_endpoint, index_names):
+    for index_name in index_names:
+        await es_request_non_200_exception(
+            session=session,
+            endpoint=es_endpoint,
+            method='POST',
+            path=f'/{index_name}/_refresh',
+            query_string='',
+            content_type='application/json',
+            payload=b'',
+        )
 
 
-async def create_mappings(session, es_endpoint, index_name):
+async def create_mappings(session, es_endpoint, index_names):
     mapping_definition = json.dumps({
         'properties': {
             'published_date': {
@@ -117,15 +163,16 @@ async def create_mappings(session, es_endpoint, index_name):
             },
         },
     }).encode('utf-8')
-    await es_request_non_200_exception(
-        session=session,
-        endpoint=es_endpoint,
-        method='PUT',
-        path=f'/{index_name}/_mapping/_doc',
-        query_string='',
-        content_type='application/json',
-        payload=mapping_definition,
-    )
+    for index_name in index_names:
+        await es_request_non_200_exception(
+            session=session,
+            endpoint=es_endpoint,
+            method='PUT',
+            path=f'/{index_name}/_mapping/_doc',
+            query_string='',
+            content_type='application/json',
+            payload=mapping_definition,
+        )
 
 
 def es_search_new_scroll(_, __, query):

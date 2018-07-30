@@ -23,9 +23,6 @@ async def run_app_until_accepts_http():
 
 
 async def is_http_accepted_eventually():
-    def is_connection_error(exception):
-        return 'Cannot connect to host' in str(exception)
-
     attempts = 0
     while attempts < 20:
         try:
@@ -42,11 +39,9 @@ async def is_http_accepted_eventually():
                     'Content-Type': 'application/json',
                 }, data='{}', timeout=1)
             return True
-        except aiohttp.client_exceptions.ClientConnectorError as exception:
+        except aiohttp.client_exceptions.ClientConnectorError:
             attempts += 1
             await asyncio.sleep(0.2)
-            if not is_connection_error(exception):
-                return True
 
 
 async def wait_until_get_working():
@@ -88,6 +83,12 @@ async def delete_all_es_data():
 
 async def fetch_all_es_data_until(condition, sleep):
     return await fetch_until('http://127.0.0.1:9200/activities/_search', condition, sleep)
+
+
+async def fetch_es_index_names():
+    async with aiohttp.ClientSession() as session:
+        response = await session.get('http://127.0.0.1:9200/_alias')
+        return json.loads(await response.text()).keys()
 
 
 async def fetch_until(url, condition, sleep):
@@ -240,6 +241,7 @@ def mock_env():
         'ELASTICSEARCH__PORT': '9200',
         'ELASTICSEARCH__PROTOCOL': 'http',
         'ELASTICSEARCH__REGION': 'us-east-2',
+        'FEEDS__1__UNIQUE_ID': 'first_feed',
         'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_activity_stream_1.json',
         'FEEDS__1__ACCESS_KEY_ID': 'feed-some-id',
         'FEEDS__1__SECRET_ACCESS_KEY': '?[!@$%^%',

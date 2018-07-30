@@ -13,13 +13,15 @@ from raven_aiohttp import QueuedAioHttpTransport
 
 from .app_elasticsearch import (
     es_bulk,
-    create_index,
+    create_indexes,
     create_mappings,
-    get_new_index_name,
+    get_new_index_names,
     get_old_index_names,
-    set_alias,
+    indexes_matching_feeds,
+    indexes_matching_no_feeds,
+    add_remove_aliases_atomically,
     delete_indexes,
-    refresh_index,
+    refresh_indexes,
 )
 
 from .app_feeds import (
@@ -84,7 +86,7 @@ async def run_application():
         dns=sentry_dsn,
         environment=sentry_environment,
         transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
-    session = aiohttp.ClientSession()
+    session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
     running = True
 
     def is_running():
@@ -149,20 +151,37 @@ async def create_outgoing_application(is_running, raven_client, session,
 
 
 async def ingest_feeds(session, feed_endpoints, es_endpoint):
-    new_index_name = get_new_index_name()
+    all_feed_ids = feed_unique_ids(feed_endpoints)
+    new_index_names = get_new_index_names(all_feed_ids)
     old_index_names = await get_old_index_names(session, es_endpoint)
 
-    await create_index(session, es_endpoint, new_index_name)
-    await create_mappings(session, es_endpoint, new_index_name)
+    await delete_indexes(session, es_endpoint, old_index_names['without-alias'])
+    await create_indexes(session, es_endpoint, new_index_names)
+    await create_mappings(session, es_endpoint, new_index_names)
 
-    await asyncio.gather(*[
-        ingest_feed(session, feed_endpoint, es_endpoint, new_index_name)
-        for feed_endpoint in feed_endpoints
+    ingest_results = await asyncio.gather(*[
+        ingest_feed(session, feed_endpoint, es_endpoint, new_index_names[i])
+        for i, feed_endpoint in enumerate(feed_endpoints)
+    ], return_exceptions=True)
+
+    successful_feed_ids = feed_unique_ids([
+        feed_endpoint
+        for i, feed_endpoint in enumerate(feed_endpoints)
+        if not isinstance(ingest_results[i], BaseException)
     ])
 
-    await refresh_index(session, es_endpoint, new_index_name)
-    await set_alias(session, es_endpoint, new_index_name)
-    await delete_indexes(session, es_endpoint, old_index_names)
+    indexes_to_add_to_alias = indexes_matching_feeds(new_index_names, successful_feed_ids)
+    indexes_to_remove_from_alias = \
+        indexes_matching_feeds(old_index_names['with-alias'], successful_feed_ids) + \
+        indexes_matching_no_feeds(old_index_names['with-alias'], all_feed_ids)
+
+    await refresh_indexes(session, es_endpoint, new_index_names)
+    await add_remove_aliases_atomically(session, es_endpoint,
+                                        indexes_to_add_to_alias, indexes_to_remove_from_alias)
+
+
+def feed_unique_ids(feed_endpoints):
+    return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
 async def ingest_feed(session, feed_endpoint, es_endpoint, index_name):

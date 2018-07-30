@@ -15,6 +15,7 @@ from core.tests_utils import (
     async_test,
     delete_all_es_data,
     fetch_all_es_data_until,
+    fetch_es_index_names,
     get,
     get_until,
     has_at_least,
@@ -453,6 +454,7 @@ class TestApplication(TestBase):
                 'http://localhost:8081/'
                 'tests_fixture_activity_stream_multipage_1.json'
             ),
+            'FEEDS__2__UNIQUE_ID': 'second_feed',
             'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
             'FEEDS__2__API_EMAIL': 'test@test.com',
             'FEEDS__2__API_KEY': 'some-key',
@@ -564,7 +566,7 @@ class TestApplication(TestBase):
             'AWS4-HMAC-SHA256 '
             'Credential=some-id/20120114/us-east-2/es/aws4_request, '
             'SignedHeaders=content-type;host;x-amz-date, '
-            'Signature=8dcf816d7d97f9811a05c3d59814646908359f9aa3d994d9d96eb597b3da34b8')
+            'Signature=959e16e7d72ce7d29860d393381d7e752a88404c43baabfdfcb65c151fbfd625')
         self.assertEqual(es_bulk_content.decode('utf-8')[-1], '\n')
         self.assertEqual(es_bulk_headers['Content-Type'], 'application/x-ndjson')
 
@@ -639,17 +641,19 @@ class TestApplication(TestBase):
 
     @async_test
     async def test_es_503_recovered_from(self):
-        modifiy_called = 0
-        max_modifications = 8
+        modified = 0
+        max_modifications = 2
 
         http_200 = b'HTTP/1.1 200 OK'
         http_500 = b'HTTP/1.1 503 Service Unavailable'
 
         def modify(data):
-            nonlocal modifiy_called
-            modifiy_called += 1
-            return data.replace(http_200, http_500) if modifiy_called < max_modifications else \
-                data
+            nonlocal modified
+            should_modify = modified < max_modifications and b'"status":201' in data
+            data, modified = \
+                (data.replace(http_200, http_500), modified + 1) if should_modify else \
+                (data, modified)
+            return data
 
         async def handle_client(local_reader, local_writer):
             try:
@@ -664,7 +668,7 @@ class TestApplication(TestBase):
         async def pipe(reader, writer):
             try:
                 while not reader.at_eof():
-                    writer.write(modify(await reader.read(2048)))
+                    writer.write(modify(await reader.read(16384)))
             finally:
                 writer.close()
 
@@ -673,7 +677,7 @@ class TestApplication(TestBase):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                     mock_feed=read_file)
-            while modifiy_called < max_modifications:
+            while modified < max_modifications:
                 await ORIGINAL_SLEEP(0.1)
 
             await wait_until_get_working()
@@ -687,6 +691,8 @@ class TestApplication(TestBase):
         self.assertEqual(status, 200)
         self.assertEqual(result['orderedItems'][0]['id'],
                          'dit:exportOpportunities:Enquiry:49863:Create')
+
+        self.assertEqual(len(await fetch_es_index_names()), 1)
 
     @async_test
     async def test_es_no_connect_on_get_500(self):
@@ -728,6 +734,7 @@ class TestApplication(TestBase):
     async def test_two_feeds(self):
         env = {
             **mock_env(),
+            'FEEDS__2__UNIQUE_ID': 'second_feed',
             'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_activity_stream_2.json',
             'FEEDS__2__ACCESS_KEY_ID': 'feed-some-id',
             'FEEDS__2__SECRET_ACCESS_KEY': '?[!@$%^%',
@@ -740,6 +747,23 @@ class TestApplication(TestBase):
 
         self.assertIn('dit:exportOpportunities:Enquiry:49863:Create', str(results))
         self.assertIn('dit:exportOpportunities:Enquiry:42863:Create', str(results))
+
+    @async_test
+    async def test_two_feeds_one_fails(self):
+        env = {
+            **mock_env(),
+            'FEEDS__2__UNIQUE_ID': 'failing_feed',
+            'FEEDS__2__SEED': 'http://localhost:1223/',
+            'FEEDS__2__ACCESS_KEY_ID': 'feed-some-id',
+            'FEEDS__2__SECRET_ACCESS_KEY': '?[!@$%^%',
+            'FEEDS__2__TYPE': 'activity_stream',
+        }
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_file)
+            results = await fetch_all_es_data_until(has_at_least(2), ORIGINAL_SLEEP)
+
+        self.assertIn('dit:exportOpportunities:Enquiry:49863:Create', str(results))
 
     @async_test
     async def test_zendesk(self):
@@ -757,6 +781,7 @@ class TestApplication(TestBase):
 
         env = {
             **mock_env(),
+            'FEEDS__2__UNIQUE_ID': 'second_feed',
             'FEEDS__2__SEED': 'http://localhost:8081/tests_fixture_zendesk_1.json',
             'FEEDS__2__API_EMAIL': 'test@test.com',
             'FEEDS__2__API_KEY': 'some-key',

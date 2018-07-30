@@ -13,9 +13,11 @@ class ActivityStreamFeed:
 
     @classmethod
     def parse_config(cls, config):
-        return cls(**sub_dict_lower(config, ['SEED', 'ACCESS_KEY_ID', 'SECRET_ACCESS_KEY']))
+        return cls(**sub_dict_lower(config,
+                                    ['UNIQUE_ID', 'SEED', 'ACCESS_KEY_ID', 'SECRET_ACCESS_KEY']))
 
-    def __init__(self, seed, access_key_id, secret_access_key):
+    def __init__(self, unique_id, seed, access_key_id, secret_access_key):
+        self.unique_id = unique_id
         self.seed = seed
         self.access_key_id = access_key_id
         self.secret_access_key = secret_access_key
@@ -34,8 +36,8 @@ class ActivityStreamFeed:
             }, url, method, content_type='', content='').request_header,
         }
 
-    @staticmethod
-    def convert_to_bulk_es(feed, index_name):
+    @classmethod
+    def convert_to_bulk_es(cls, feed, index_name):
         return [{
             'action_and_metadata': {
                 'index': {
@@ -59,9 +61,10 @@ class ZendeskFeed:
 
     @classmethod
     def parse_config(cls, config):
-        return cls(**sub_dict_lower(config, ['SEED', 'API_EMAIL', 'API_KEY']))
+        return cls(**sub_dict_lower(config, ['UNIQUE_ID', 'SEED', 'API_EMAIL', 'API_KEY']))
 
-    def __init__(self, seed, api_email, api_key):
+    def __init__(self, unique_id, seed, api_email, api_key):
+        self.unique_id = unique_id
         self.seed = seed
         self.api_email = api_email
         self.api_key = api_key
