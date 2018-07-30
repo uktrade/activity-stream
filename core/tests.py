@@ -919,23 +919,27 @@ class TestApplication(TestBase):
 
 class TestProcess(unittest.TestCase):
 
-    def setUp(self):
-        loop = asyncio.get_event_loop()
-
-        loop.run_until_complete(delete_all_es_data())
-        self.feed_runner_1 = loop.run_until_complete(run_feed_application(read_file, Mock(), 8081))
+    async def setup_manual(self):
+        await delete_all_es_data()
+        self.feed_runner_1 = await run_feed_application(read_file, Mock(), 8081)
         self.server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
             'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
         })
 
-    def tearDown(self):
-        self.server.terminate()
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.feed_runner_1.cleanup())
+        def add_async_cleanup(coroutine):
+            loop = asyncio.get_event_loop()
+            self.addCleanup(loop.run_until_complete, coroutine())
+
+        async def tear_down():
+            self.server.terminate()
+            await self.feed_runner_1.cleanup()
+
+        add_async_cleanup(tear_down)
 
     @async_test
     async def test_server_accepts_http(self):
+        await self.setup_manual()
         self.assertTrue(await is_http_accepted_eventually())
 
 
