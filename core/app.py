@@ -52,7 +52,7 @@ from .app_utils import (
     ExpiringDict,
     ExpiringSet,
     normalise_environment,
-    async_repeat_while,
+    async_repeat_until_cancelled,
 )
 
 EXCEPTION_INTERVAL = 60
@@ -102,27 +102,32 @@ async def run_application():
         environment=sentry['environment'],
         transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
-    running = True
 
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
     await create_outgoing_application(
-        lambda: running, metrics, raven_client, session,
-        feed_endpoints, es_endpoint,
+        metrics, raven_client, session, feed_endpoints, es_endpoint,
     )
     runner = await create_incoming_application(
         port, ip_whitelist, incoming_key_pairs, metrics_registry,
         raven_client, session, es_endpoint,
     )
     await create_es_metrics_application(
-        lambda: running, metrics, raven_client, session, feed_endpoints, es_endpoint,
+        metrics, raven_client, session, feed_endpoints, es_endpoint,
     )
 
     async def cleanup():
-        nonlocal running
-        running = False
+        current_task = asyncio.Task.current_task()
+        all_tasks = asyncio.Task.all_tasks()
+        non_current_tasks = [task for task in all_tasks if task != current_task]
+        for task in non_current_tasks:
+            task.cancel()
+        # Allow CancelledException to be thrown at the location of all awaits
+        await asyncio.sleep(0)
+
         await runner.cleanup()
         await raven_client.remote.get_transport().close()
+
         await session.close()
         # https://github.com/aio-libs/aiohttp/issues/1925
         await asyncio.sleep(0.250)
@@ -172,20 +177,18 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
     return runner
 
 
-async def create_outgoing_application(is_running, metrics, raven_client, session,
-                                      feed_endpoints, es_endpoint):
+async def create_outgoing_application(metrics, raven_client, session, feed_endpoints, es_endpoint):
     asyncio.ensure_future(ingest_feeds(
         metrics, session, feed_endpoints, es_endpoint,
-        _async_repeat_while=is_running,
-        _async_repeat_while_raven_client=raven_client,
-        _async_repeat_while_exception_interval=EXCEPTION_INTERVAL,
-        _async_repeat_while_logging_title='Polling feed',
+        _async_repeat_until_cancelled_raven_client=raven_client,
+        _async_repeat_until_cancelled_exception_interval=EXCEPTION_INTERVAL,
+        _async_repeat_until_cancelled_logging_title='Polling feed',
         _async_timer=metrics['ingest_feeds_duration_seconds'],
         _async_timer_labels=[],
     ))
 
 
-@async_repeat_while
+@async_repeat_until_cancelled
 @async_timer
 async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint, **_):
     all_feed_ids = feed_unique_ids(feed_endpoints)
@@ -305,10 +308,10 @@ def parse_feed_config(feed_config):
     return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
 
-async def create_es_metrics_application(
-        is_running, metrics, raven_client, session, feed_endpoints, es_endpoint):
+async def create_es_metrics_application(metrics, raven_client, session, feed_endpoints,
+                                        es_endpoint):
 
-    @async_repeat_while
+    @async_repeat_until_cancelled
     async def poll_metrics(**_):
         searchable, nonsearchable = await es_activities_total(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
@@ -326,10 +329,9 @@ async def create_es_metrics_application(
         await asyncio.sleep(STATS_INTERVAL)
 
     asyncio.ensure_future(poll_metrics(
-        _async_repeat_while=is_running,
-        _async_repeat_while_raven_client=raven_client,
-        _async_repeat_while_exception_interval=STATS_INTERVAL,
-        _async_repeat_while_logging_title='Elasticsearch polling',
+        _async_repeat_until_cancelled_raven_client=raven_client,
+        _async_repeat_until_cancelled_exception_interval=STATS_INTERVAL,
+        _async_repeat_until_cancelled_logging_title='Elasticsearch polling',
     ))
 
 
