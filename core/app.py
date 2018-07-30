@@ -224,45 +224,53 @@ def feed_unique_ids(feed_endpoints):
 @async_inprogress
 @async_timer
 async def ingest_feed(is_running, metrics, session, feed, es_endpoint, index_name, **_):
-    app_logger = logging.getLogger('activity-stream')
-
     href = feed.seed
     while href:
-        app_logger.debug('Polling')
-        feed_contents = await get_feed_contents(
-            session, href, feed.auth_headers(href),
-            _async_timer=metrics['ingest_page_duration_seconds'],
-            _async_timer_labels=[feed.unique_id, 'pull'],
-            _async_timer_is_running=is_running,
+        href = await ingest_feed_page(
+            is_running, metrics, session, feed, es_endpoint, index_name, href,
         )
 
-        app_logger.debug('Parsing JSON...')
-        feed_parsed = json.loads(feed_contents)
-        app_logger.debug('Parsed')
 
-        es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_name)
-        await es_bulk(
-            session, es_endpoint, es_bulk_items,
-            _async_timer=metrics['ingest_page_duration_seconds'],
-            _async_timer_labels=[feed.unique_id, 'push'],
-            _async_timer_is_running=is_running,
-            _async_counter=metrics['ingest_activities_nonunique_total'],
-            _async_counter_labels=[feed.unique_id],
-            _async_counter_increment_by=len(es_bulk_items),
-        )
+async def ingest_feed_page(is_running, metrics, session, feed, es_endpoint, index_name, href):
+    app_logger = logging.getLogger('activity-stream')
 
-        app_logger.debug('Finding next URL...')
-        href = feed.next_href(feed_parsed)
-        app_logger.debug('Finding next URL: done (%s)', href)
+    app_logger.debug('Polling')
+    feed_contents = await get_feed_contents(
+        session, href, feed.auth_headers(href),
+        _async_timer=metrics['ingest_page_duration_seconds'],
+        _async_timer_labels=[feed.unique_id, 'pull'],
+        _async_timer_is_running=is_running,
+    )
 
-        interval, message = \
-            (feed.polling_page_interval, 'Will poll next page in feed') if href else \
-            (feed.polling_seed_interval, 'Will poll seed page')
+    app_logger.debug('Parsing JSON...')
+    feed_parsed = json.loads(feed_contents)
+    app_logger.debug('Parsed')
 
-        app_logger.debug(message)
-        app_logger.debug('Sleeping for %s seconds', interval)
+    es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_name)
+    await es_bulk(
+        session, es_endpoint, es_bulk_items,
+        _async_timer=metrics['ingest_page_duration_seconds'],
+        _async_timer_labels=[feed.unique_id, 'push'],
+        _async_timer_is_running=is_running,
+        _async_counter=metrics['ingest_activities_nonunique_total'],
+        _async_counter_labels=[feed.unique_id],
+        _async_counter_increment_by=len(es_bulk_items),
+    )
 
-        await asyncio.sleep(interval)
+    app_logger.debug('Finding next URL...')
+    next_href = feed.next_href(feed_parsed)
+    app_logger.debug('Finding next URL: done (%s)', next_href)
+
+    interval, message = \
+        (feed.polling_page_interval, 'Will poll next page in feed') if next_href else \
+        (feed.polling_seed_interval, 'Will poll seed page')
+
+    app_logger.debug(message)
+    app_logger.debug('Sleeping for %s seconds', interval)
+
+    await asyncio.sleep(interval)
+
+    return next_href
 
 
 @async_timer
