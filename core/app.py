@@ -49,7 +49,7 @@ from .app_server import (
 from .app_utils import (
     ExpiringDict,
     normalise_environment,
-    repeat_while,
+    async_repeat_while,
 )
 
 EXCEPTION_INTERVAL = 60
@@ -160,19 +160,21 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
 
 async def create_outgoing_application(is_running, metrics, raven_client, session,
                                       feed_endpoints, es_endpoint):
-    asyncio.ensure_future(repeat_while(
-        functools.partial(
-            ingest_feeds, is_running, metrics, session, feed_endpoints, es_endpoint,
-            _async_timer=metrics['ingest_feeds_duration_seconds'],
-            _async_timer_labels=[],
-            _async_timer_is_running=is_running,
-        ),
-        predicate=is_running, raven_client=raven_client,
-        exception_interval=EXCEPTION_INTERVAL, logging_title='Polling feed'))
+    asyncio.ensure_future(ingest_feeds(
+        is_running, metrics, session, feed_endpoints, es_endpoint,
+        _async_repeat_while=is_running,
+        _async_repeat_while_raven_client=raven_client,
+        _async_repeat_while_exception_interval=EXCEPTION_INTERVAL,
+        _async_repeat_while_logging_title='Polling feed',
+        _async_timer=metrics['ingest_feeds_duration_seconds'],
+        _async_timer_labels=[],
+        _async_timer_is_running=is_running,
+    ))
 
 
+@async_repeat_while
 @async_timer
-async def ingest_feeds(is_running, metrics, session, feed_endpoints, es_endpoint):
+async def ingest_feeds(is_running, metrics, session, feed_endpoints, es_endpoint, **_):
     all_feed_ids = feed_unique_ids(feed_endpoints)
     new_index_names = get_new_index_names(all_feed_ids)
     old_index_names = await get_old_index_names(session, es_endpoint)

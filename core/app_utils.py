@@ -157,19 +157,28 @@ def normalise_environment(key_values):
         nested_structured_dict
 
 
-async def repeat_while(never_ending_coroutine, predicate, raven_client,
-                       exception_interval, logging_title):
-    app_logger = logging.getLogger('activity-stream')
+def async_repeat_while(coroutine):
 
-    while predicate():
-        try:
-            await never_ending_coroutine()
-        except BaseException as exception:
-            app_logger.exception('%s raised exception: %s', logging_title, exception)
-            raven_client.captureException()
-        finally:
-            app_logger.warning('Waiting %s seconds until restarting', exception_interval)
-            await asyncio.sleep(exception_interval)
+    async def wrapper(*args, **kwargs):
+        app_logger = logging.getLogger('activity-stream')
+
+        kwargs_to_pass, (predicate, raven_client, exception_interval, logging_title) = \
+            extract_keys(kwargs, [
+                '_async_repeat_while', '_async_repeat_while_raven_client',
+                '_async_repeat_while_exception_interval', '_async_repeat_while_logging_title',
+            ])
+
+        while predicate():
+            try:
+                await coroutine(*args, **kwargs_to_pass)
+            except BaseException as exception:
+                app_logger.exception('%s raised exception: %s', logging_title, exception)
+                raven_client.captureException()
+            finally:
+                app_logger.warning('Waiting %s seconds until restarting', exception_interval)
+                await asyncio.sleep(exception_interval)
+
+    return wrapper
 
 
 def sub_dict_lower(super_dict, keys):
