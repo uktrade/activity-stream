@@ -921,8 +921,8 @@ class TestProcess(unittest.TestCase):
 
     async def setup_manual(self):
         await delete_all_es_data()
-        self.feed_runner_1 = await run_feed_application(read_file, Mock(), 8081)
-        self.server = Popen([sys.executable, '-m', 'core.app'], env={
+        feed_runner_1 = await run_feed_application(read_file, Mock(), 8081)
+        server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
             'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
         })
@@ -932,9 +932,9 @@ class TestProcess(unittest.TestCase):
             self.addCleanup(loop.run_until_complete, coroutine())
 
         async def tear_down():
-            self.server.terminate()
+            server.terminate()
             await asyncio.sleep(1)
-            await self.feed_runner_1.cleanup()
+            await feed_runner_1.cleanup()
 
         add_async_cleanup(tear_down)
 
