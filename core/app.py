@@ -50,6 +50,7 @@ from .app_server import (
 )
 from .app_utils import (
     ExpiringDict,
+    ExpiringSet,
     normalise_environment,
     async_repeat_while,
 )
@@ -133,13 +134,17 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
 
     app_logger.debug('Creating listening web application...')
 
+    # These would need to be stored externally if this was ever to be load balanced
     public_to_private_scroll_ids = ExpiringDict(30)
+    seen_nonces = ExpiringSet(NONCE_EXPIRE)
+
     app = web.Application(middlewares=[
         convert_errors_to_json(),
         raven_reporter(raven_client),
     ])
+
     private_app = web.Application(middlewares=[
-        authenticator(ip_whitelist, incoming_key_pairs, NONCE_EXPIRE),
+        authenticator(ip_whitelist, incoming_key_pairs, seen_nonces),
         authorizer(),
     ])
     private_app.add_routes([

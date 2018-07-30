@@ -13,9 +13,6 @@ from .app_elasticsearch import (
     es_search_existing_scroll,
     es_search_new_scroll,
 )
-from .app_utils import (
-    ExpiringSet,
-)
 
 
 NOT_PROVIDED = 'Authentication credentials were not provided.'
@@ -27,12 +24,8 @@ NOT_AUTHORIZED = 'You are not authorized to perform this action.'
 UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
-def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
+def authenticator(ip_whitelist, incoming_key_pairs, seen_nonces):
     app_logger = logging.getLogger('activity-stream')
-
-    # This would need to be stored externally if this was ever to be load balanced,
-    # otherwise replay attacks could succeed by hitting another instance
-    seen_nonces = ExpiringSet(nonce_expire)
 
     async def authenticate_or_raise(request):
         return mohawk.Receiver(
