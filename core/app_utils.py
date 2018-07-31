@@ -189,6 +189,14 @@ def async_repeat_until_cancelled(coroutine):
 
 async def gather_with_exceptions(list_of_coroutines):
     results = await asyncio.gather(*list_of_coroutines, return_exceptions=True)
+    cancelled_errors = [
+        result for result in results if isinstance(result, asyncio.CancelledError)
+    ]
+    if cancelled_errors:
+        # We only provide the ability to cancel on exit of the program, when
+        # we cancel all tasks, so re-raising the first is as good as any
+        raise cancelled_errors[0]
+
     return results
 
 

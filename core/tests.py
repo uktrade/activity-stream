@@ -2,7 +2,7 @@ import asyncio
 import datetime
 import json
 import os
-from subprocess import Popen
+from subprocess import Popen, PIPE
 import sys
 import unittest
 from unittest.mock import Mock, patch
@@ -920,13 +920,15 @@ class TestApplication(TestBase):
 
 class TestProcess(unittest.TestCase):
 
-    async def setup_manual(self):
+    @async_test
+    async def test_http_and_exit_clean(self):
         await delete_all_es_data()
+
         feed_runner_1 = await run_feed_application(read_file, Mock(), 8081)
         server = Popen([sys.executable, '-m', 'core.app'], env={
             **mock_env(),
             'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
-        })
+        }, stdout=PIPE)
 
         def add_async_cleanup(coroutine):
             loop = asyncio.get_event_loop()
@@ -934,15 +936,19 @@ class TestProcess(unittest.TestCase):
 
         async def tear_down():
             server.terminate()
-            await asyncio.sleep(1)
             await feed_runner_1.cleanup()
-
         add_async_cleanup(tear_down)
 
-    @async_test
-    async def test_server_accepts_http(self):
-        await self.setup_manual()
         self.assertTrue(await is_http_accepted_eventually())
+
+        server.terminate()
+        # PaaS has 10 seconds to exit cleanly
+        await asyncio.sleep(1)
+        output, _ = server.communicate()
+
+        final_string = b'Reached end of main. Exiting now.\n'
+        self.assertEqual(final_string, output[-len(final_string):])
+        self.assertEqual(server.returncode, 0)
 
 
 async def fast_sleep(_):
