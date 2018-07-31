@@ -157,19 +157,47 @@ def normalise_environment(key_values):
         nested_structured_dict
 
 
-async def repeat_while(never_ending_coroutine, predicate, raven_client,
-                       exception_interval, logging_title):
-    app_logger = logging.getLogger('activity-stream')
+def async_repeat_until_cancelled(coroutine):
 
-    while predicate():
-        try:
-            await never_ending_coroutine()
-        except BaseException as exception:
-            app_logger.exception('%s raised exception: %s', logging_title, exception)
-            raven_client.captureException()
-        finally:
-            app_logger.warning('Waiting %s seconds until restarting', exception_interval)
-            await asyncio.sleep(exception_interval)
+    async def wrapper(*args, **kwargs):
+        app_logger = logging.getLogger('activity-stream')
+
+        kwargs_to_pass, (raven_client, exception_interval, logging_title) = \
+            extract_keys(kwargs, [
+                '_async_repeat_until_cancelled_raven_client',
+                '_async_repeat_until_cancelled_exception_interval',
+                '_async_repeat_until_cancelled_logging_title',
+            ])
+
+        while True:
+            try:
+                await coroutine(*args, **kwargs_to_pass)
+            except asyncio.CancelledError:
+                break
+            except BaseException as exception:
+                app_logger.exception('%s raised exception: %s', logging_title, exception)
+                raven_client.captureException()
+                app_logger.warning('Waiting %s seconds until restarting', exception_interval)
+
+                try:
+                    await asyncio.sleep(exception_interval)
+                except asyncio.CancelledError:
+                    break
+
+    return wrapper
+
+
+async def gather_with_exceptions(list_of_coroutines):
+    results = await asyncio.gather(*list_of_coroutines, return_exceptions=True)
+    cancelled_errors = [
+        result for result in results if isinstance(result, asyncio.CancelledError)
+    ]
+    if cancelled_errors:
+        # We only provide the ability to cancel on exit of the program, when
+        # we cancel all tasks, so re-raising the first is as good as any
+        raise cancelled_errors[0]
+
+    return results
 
 
 def sub_dict_lower(super_dict, keys):
@@ -177,3 +205,16 @@ def sub_dict_lower(super_dict, keys):
         key.lower(): super_dict[key]
         for key in keys
     }
+
+
+def extract_keys(dictionary, keys):
+    extracted = [
+        dictionary[key]
+        for key in keys
+    ]
+    without_keys = {
+        key: value
+        for key, value in dictionary.items()
+        if key not in keys
+    }
+    return without_keys, extracted
