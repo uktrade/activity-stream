@@ -178,7 +178,7 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
 
 
 async def create_outgoing_application(metrics, raven_client, session, feed_endpoints, es_endpoint):
-    asyncio.ensure_future(ingest_feeds(
+    asyncio.get_event_loop().create_task(ingest_feeds(
         metrics, session, feed_endpoints, es_endpoint,
         _async_repeat_until_cancelled_raven_client=raven_client,
         _async_repeat_until_cancelled_exception_interval=EXCEPTION_INTERVAL,
@@ -328,7 +328,7 @@ async def create_es_metrics_application(metrics, raven_client, session, feed_end
 
         await asyncio.sleep(STATS_INTERVAL)
 
-    asyncio.ensure_future(poll_metrics(
+    asyncio.get_event_loop().create_task(poll_metrics(
         _async_repeat_until_cancelled_raven_client=raven_client,
         _async_repeat_until_cancelled_exception_interval=STATS_INTERVAL,
         _async_repeat_until_cancelled_logging_title='Elasticsearch polling',
@@ -354,8 +354,8 @@ def main():
         return 'anything-to-avoid-pylint-assignment-from-none-error'
 
     cleanup_then_stop = cleanup_then_stop_loop()
-    loop.add_signal_handler(signal.SIGINT, asyncio.ensure_future, cleanup_then_stop)
-    loop.add_signal_handler(signal.SIGTERM, asyncio.ensure_future, cleanup_then_stop)
+    loop.add_signal_handler(signal.SIGINT, loop.create_task, cleanup_then_stop)
+    loop.add_signal_handler(signal.SIGTERM, loop.create_task, cleanup_then_stop)
     loop.run_forever()
     app_logger.info('Reached end of main. Exiting now.')
 
