@@ -51,6 +51,7 @@ from .app_server import (
 from .app_utils import (
     ExpiringDict,
     ExpiringSet,
+    gather_with_exceptions,
     normalise_environment,
     async_repeat_until_cancelled,
 )
@@ -199,7 +200,7 @@ async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint, **_):
     await create_indexes(session, es_endpoint, new_index_names)
     await create_mappings(session, es_endpoint, new_index_names)
 
-    ingest_results = await asyncio.gather(*[
+    ingest_results = await gather_with_exceptions([
         ingest_feed(
             metrics, session, feed_endpoint, es_endpoint, new_index_names[i],
             _async_timer=metrics['ingest_feed_duration_seconds'],
@@ -207,7 +208,7 @@ async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint, **_):
             _async_inprogress=metrics['ingest_inprogress_ingests_total'],
         )
         for i, feed_endpoint in enumerate(feed_endpoints)
-    ], return_exceptions=True)
+    ])
 
     successful_feed_ids = feed_unique_ids([
         feed_endpoint

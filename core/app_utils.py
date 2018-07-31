@@ -187,6 +187,11 @@ def async_repeat_until_cancelled(coroutine):
     return wrapper
 
 
+async def gather_with_exceptions(list_of_coroutines):
+    results = await asyncio.gather(*list_of_coroutines, return_exceptions=True)
+    return results
+
+
 def sub_dict_lower(super_dict, keys):
     return {
         key.lower(): super_dict[key]
