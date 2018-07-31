@@ -23,7 +23,7 @@ NOT_AUTHORIZED = 'You are not authorized to perform this action.'
 UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
-def authenticator(ip_whitelist, incoming_key_pairs, seen_nonces):
+def authenticator(ip_whitelist, incoming_key_pairs, redis_client, nonce_expire):
     app_logger = logging.getLogger('activity-stream')
 
     @web.middleware
@@ -65,7 +65,8 @@ def authenticator(ip_whitelist, incoming_key_pairs, seen_nonces):
             raise web.HTTPUnauthorized(text=MISSING_CONTENT_TYPE)
 
         try:
-            receiver = await _authenticate_or_raise(incoming_key_pairs, seen_nonces, request)
+            receiver = await _authenticate_or_raise(incoming_key_pairs, redis_client,
+                                                    nonce_expire, request)
         except HawkFail as exception:
             app_logger.warning('Failed authentication %s', exception)
             raise web.HTTPUnauthorized(text=INCORRECT)
@@ -76,7 +77,7 @@ def authenticator(ip_whitelist, incoming_key_pairs, seen_nonces):
     return authenticate
 
 
-async def _authenticate_or_raise(incoming_key_pairs, seen_nonces, request):
+async def _authenticate_or_raise(incoming_key_pairs, redis_client, nonce_expire, request):
     def lookup_credentials(passed_access_key_id):
         matching_key_pairs = [
             key_pair
@@ -94,22 +95,27 @@ async def _authenticate_or_raise(incoming_key_pairs, seen_nonces, request):
             'algorithm': 'sha256',
         }
 
-    def seen_nonce(access_key_id, nonce, _):
-        nonce_tuple = (access_key_id, nonce)
-        seen = nonce_tuple in seen_nonces
-        if not seen:
-            seen_nonces.add(nonce_tuple)
-        return seen
-
-    return mohawk.Receiver(
+    receiver = mohawk.Receiver(
         lookup_credentials,
         request.headers['Authorization'],
         str(request.url.with_scheme(request.headers['X-Forwarded-Proto'])),
         request.method,
         content=await request.read(),
         content_type=request.headers['Content-Type'],
-        seen_nonce=seen_nonce,
+        # Mohawk doesn't provide an async way of checking nonce
+        seen_nonce=lambda _, __, ___: False,
     )
+
+    nonce = receiver.resource.nonce
+    access_key_id = receiver.resource.credentials['id']
+    nonce_key = f'nonce-{access_key_id}-{nonce}'
+    redis_response = await redis_client.execute('SET', nonce_key, '1',
+                                                'EX', nonce_expire, 'NX')
+    seen_nonce = not redis_response == b'OK'
+    if seen_nonce:
+        raise web.HTTPUnauthorized(text=INCORRECT)
+
+    return receiver
 
 
 def authorizer():

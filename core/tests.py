@@ -220,26 +220,23 @@ class TestAuthentication(TestBase):
             is shorter then the allowed Hawk skew. The second request succeeding gives
             evidence that the cache of nonces was cleared.
         '''
-
-        now = datetime.datetime.now()
-        past = now + datetime.timedelta(seconds=-45)
-
-        with patch('core.app.NONCE_EXPIRE', 30):
+        with patch('core.app.NONCE_EXPIRE', 1):
             await self.setup_manual(env=mock_env(), mock_feed=read_file)
 
-            url = 'http://127.0.0.1:8080/v1/'
-            x_forwarded_for = '1.2.3.4, 127.0.0.0'
+        url = 'http://127.0.0.1:8080/v1/'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
 
-            with freeze_time(past):
-                auth = hawk_auth_header(
-                    'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
-                )
-                _, status_1 = await post(url, auth, x_forwarded_for)
-            self.assertEqual(status_1, 200)
+        auth = hawk_auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
+        )
 
-            with freeze_time(now):
-                _, status_2 = await post(url, auth, x_forwarded_for)
-            self.assertEqual(status_2, 200)
+        _, status_1 = await post(url, auth, x_forwarded_for)
+        self.assertEqual(status_1, 200)
+
+        await asyncio.sleep(1)
+
+        _, status_2 = await post(url, auth, x_forwarded_for)
+        self.assertEqual(status_2, 200)
 
     @async_test
     async def test_no_x_fwd_for_401(self):
@@ -605,10 +602,16 @@ class TestApplication(TestBase):
         es_runner = await run_es_application(port=9201, override_routes=routes)
 
         with \
-                freeze_time('2012-01-15 12:00:01'), \
-                patch('os.urandom', return_value=b'something-random'):
+                freeze_time('2012-01-15 12:00:01'):
             await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                     mock_feed=read_file)
+
+            url = 'http://127.0.0.1:8080/v1/'
+            auth = hawk_auth_header(
+                'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
+            )
+            x_forwarded_for = '1.2.3.4, 127.0.0.0'
+            await get(url, auth, x_forwarded_for, b'')
             await es_runner.cleanup()
             [[_, es_headers]] = await get_es_once
 

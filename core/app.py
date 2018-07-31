@@ -50,7 +50,6 @@ from .app_server import (
     raven_reporter,
 )
 from .app_utils import (
-    ExpiringSet,
     normalise_environment,
     async_repeat_until_cancelled,
 )
@@ -147,16 +146,13 @@ async def create_incoming_application(
 
     app_logger.debug('Creating listening web application...')
 
-    # This would need to be stored externally if this was ever to be load balanced
-    seen_nonces = ExpiringSet(NONCE_EXPIRE)
-
     app = web.Application(middlewares=[
         convert_errors_to_json(),
         raven_reporter(raven_client),
     ])
 
     private_app = web.Application(middlewares=[
-        authenticator(ip_whitelist, incoming_key_pairs, seen_nonces),
+        authenticator(ip_whitelist, incoming_key_pairs, redis_client, NONCE_EXPIRE),
         authorizer(),
     ])
     private_app.add_routes([
