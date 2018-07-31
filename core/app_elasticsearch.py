@@ -180,27 +180,26 @@ async def create_mappings(session, es_endpoint, index_names):
         )
 
 
-def es_search_new_scroll(_, __, query):
+async def es_search_new_scroll(_, __, query):
     return f'/{ALIAS}/_search', 'scroll=30s', query
 
 
-def es_search_existing_scroll(public_to_private_scroll_ids, match_info, _):
+async def es_search_existing_scroll(redis_client, match_info, _):
     # This is not wrapped in a try/except. This function should only be
     # called if public_scroll_id is in match_info, and there is some server
     # error if this isn't present, and so bubbling up and resulting in a 500
     # is appropriate if a KeyError is thrown
     public_scroll_id = match_info['public_scroll_id']
 
-    try:
-        private_scroll_id = public_to_private_scroll_ids[public_scroll_id]
-    except KeyError:
+    private_scroll_id = await redis_client.get(f'private-scroll-id-{public_scroll_id}')
+    if private_scroll_id is None:
         # It can be argued that this function shouldn't have knowledge that
         # it's called from a HTTP request. However, that _is_ its only use,
         # so KISS, and not introduce more layers unless needed
         raise HTTPNotFound(text='Scroll ID not found.')
 
     return '/_search/scroll', 'scroll=30s', json.dumps({
-        'scroll_id': private_scroll_id,
+        'scroll_id': private_scroll_id.decode('utf-8'),
     }).encode('utf-8')
 
 
@@ -218,15 +217,15 @@ async def es_search(session, es_endpoint, path, query_string, body,
 
     response = await results.json()
     return \
-        (activities(response, to_public_scroll_url), 200) if results.status == 200 else \
+        (await activities(response, to_public_scroll_url), 200) if results.status == 200 else \
         (response, results.status)
 
 
-def activities(elasticsearch_reponse, to_public_scroll_url):
+async def activities(elasticsearch_reponse, to_public_scroll_url):
     elasticsearch_hits = elasticsearch_reponse['hits'].get('hits', [])
     private_scroll_id = elasticsearch_reponse['_scroll_id']
     next_dict = {
-        'next': to_public_scroll_url(private_scroll_id)
+        'next': await to_public_scroll_url(private_scroll_id)
     } if elasticsearch_hits else {}
 
     return {**{

@@ -414,7 +414,9 @@ class TestApplication(TestBase):
 
     @async_test
     async def test_pagination_expiry(self):
-        with patch('asyncio.sleep', wraps=fast_sleep):
+        with \
+                patch('core.app.PAGINATION_EXPIRE', 1), \
+                patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file)
             await wait_until_get_working()
 
@@ -422,30 +424,27 @@ class TestApplication(TestBase):
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
         await get_until(url_1, x_forwarded_for, has_at_least_ordered_items(2), asyncio.sleep)
 
-        now = datetime.datetime.now()
-        past = now + datetime.timedelta(seconds=-60)
-
         query = json.dumps({
             'size': '1',
         }).encode('utf-8')
 
-        with freeze_time(past):
-            auth = hawk_auth_header(
-                'incoming-some-id-3', 'incoming-some-secret-3', url_1,
-                'GET', query, 'application/json',
-            )
-            result_1, _, _ = await get(url_1, auth, x_forwarded_for, query)
-            result_1_json = json.loads(result_1)
-            url_2 = result_1_json['next']
+        auth = hawk_auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url_1,
+            'GET', query, 'application/json',
+        )
+        result_1, _, _ = await get(url_1, auth, x_forwarded_for, query)
+        result_1_json = json.loads(result_1)
+        url_2 = result_1_json['next']
 
-        with freeze_time(now):
-            auth_2 = hawk_auth_header(
-                'incoming-some-id-3', 'incoming-some-secret-3', url_2,
-                'GET', b'', 'application/json',
-            )
-            result_2, status_2, _ = await get(url_2, auth_2, x_forwarded_for, b'')
-            self.assertEqual(json.loads(result_2)['details'], 'Scroll ID not found.')
-            self.assertEqual(status_2, 404)
+        await asyncio.sleep(1)
+
+        auth_2 = hawk_auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url_2,
+            'GET', b'', 'application/json',
+        )
+        result_2, status_2, _ = await get(url_2, auth_2, x_forwarded_for, b'')
+        self.assertEqual(json.loads(result_2)['details'], 'Scroll ID not found.')
+        self.assertEqual(status_2, 404)
 
     @async_test
     async def test_get_can_filter(self):

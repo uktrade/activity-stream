@@ -168,25 +168,26 @@ async def handle_post(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
-def handle_get_new(session, public_to_private_scroll_ids, es_endpoint):
-    return _handle_get(session, public_to_private_scroll_ids,
-                       es_endpoint, es_search_new_scroll)
+def handle_get_new(session, redis_client, pagination_expire, es_endpoint):
+    return _handle_get(session, redis_client, pagination_expire, es_endpoint,
+                       es_search_new_scroll)
 
 
-def handle_get_existing(session, public_to_private_scroll_ids, es_endpoint):
-    return _handle_get(session, public_to_private_scroll_ids,
-                       es_endpoint, es_search_existing_scroll)
+def handle_get_existing(session, redis_client, pagination_expire, es_endpoint):
+    return _handle_get(session, redis_client, pagination_expire, es_endpoint,
+                       es_search_existing_scroll)
 
 
-def _handle_get(session, public_to_private_scroll_ids, es_endpoint, get_path_query):
+def _handle_get(session, redis_client, pagination_expire, es_endpoint, get_path_query):
     async def handle(request):
         incoming_body = await request.read()
-        path, query_string, body = get_path_query(public_to_private_scroll_ids,
-                                                  request.match_info, incoming_body)
+        path, query_string, body = await get_path_query(redis_client, request.match_info,
+                                                        incoming_body)
 
-        def to_public_scroll_url(private_scroll_id):
+        async def to_public_scroll_url(private_scroll_id):
             public_scroll_id = uuid.uuid4().hex
-            public_to_private_scroll_ids[public_scroll_id] = private_scroll_id
+            await redis_client.set(f'private-scroll-id-{public_scroll_id}', private_scroll_id,
+                                   expire=pagination_expire)
             return str(request.url.join(
                 request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)))
 
