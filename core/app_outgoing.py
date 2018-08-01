@@ -83,7 +83,6 @@ async def run_outgoing_application():
 
     raven_client = get_raven_client(sentry)
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
-
     redis_client = await aioredis.create_redis(redis_uri)
 
     metrics_registry = CollectorRegistry()
