@@ -63,7 +63,7 @@ class TestBase(unittest.TestCase):
             else:
                 first_not_done.set_result(request)
 
-        feed_runner = await run_feed_application(mock_feed, feed_requested_callback, 8081)
+        feed_runner = await run_feed_application(mock_feed, 200, feed_requested_callback, 8081)
         add_async_cleanup(feed_runner.cleanup)
 
         cleanup = await run_app_until_accepts_http()
@@ -937,7 +937,7 @@ class TestProcess(unittest.TestCase):
     async def setup_manual(self, env):
         await delete_all_es_data()
 
-        feed_runner_1 = await run_feed_application(read_file, Mock(), 8081)
+        feed_runner_1 = await run_feed_application(read_file, 200, Mock(), 8081)
         server = Popen([sys.executable, '-m', 'core.app'], env={
             **env,
             'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
