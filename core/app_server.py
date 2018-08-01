@@ -1,4 +1,3 @@
-import functools
 import hmac
 import logging
 import uuid
@@ -26,17 +25,6 @@ UNKNOWN_ERROR = 'An unknown error occurred.'
 
 def authenticator(ip_whitelist, incoming_key_pairs, seen_nonces):
     app_logger = logging.getLogger('activity-stream')
-
-    async def authenticate_or_raise(request):
-        return mohawk.Receiver(
-            functools.partial(_lookup_credentials, incoming_key_pairs),
-            request.headers['Authorization'],
-            str(request.url.with_scheme(request.headers['X-Forwarded-Proto'])),
-            request.method,
-            content=await request.read(),
-            content_type=request.headers['Content-Type'],
-            seen_nonce=functools.partial(_seen_nonce, seen_nonces),
-        )
 
     @web.middleware
     async def authenticate(request, handler):
@@ -77,7 +65,7 @@ def authenticator(ip_whitelist, incoming_key_pairs, seen_nonces):
             raise web.HTTPUnauthorized(text=MISSING_CONTENT_TYPE)
 
         try:
-            receiver = await authenticate_or_raise(request)
+            receiver = await _authenticate_or_raise(incoming_key_pairs, seen_nonces, request)
         except HawkFail as exception:
             app_logger.warning('Failed authentication %s', exception)
             raise web.HTTPUnauthorized(text=INCORRECT)
@@ -88,30 +76,40 @@ def authenticator(ip_whitelist, incoming_key_pairs, seen_nonces):
     return authenticate
 
 
-def _lookup_credentials(incoming_key_pairs, passed_access_key_id):
-    matching_key_pairs = [
-        key_pair
-        for key_pair in incoming_key_pairs
-        if hmac.compare_digest(key_pair['key_id'], passed_access_key_id)
-    ]
+async def _authenticate_or_raise(incoming_key_pairs, seen_nonces, request):
+    def lookup_credentials(passed_access_key_id):
+        matching_key_pairs = [
+            key_pair
+            for key_pair in incoming_key_pairs
+            if hmac.compare_digest(key_pair['key_id'], passed_access_key_id)
+        ]
 
-    if not matching_key_pairs:
-        raise HawkFail(f'No Hawk ID of {passed_access_key_id}')
+        if not matching_key_pairs:
+            raise HawkFail(f'No Hawk ID of {passed_access_key_id}')
 
-    return {
-        'id': matching_key_pairs[0]['key_id'],
-        'key': matching_key_pairs[0]['secret_key'],
-        'permissions': matching_key_pairs[0]['permissions'],
-        'algorithm': 'sha256',
-    }
+        return {
+            'id': matching_key_pairs[0]['key_id'],
+            'key': matching_key_pairs[0]['secret_key'],
+            'permissions': matching_key_pairs[0]['permissions'],
+            'algorithm': 'sha256',
+        }
 
+    def seen_nonce(access_key_id, nonce, _):
+        nonce_tuple = (access_key_id, nonce)
+        seen = nonce_tuple in seen_nonces
+        if not seen:
+            seen_nonces.add(nonce_tuple)
+        return seen
 
-def _seen_nonce(seen_nonces, access_key_id, nonce, _):
-    nonce_tuple = (access_key_id, nonce)
-    seen = nonce_tuple in seen_nonces
-    if not seen:
-        seen_nonces.add(nonce_tuple)
-    return seen
+    return mohawk.Receiver(
+        lookup_credentials,
+        request.headers['Authorization'],
+        str(request.url.with_scheme(request.headers['X-Forwarded-Proto'])),
+        request.method,
+        content=await request.read(),
+        content_type=request.headers['Content-Type'],
+        seen_nonce=seen_nonce,
+    )
 
 
 def authorizer():
