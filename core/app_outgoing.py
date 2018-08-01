@@ -69,20 +69,15 @@ async def run_outgoing_application():
     env = normalise_environment(os.environ)
 
     port = env['PORT']
-
     feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
-
     incoming_key_pairs = [{
         'key_id': key_pair['KEY_ID'],
         'secret_key': key_pair['SECRET_KEY'],
         'permissions': key_pair['PERMISSIONS'],
     } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
     ip_whitelist = env['INCOMING_IP_WHITELIST']
-
     es_endpoint = get_endpoint(env)
-
     redis_uri = json.loads(os.environ['VCAP_SERVICES'])['redis'][0]['credentials']['uri']
-
     sentry = {
         'dsn': env['SENTRY_DSN'],
         'environment': env['SENTRY_ENVIRONMENT'],
