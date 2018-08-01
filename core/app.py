@@ -116,7 +116,7 @@ async def run_application():
         port, ip_whitelist, incoming_key_pairs, metrics_registry,
         redis_client, raven_client, session, es_endpoint,
     )
-    await create_es_metrics_application(
+    await create_metrics_application(
         metrics, raven_client, session, feed_endpoints, es_endpoint,
     )
 
@@ -310,8 +310,8 @@ def parse_feed_config(feed_config):
     return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
 
-async def create_es_metrics_application(metrics, raven_client, session, feed_endpoints,
-                                        es_endpoint):
+async def create_metrics_application(metrics, raven_client, session, feed_endpoints,
+                                     es_endpoint):
 
     @async_repeat_until_cancelled
     async def poll_metrics(**_):
