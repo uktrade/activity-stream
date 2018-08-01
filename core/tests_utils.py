@@ -5,7 +5,7 @@ import aiohttp
 from aiohttp import web
 import mohawk
 
-from core.app import run_application
+from core.app_outgoing import run_application
 
 
 ORIGINAL_SLEEP = asyncio.sleep

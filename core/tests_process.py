@@ -36,7 +36,7 @@ class TestProcess(unittest.TestCase):
         await delete_all_es_data()
 
         feed_runner_1 = await run_feed_application(read_file, lambda: 200, Mock(), 8081)
-        server = Popen([sys.executable, '-m', 'core.app'], env={
+        server = Popen([sys.executable, '-m', 'core.app_outgoing'], env={
             **env,
             'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
         }, stdout=PIPE)
