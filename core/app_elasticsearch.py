@@ -4,11 +4,16 @@ import hmac
 import json
 import logging
 import os
+import urllib.parse
 
 from aiohttp.web import (
     HTTPNotFound,
 )
 
+from .app_metrics import (
+    async_counter,
+    async_timer,
+)
 from .app_utils import (
     flatten,
 )
@@ -239,8 +244,14 @@ def activities(elasticsearch_reponse, to_public_scroll_url):
     }, **next_dict}
 
 
-async def es_bulk(session, es_endpoint, items):
+@async_counter
+@async_timer
+async def es_bulk(session, es_endpoint, items, **_):
     app_logger = logging.getLogger('activity-stream')
+
+    if not items:
+        app_logger.debug('No ES items. Skipping')
+        return
 
     app_logger.debug('Converting feed to ES bulk ingest commands...')
     es_bulk_contents = ('\n'.join(flatten([
@@ -257,6 +268,57 @@ async def es_bulk(session, es_endpoint, items):
         content_type='application/x-ndjson', payload=es_bulk_contents,
     )
     app_logger.debug('Pushing to ES: done (%s)', await es_result.text())
+
+
+async def es_activities_total(session, es_endpoint):
+    searchable_result = await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='GET',
+        path=f'/{ALIAS}/_count',
+        query_string='ignore_unavailable=true',
+        content_type='application/json',
+        payload=b'',
+    )
+    searchable = (await searchable_result.json())['count']
+    nonsearchable_result = await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='GET',
+        path=f'/{ALIAS}_*,-*{ALIAS}/_count',
+        query_string='ignore_unavailable=true',
+        content_type='application/json',
+        payload=b'',
+    )
+    nonsearchable = (await nonsearchable_result.json())['count']
+
+    return searchable, nonsearchable
+
+
+async def es_feed_activities_total(session, es_endpoint, feed_id):
+    nonsearchable_result = await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='GET',
+        path=f'/{ALIAS}__feed_id_{feed_id}__*,-*{ALIAS}/_count',
+        query_string='ignore_unavailable=true',
+        content_type='application/json',
+        payload=b'',
+    )
+    nonsearchable = (await nonsearchable_result.json())['count']
+
+    total_result = await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='GET',
+        path=f'/{ALIAS}__feed_id_{feed_id}__*/_count',
+        query_string='ignore_unavailable=true',
+        content_type='application/json',
+        payload=b'',
+    )
+    searchable = max((await total_result.json())['count'] - nonsearchable, 0)
+
+    return searchable, nonsearchable
 
 
 async def es_request_non_200_exception(session, endpoint, method, path, query_string,
@@ -295,7 +357,7 @@ def es_auth_headers(endpoint, method, path, query_string, content_type, payload)
 
     def signature():
         def canonical_request():
-            canonical_uri = path
+            canonical_uri = urllib.parse.quote(path)
             canonical_querystring = query_string
             canonical_headers = \
                 f'content-type:{content_type}\n' + \

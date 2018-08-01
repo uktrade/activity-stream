@@ -7,6 +7,7 @@ import sys
 import unittest
 from unittest.mock import Mock, patch
 
+import aiohttp
 from aiohttp import web
 from freezegun import freeze_time
 
@@ -692,7 +693,55 @@ class TestApplication(TestBase):
         self.assertEqual(result['orderedItems'][0]['id'],
                          'dit:exportOpportunities:Enquiry:49863:Create')
 
-        self.assertEqual(len(await fetch_es_index_names()), 1)
+        self.assertLessEqual(len(await fetch_es_index_names()), 2)
+
+    @async_test
+    async def test_es_no_connect_recovered(self):
+        modified = 0
+        max_modifications = 2
+
+        async def handle_client(local_reader, local_writer):
+            nonlocal modified
+            if modified < max_modifications:
+                local_writer.close()
+                modified += 1
+            else:
+                try:
+                    remote_reader, remote_writer = await asyncio.open_connection('127.0.0.1', 9200)
+                    await asyncio.gather(
+                        pipe(local_reader, remote_writer),  # Upstream
+                        pipe(remote_reader, local_writer),  # Downstream
+                    )
+                finally:
+                    local_writer.close()
+
+        async def pipe(reader, writer):
+            try:
+                while not reader.at_eof():
+                    writer.write(await reader.read(16384))
+            finally:
+                writer.close()
+
+        server = await asyncio.start_server(handle_client, '0.0.0.0', 9201)
+
+        with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
+            await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
+                                    mock_feed=read_file)
+            while modified < max_modifications:
+                await ORIGINAL_SLEEP(0.1)
+
+            await wait_until_get_working()
+            mock_sleep.assert_any_call(60)
+
+        url = 'http://127.0.0.1:8080/v1/'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+        result, status, _ = await get_until(url, x_forwarded_for,
+                                            has_at_least_ordered_items(2), asyncio.sleep)
+        server.close()
+        await server.wait_closed()
+        self.assertEqual(status, 200)
+        self.assertEqual(result['orderedItems'][0]['id'],
+                         'dit:exportOpportunities:Enquiry:49863:Create')
 
     @async_test
     async def test_es_no_connect_on_get_500(self):
@@ -814,16 +863,59 @@ class TestApplication(TestBase):
             sent_broken = True
             return feed_contents_maybe_broken
 
-        with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
+        with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file_broken_then_fixed)
             results = await fetch_all_es_data_until(has_at_least(1), ORIGINAL_SLEEP)
-            mock_sleep.assert_any_call(60)
             return results
 
         self.assertIn(
             'dit:exportOpportunities:Enquiry:49863:Create',
             str(results),
         )
+
+    @async_test
+    async def test_returns_some_metrics(self):
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=mock_env(), mock_feed=read_file)
+            await fetch_all_es_data_until(has_at_least(2), ORIGINAL_SLEEP)
+
+        # Might be a bit flaky
+        await ORIGINAL_SLEEP(4)
+        async with aiohttp.ClientSession() as session:
+            url = 'http://127.0.0.1:8080/metrics'
+            result = await session.get(url)
+        text = await result.text()
+        self.assertIn('python_info', text)
+        self.assertIn('ingest_feed_duration_seconds_count', text)
+        self.assertIn('feed_unique_id="first_feed"', text)
+        self.assertIn('status="success"', text)
+        self.assertIn('ingest_activities_nonunique_total{feed_unique_id="first_feed"}',
+                      text)
+        self.assertIn('ingest_page_duration_seconds_bucket'
+                      '{feed_unique_id="first_feed",le="0.005",stage="push"', text)
+        self.assertIn('elasticsearch_activities_total{searchable="searchable"} 2.0', text)
+        self.assertIn('elasticsearch_feed_activities_total'
+                      '{feed_unique_id="first_feed",searchable="searchable"} 2.0', text)
+
+    @async_test
+    async def test_empty_feed_is_success(self):
+        env = {
+            **mock_env(),
+            'FEEDS__1__SEED': (
+                'http://localhost:8081/'
+                'tests_fixture_activity_stream_empty.json'
+            ),
+        }
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_file)
+            await ORIGINAL_SLEEP(2)
+
+            async with aiohttp.ClientSession() as session:
+                url = 'http://127.0.0.1:8080/metrics'
+                result = await session.get(url)
+
+        self.assertIn('status="success"', await result.text())
 
 
 class TestProcess(unittest.TestCase):

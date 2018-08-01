@@ -6,14 +6,12 @@ import uuid
 from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
+from prometheus_client import generate_latest
 
 from .app_elasticsearch import (
     es_search,
     es_search_existing_scroll,
     es_search_new_scroll,
-)
-from .app_utils import (
-    ExpiringSet,
 )
 
 
@@ -26,12 +24,8 @@ NOT_AUTHORIZED = 'You are not authorized to perform this action.'
 UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
-def authenticator(ip_whitelist, incoming_key_pairs, nonce_expire):
+def authenticator(ip_whitelist, incoming_key_pairs, seen_nonces):
     app_logger = logging.getLogger('activity-stream')
-
-    # This would need to be stored externally if this was ever to be load balanced,
-    # otherwise replay attacks could succeed by hitting another instance
-    seen_nonces = ExpiringSet(nonce_expire)
 
     async def authenticate_or_raise(request):
         return mohawk.Receiver(
@@ -201,6 +195,15 @@ def _handle_get(session, public_to_private_scroll_ids, es_endpoint, get_path_que
                                           to_public_scroll_url)
 
         return json_response(results, status=status)
+
+    return handle
+
+
+def handle_get_metrics(registry):
+    async def handle(_):
+        return web.Response(body=generate_latest(registry), status=200, headers={
+            'Content-Type': 'text/plain; charset=utf-8',
+        })
 
     return handle
 

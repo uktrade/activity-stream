@@ -8,11 +8,16 @@ import sys
 
 import aiohttp
 from aiohttp import web
+from prometheus_client import (
+    CollectorRegistry,
+)
 from raven import Client
 from raven_aiohttp import QueuedAioHttpTransport
 
 from .app_elasticsearch import (
     es_bulk,
+    es_activities_total,
+    es_feed_activities_total,
     create_indexes,
     create_mappings,
     get_new_index_names,
@@ -28,23 +33,31 @@ from .app_feeds import (
     ActivityStreamFeed,
     ZendeskFeed,
 )
+from .app_metrics import (
+    async_inprogress,
+    async_timer,
+    get_metrics,
+)
 from .app_server import (
     authenticator,
     authorizer,
     convert_errors_to_json,
     handle_get_existing,
     handle_get_new,
+    handle_get_metrics,
     handle_post,
     raven_reporter,
 )
 from .app_utils import (
     ExpiringDict,
+    ExpiringSet,
     normalise_environment,
-    repeat_while,
+    async_repeat_while,
 )
 
 EXCEPTION_INTERVAL = 60
 NONCE_EXPIRE = 120
+STATS_INTERVAL = 3
 
 
 async def run_application():
@@ -77,27 +90,32 @@ async def run_application():
         'port': env['ELASTICSEARCH']['PORT'],
     }
 
-    sentry_dsn = env['SENTRY_DSN']
-    sentry_environment = env['SENTRY_ENVIRONMENT']
+    sentry = {
+        'dsn': env['SENTRY_DSN'],
+        'environment': env['SENTRY_ENVIRONMENT'],
+    }
 
     app_logger.debug('Examining environment: done')
 
     raven_client = Client(
-        dns=sentry_dsn,
-        environment=sentry_environment,
+        sentry['dsn'],
+        environment=sentry['environment'],
         transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
     running = True
 
-    def is_running():
-        nonlocal running
-        return running
-
+    metrics_registry = CollectorRegistry()
+    metrics = get_metrics(metrics_registry)
     await create_outgoing_application(
-        is_running, raven_client, session, feed_endpoints, es_endpoint,
+        lambda: running, metrics, raven_client, session,
+        feed_endpoints, es_endpoint,
     )
     runner = await create_incoming_application(
-        port, ip_whitelist, incoming_key_pairs, raven_client, session, es_endpoint,
+        port, ip_whitelist, incoming_key_pairs, metrics_registry,
+        raven_client, session, es_endpoint,
+    )
+    await create_es_metrics_application(
+        lambda: running, metrics, raven_client, session, feed_endpoints, es_endpoint,
     )
 
     async def cleanup():
@@ -111,25 +129,35 @@ async def run_application():
 
 
 async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
-                                      raven_client, session, es_endpoint):
+                                      metrics_registry, raven_client, session, es_endpoint):
     app_logger = logging.getLogger('activity-stream')
 
     app_logger.debug('Creating listening web application...')
 
+    # These would need to be stored externally if this was ever to be load balanced
     public_to_private_scroll_ids = ExpiringDict(30)
+    seen_nonces = ExpiringSet(NONCE_EXPIRE)
+
     app = web.Application(middlewares=[
         convert_errors_to_json(),
         raven_reporter(raven_client),
-        authenticator(ip_whitelist, incoming_key_pairs, NONCE_EXPIRE),
+    ])
+
+    private_app = web.Application(middlewares=[
+        authenticator(ip_whitelist, incoming_key_pairs, seen_nonces),
         authorizer(),
     ])
-    app.add_routes([
-        web.post('/v1/', handle_post),
-        web.get('/v1/', handle_get_new(session, public_to_private_scroll_ids, es_endpoint)),
+    private_app.add_routes([
+        web.post('/', handle_post),
+        web.get('/', handle_get_new(session, public_to_private_scroll_ids, es_endpoint)),
         web.get(
-            '/v1/{public_scroll_id}',
+            '/{public_scroll_id}',
             handle_get_existing(session, public_to_private_scroll_ids, es_endpoint), name='scroll',
         ),
+    ])
+    app.add_subapp('/v1/', private_app)
+    app.add_routes([
+        web.get('/metrics', handle_get_metrics(metrics_registry)),
     ])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 
@@ -142,15 +170,23 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
     return runner
 
 
-async def create_outgoing_application(is_running, raven_client, session,
+async def create_outgoing_application(is_running, metrics, raven_client, session,
                                       feed_endpoints, es_endpoint):
-    asyncio.ensure_future(repeat_while(
-        functools.partial(ingest_feeds, session, feed_endpoints, es_endpoint),
-        predicate=is_running, raven_client=raven_client,
-        exception_interval=EXCEPTION_INTERVAL, logging_title='Polling feed'))
+    asyncio.ensure_future(ingest_feeds(
+        is_running, metrics, session, feed_endpoints, es_endpoint,
+        _async_repeat_while=is_running,
+        _async_repeat_while_raven_client=raven_client,
+        _async_repeat_while_exception_interval=EXCEPTION_INTERVAL,
+        _async_repeat_while_logging_title='Polling feed',
+        _async_timer=metrics['ingest_feeds_duration_seconds'],
+        _async_timer_labels=[],
+        _async_timer_is_running=is_running,
+    ))
 
 
-async def ingest_feeds(session, feed_endpoints, es_endpoint):
+@async_repeat_while
+@async_timer
+async def ingest_feeds(is_running, metrics, session, feed_endpoints, es_endpoint, **_):
     all_feed_ids = feed_unique_ids(feed_endpoints)
     new_index_names = get_new_index_names(all_feed_ids)
     old_index_names = await get_old_index_names(session, es_endpoint)
@@ -160,7 +196,13 @@ async def ingest_feeds(session, feed_endpoints, es_endpoint):
     await create_mappings(session, es_endpoint, new_index_names)
 
     ingest_results = await asyncio.gather(*[
-        ingest_feed(session, feed_endpoint, es_endpoint, new_index_names[i])
+        ingest_feed(
+            is_running, metrics, session, feed_endpoint, es_endpoint, new_index_names[i],
+            _async_timer=metrics['ingest_feed_duration_seconds'],
+            _async_timer_labels=[feed_endpoint.unique_id],
+            _async_timer_is_running=is_running,
+            _async_inprogress=metrics['ingest_inprogress_ingests_total'],
+        )
         for i, feed_endpoint in enumerate(feed_endpoints)
     ], return_exceptions=True)
 
@@ -184,41 +226,78 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-async def ingest_feed(session, feed_endpoint, es_endpoint, index_name):
-    async for feed in poll(session, feed_endpoint, index_name):
-        await es_bulk(session, es_endpoint, feed)
-
-
-async def poll(session, feed, index_name):
-    app_logger = logging.getLogger('activity-stream')
-
+@async_inprogress
+@async_timer
+async def ingest_feed(is_running, metrics, session, feed, es_endpoint, index_name, **_):
     href = feed.seed
     while href:
-        app_logger.debug('Polling')
-        result = await session.get(href, headers=feed.auth_headers(href))
+        href = await ingest_feed_page(
+            is_running, metrics, session, feed, es_endpoint, index_name, href,
+            _async_timer=metrics['ingest_page_duration_seconds'],
+            _async_timer_labels=[feed.unique_id, 'total'],
+            _async_timer_is_running=is_running,
+        )
 
-        app_logger.debug('Fetching contents of feed...')
-        feed_contents = await result.content.read()
-        app_logger.debug('Fetching contents of feed: done (%s)', feed_contents)
 
-        app_logger.debug('Parsing JSON...')
-        feed_parsed = json.loads(feed_contents)
-        app_logger.debug('Parsed')
+@async_timer
+async def ingest_feed_page(is_running, metrics, session, feed, es_endpoint, index_name, href, **_):
+    app_logger = logging.getLogger('activity-stream')
 
-        yield feed.convert_to_bulk_es(feed_parsed, index_name)
+    app_logger.debug('Polling')
+    feed_contents = await get_feed_contents(
+        session, href, feed.auth_headers(href),
+        _async_timer=metrics['ingest_page_duration_seconds'],
+        _async_timer_labels=[feed.unique_id, 'pull'],
+        _async_timer_is_running=is_running,
+    )
 
-        app_logger.debug('Finding next URL...')
-        href = feed.next_href(feed_parsed)
-        app_logger.debug('Finding next URL: done (%s)', href)
+    app_logger.debug('Parsing JSON...')
+    feed_parsed = json.loads(feed_contents)
+    app_logger.debug('Parsed')
 
-        interval, message = \
-            (feed.polling_page_interval, 'Will poll next page in feed') if href else \
-            (feed.polling_seed_interval, 'Will poll seed page')
+    es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_name)
+    await es_bulk(
+        session, es_endpoint, es_bulk_items,
+        _async_timer=metrics['ingest_page_duration_seconds'],
+        _async_timer_labels=[feed.unique_id, 'push'],
+        _async_timer_is_running=is_running,
+        _async_counter=metrics['ingest_activities_nonunique_total'],
+        _async_counter_labels=[feed.unique_id],
+        _async_counter_increment_by=len(es_bulk_items),
+    )
 
-        app_logger.debug(message)
-        app_logger.debug('Sleeping for %s seconds', interval)
+    app_logger.debug('Finding next URL...')
+    next_href = feed.next_href(feed_parsed)
+    app_logger.debug('Finding next URL: done (%s)', next_href)
 
-        await asyncio.sleep(interval)
+    interval, message = \
+        (feed.polling_page_interval, 'Will poll next page in feed') if next_href else \
+        (feed.polling_seed_interval, 'Will poll seed page')
+
+    app_logger.debug(message)
+    app_logger.debug('Sleeping for %s seconds', interval)
+
+    await asyncio.sleep(interval)
+
+    return next_href
+
+
+@async_timer
+async def get_feed_contents(session, href, headers, **_):
+    app_logger = logging.getLogger('activity-stream')
+
+    app_logger.debug('Fetching feed...')
+    result = await session.get(href, headers=headers)
+    app_logger.debug('Fetching feed: done')
+
+    if result.status != 200:
+        raise Exception(await result.text())
+
+    app_logger.debug('Fetching feed contents...')
+    contents = await result.content.read()
+    app_logger.debug('Fetched feed contents: done')
+
+    return contents
 
 
 def parse_feed_config(feed_config):
@@ -227,6 +306,34 @@ def parse_feed_config(feed_config):
         'zendesk': ZendeskFeed,
     }
     return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
+
+
+async def create_es_metrics_application(
+        is_running, metrics, raven_client, session, feed_endpoints, es_endpoint):
+
+    @async_repeat_while
+    async def poll_metrics(**_):
+        searchable, nonsearchable = await es_activities_total(session, es_endpoint)
+        metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
+        metrics['elasticsearch_activities_total'].labels('nonsearchable').set(nonsearchable)
+
+        feed_ids = feed_unique_ids(feed_endpoints)
+        for feed_id in feed_ids:
+            searchable, nonsearchable = await es_feed_activities_total(session,
+                                                                       es_endpoint, feed_id)
+            metrics['elasticsearch_feed_activities_total'].labels(
+                feed_id, 'searchable').set(searchable)
+            metrics['elasticsearch_feed_activities_total'].labels(
+                feed_id, 'nonsearchable').set(nonsearchable)
+
+        await asyncio.sleep(STATS_INTERVAL)
+
+    asyncio.ensure_future(poll_metrics(
+        _async_repeat_while=is_running,
+        _async_repeat_while_raven_client=raven_client,
+        _async_repeat_while_exception_interval=STATS_INTERVAL,
+        _async_repeat_while_logging_title='Elasticsearch polling',
+    ))
 
 
 def main():

@@ -179,6 +179,7 @@ async def run_es_application(port, override_routes):
     default_routes = [
         web.put('/{index_name}/_mapping/_doc', respond_http('{}', 200)),
         web.put('/{index_name}', respond_http('{}', 200)),
+        web.get('/{index_names}/_count', respond_http('{}', 200)),
         web.delete('/{index_names}', respond_http('{}', 200)),
         web.get('/_search', respond_http('{}', 200)),
         web.post('/_bulk', respond_http('{}', 200)),
