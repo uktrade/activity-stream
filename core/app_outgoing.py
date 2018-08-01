@@ -3,8 +3,6 @@ import functools
 import json
 import logging
 import os
-import signal
-import sys
 
 import aiohttp
 from aiohttp import web
@@ -53,6 +51,7 @@ from .app_server import (
 from .app_utils import (
     normalise_environment,
     async_repeat_until_cancelled,
+    main,
 )
 
 EXCEPTION_INTERVAL = 60
@@ -340,30 +339,5 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
     ))
 
 
-def main():
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    aiohttp_log = logging.getLogger('aiohttp.access')
-    aiohttp_log.setLevel(logging.DEBUG)
-    aiohttp_log.addHandler(stdout_handler)
-
-    app_logger = logging.getLogger('activity-stream')
-    app_logger.setLevel(logging.DEBUG)
-    app_logger.addHandler(stdout_handler)
-
-    loop = asyncio.get_event_loop()
-    cleanup = loop.run_until_complete(run_outgoing_application())
-
-    async def cleanup_then_stop_loop():
-        await cleanup()
-        asyncio.get_event_loop().stop()
-        return 'anything-to-avoid-pylint-assignment-from-none-error'
-
-    cleanup_then_stop = cleanup_then_stop_loop()
-    loop.add_signal_handler(signal.SIGINT, loop.create_task, cleanup_then_stop)
-    loop.add_signal_handler(signal.SIGTERM, loop.create_task, cleanup_then_stop)
-    loop.run_forever()
-    app_logger.info('Reached end of main. Exiting now.')
-
-
 if __name__ == '__main__':
-    main()
+    main(run_outgoing_application)
