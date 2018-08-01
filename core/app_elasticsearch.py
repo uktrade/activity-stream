@@ -22,6 +22,21 @@ from .app_utils import (
 ALIAS = 'activities'
 
 
+def get_endpoint(env):
+    return {
+        'host': env['ELASTICSEARCH']['HOST'],
+        'access_key_id': env['ELASTICSEARCH']['AWS_ACCESS_KEY_ID'],
+        'secret_key': env['ELASTICSEARCH']['AWS_SECRET_ACCESS_KEY'],
+        'region': env['ELASTICSEARCH']['REGION'],
+        'protocol': env['ELASTICSEARCH']['PROTOCOL'],
+        'base_url': (
+            env['ELASTICSEARCH']['PROTOCOL'] + '://' +
+            env['ELASTICSEARCH']['HOST'] + ':' + env['ELASTICSEARCH']['PORT']
+        ),
+        'port': env['ELASTICSEARCH']['PORT'],
+    }
+
+
 def get_new_index_names(feed_unique_ids):
     today = datetime.date.today().isoformat()
     now = str(datetime.datetime.now().timestamp()).split('.')[0]
