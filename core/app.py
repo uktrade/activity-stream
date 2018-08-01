@@ -57,7 +57,7 @@ from .app_utils import (
 EXCEPTION_INTERVAL = 60
 NONCE_EXPIRE = 120
 PAGINATION_EXPIRE = 60
-STATS_INTERVAL = 3
+METRICS_INTERVAL = 3
 
 
 async def run_application():
@@ -328,11 +328,11 @@ async def create_es_metrics_application(metrics, raven_client, session, feed_end
             metrics['elasticsearch_feed_activities_total'].labels(
                 feed_id, 'nonsearchable').set(nonsearchable)
 
-        await asyncio.sleep(STATS_INTERVAL)
+        await asyncio.sleep(METRICS_INTERVAL)
 
     asyncio.get_event_loop().create_task(poll_metrics(
         _async_repeat_until_cancelled_raven_client=raven_client,
-        _async_repeat_until_cancelled_exception_interval=STATS_INTERVAL,
+        _async_repeat_until_cancelled_exception_interval=METRICS_INTERVAL,
         _async_repeat_until_cancelled_logging_title='Elasticsearch polling',
     ))
 
