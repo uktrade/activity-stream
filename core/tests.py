@@ -761,6 +761,7 @@ class TestApplication(TestBase):
 
         self.assertEqual(status, 500)
         self.assertEqual(text, '{"details": "An unknown error occurred."}')
+        await asyncio.sleep(1)
 
     @async_test
     async def test_multipage(self):
