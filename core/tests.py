@@ -696,6 +696,54 @@ class TestApplication(TestBase):
         self.assertLessEqual(len(await fetch_es_index_names()), 2)
 
     @async_test
+    async def test_es_no_connect_recovered(self):
+        modified = 0
+        max_modifications = 2
+
+        async def handle_client(local_reader, local_writer):
+            nonlocal modified
+            if modified < max_modifications:
+                local_writer.close()
+                modified += 1
+            else:
+                try:
+                    remote_reader, remote_writer = await asyncio.open_connection('127.0.0.1', 9200)
+                    await asyncio.gather(
+                        pipe(local_reader, remote_writer),  # Upstream
+                        pipe(remote_reader, local_writer),  # Downstream
+                    )
+                finally:
+                    local_writer.close()
+
+        async def pipe(reader, writer):
+            try:
+                while not reader.at_eof():
+                    writer.write(await reader.read(16384))
+            finally:
+                writer.close()
+
+        server = await asyncio.start_server(handle_client, '0.0.0.0', 9201)
+
+        with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
+            await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
+                                    mock_feed=read_file)
+            while modified < max_modifications:
+                await ORIGINAL_SLEEP(0.1)
+
+            await wait_until_get_working()
+            mock_sleep.assert_any_call(60)
+
+        url = 'http://127.0.0.1:8080/v1/'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+        result, status, _ = await get_until(url, x_forwarded_for,
+                                            has_at_least_ordered_items(2), asyncio.sleep)
+        server.close()
+        await server.wait_closed()
+        self.assertEqual(status, 200)
+        self.assertEqual(result['orderedItems'][0]['id'],
+                         'dit:exportOpportunities:Enquiry:49863:Create')
+
+    @async_test
     async def test_es_no_connect_on_get_500(self):
         es_runner = await run_es_application(port=9201, override_routes=[])
         await self.setup_manual({
@@ -815,10 +863,9 @@ class TestApplication(TestBase):
             sent_broken = True
             return feed_contents_maybe_broken
 
-        with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
+        with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file_broken_then_fixed)
             results = await fetch_all_es_data_until(has_at_least(1), ORIGINAL_SLEEP)
-            mock_sleep.assert_any_call(60)
             return results
 
         self.assertIn(
