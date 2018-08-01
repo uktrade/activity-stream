@@ -52,6 +52,7 @@ from .app_server import (
 from .app_utils import (
     normalise_environment,
     async_repeat_until_cancelled,
+    cancel_non_current_tasks,
     main,
 )
 
@@ -112,14 +113,7 @@ async def run_outgoing_application():
     )
 
     async def cleanup():
-        current_task = asyncio.Task.current_task()
-        all_tasks = asyncio.Task.all_tasks()
-        non_current_tasks = [task for task in all_tasks if task != current_task]
-        for task in non_current_tasks:
-            task.cancel()
-        # Allow CancelledException to be thrown at the location of all awaits
-        await asyncio.sleep(0)
-
+        await cancel_non_current_tasks()
         await runner.cleanup()
         await raven_client.remote.get_transport().close()
 

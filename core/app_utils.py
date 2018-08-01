@@ -167,6 +167,16 @@ def extract_keys(dictionary, keys):
     return without_keys, extracted
 
 
+async def cancel_non_current_tasks():
+    current_task = asyncio.Task.current_task()
+    all_tasks = asyncio.Task.all_tasks()
+    non_current_tasks = [task for task in all_tasks if task != current_task]
+    for task in non_current_tasks:
+        task.cancel()
+    # Allow CancelledException to be thrown at the location of all awaits
+    await asyncio.sleep(0)
+
+
 def main(run_application_coroutine):
     stdout_handler = logging.StreamHandler(sys.stdout)
     aiohttp_log = logging.getLogger('aiohttp.access')
