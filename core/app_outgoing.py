@@ -61,7 +61,7 @@ PAGINATION_EXPIRE = 60
 METRICS_INTERVAL = 1
 
 
-async def run_application():
+async def run_outgoing_application():
     app_logger = logging.getLogger('activity-stream')
 
     app_logger.debug('Examining environment...')
@@ -351,7 +351,7 @@ def main():
     app_logger.addHandler(stdout_handler)
 
     loop = asyncio.get_event_loop()
-    cleanup = loop.run_until_complete(run_application())
+    cleanup = loop.run_until_complete(run_outgoing_application())
 
     async def cleanup_then_stop_loop():
         await cleanup()

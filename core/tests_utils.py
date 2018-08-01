@@ -5,7 +5,7 @@ import aiohttp
 from aiohttp import web
 import mohawk
 
-from core.app_outgoing import run_application
+from core.app_outgoing import run_outgoing_application
 
 
 ORIGINAL_SLEEP = asyncio.sleep
@@ -24,7 +24,7 @@ def async_test(func):
 
 
 async def run_app_until_accepts_http():
-    cleanup = await run_application()
+    cleanup = await run_outgoing_application()
     await is_http_accepted_eventually()
     return cleanup
 
