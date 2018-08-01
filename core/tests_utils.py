@@ -8,6 +8,13 @@ import mohawk
 from core.app import run_application
 
 
+ORIGINAL_SLEEP = asyncio.sleep
+
+
+async def fast_sleep(_):
+    await ORIGINAL_SLEEP(0.5)
+
+
 def async_test(func):
     def wrapper(*args, **kwargs):
         future = func(*args, **kwargs)

@@ -12,9 +12,11 @@ from aiohttp import web
 from freezegun import freeze_time
 
 from core.tests_utils import (
+    ORIGINAL_SLEEP,
     append_until,
     async_test,
     delete_all_es_data,
+    fast_sleep,
     fetch_all_es_data_until,
     fetch_es_index_names,
     get,
@@ -33,8 +35,6 @@ from core.tests_utils import (
     run_feed_application,
     wait_until_get_working,
 )
-
-ORIGINAL_SLEEP = asyncio.sleep
 
 
 class TestBase(unittest.TestCase):
@@ -992,7 +992,3 @@ class TestProcess(unittest.TestCase):
         final_string = b'Reached end of main. Exiting now.\n'
         self.assertEqual(final_string, output[-len(final_string):])
         self.assertEqual(server.returncode, 0)
-
-
-async def fast_sleep(_):
-    await ORIGINAL_SLEEP(0.5)
