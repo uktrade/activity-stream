@@ -181,6 +181,13 @@ async def cancel_non_current_tasks():
     await asyncio.sleep(0)
 
 
+def get_sentry_config(env):
+    return {
+        'dsn': env['SENTRY_DSN'],
+        'environment': env['SENTRY_ENVIRONMENT'],
+    }
+
+
 def get_raven_client(sentry):
     return Client(
         sentry['dsn'],

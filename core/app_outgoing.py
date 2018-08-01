@@ -48,6 +48,7 @@ from .app_server import (
 )
 from .app_utils import (
     normalise_environment,
+    get_sentry_config,
     get_raven_client,
     async_repeat_until_cancelled,
     cancel_non_current_tasks,
@@ -76,10 +77,7 @@ async def run_outgoing_application():
     ip_whitelist = env['INCOMING_IP_WHITELIST']
     es_endpoint = get_endpoint(env)
     redis_uri = json.loads(os.environ['VCAP_SERVICES'])['redis'][0]['credentials']['uri']
-    sentry = {
-        'dsn': env['SENTRY_DSN'],
-        'environment': env['SENTRY_ENVIRONMENT'],
-    }
+    sentry = get_sentry_config(env)
 
     app_logger.debug('Examining environment: done')
 
