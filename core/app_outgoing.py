@@ -1,5 +1,4 @@
 import asyncio
-import functools
 import json
 import logging
 import os
@@ -11,8 +10,6 @@ from prometheus_client import (
     CollectorRegistry,
     generate_latest,
 )
-from raven import Client
-from raven_aiohttp import QueuedAioHttpTransport
 
 from .app_elasticsearch import (
     get_endpoint,
@@ -51,6 +48,7 @@ from .app_server import (
 )
 from .app_utils import (
     normalise_environment,
+    get_raven_client,
     async_repeat_until_cancelled,
     cancel_non_current_tasks,
     main,
@@ -85,10 +83,7 @@ async def run_outgoing_application():
 
     app_logger.debug('Examining environment: done')
 
-    raven_client = Client(
-        sentry['dsn'],
-        environment=sentry['environment'],
-        transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
+    raven_client = get_raven_client(sentry)
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
 
     redis_client = await aioredis.create_redis(redis_uri)

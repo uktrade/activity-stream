@@ -1,8 +1,12 @@
 import asyncio
+import functools
 import itertools
 import logging
 import signal
 import sys
+
+from raven import Client
+from raven_aiohttp import QueuedAioHttpTransport
 
 
 def flatten(list_to_flatten):
@@ -175,6 +179,13 @@ async def cancel_non_current_tasks():
         task.cancel()
     # Allow CancelledException to be thrown at the location of all awaits
     await asyncio.sleep(0)
+
+
+def get_raven_client(sentry):
+    return Client(
+        sentry['dsn'],
+        environment=sentry['environment'],
+        transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
 
 
 def main(run_application_coroutine):
