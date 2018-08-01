@@ -57,7 +57,7 @@ from .app_utils import (
 EXCEPTION_INTERVAL = 60
 NONCE_EXPIRE = 120
 PAGINATION_EXPIRE = 60
-METRICS_INTERVAL = 3
+METRICS_INTERVAL = 1
 
 
 async def run_application():
