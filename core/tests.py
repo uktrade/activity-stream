@@ -880,6 +880,26 @@ class TestApplication(TestBase):
         )
 
     @async_test
+    async def test_on_feed_401_retries(self):
+        sent_401 = False
+
+        def send_401_then_200():
+            nonlocal sent_401
+            status = 401 if sent_401 else 200
+            sent_401 = True
+            return status
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=mock_env(), mock_feed=read_file,
+                                    mock_feed_status=send_401_then_200)
+            results = await fetch_all_es_data_until(has_at_least(1), ORIGINAL_SLEEP)
+
+        self.assertIn(
+            'dit:exportOpportunities:Enquiry:49863:Create',
+            str(results),
+        )
+
+    @async_test
     async def test_returns_some_metrics(self):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
