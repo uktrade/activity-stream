@@ -2,7 +2,7 @@ import asyncio
 import datetime
 import json
 import os
-from subprocess import Popen
+from subprocess import Popen, PIPE
 import sys
 import unittest
 from unittest.mock import Mock, patch
@@ -761,6 +761,7 @@ class TestApplication(TestBase):
 
         self.assertEqual(status, 500)
         self.assertEqual(text, '{"details": "An unknown error occurred."}')
+        await asyncio.sleep(1)
 
     @async_test
     async def test_multipage(self):
@@ -866,7 +867,6 @@ class TestApplication(TestBase):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file_broken_then_fixed)
             results = await fetch_all_es_data_until(has_at_least(1), ORIGINAL_SLEEP)
-            return results
 
         self.assertIn(
             'dit:exportOpportunities:Enquiry:49863:Create',
@@ -920,24 +920,79 @@ class TestApplication(TestBase):
 
 class TestProcess(unittest.TestCase):
 
-    def setUp(self):
+    def add_async_cleanup(self, coroutine):
         loop = asyncio.get_event_loop()
+        self.addCleanup(loop.run_until_complete, coroutine())
 
-        loop.run_until_complete(delete_all_es_data())
-        self.feed_runner_1 = loop.run_until_complete(run_feed_application(read_file, Mock(), 8081))
-        self.server = Popen([sys.executable, '-m', 'core.app'], env={
-            **mock_env(),
+    async def terminate_with_output(self, server):
+        await asyncio.sleep(1)
+        server.terminate()
+        # PaaS has 10 seconds to exit cleanly
+        await asyncio.sleep(1)
+        output, _ = server.communicate()
+        return output
+
+    async def setup_manual(self, env):
+        await delete_all_es_data()
+
+        feed_runner_1 = await run_feed_application(read_file, Mock(), 8081)
+        server = Popen([sys.executable, '-m', 'core.app'], env={
+            **env,
             'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
-        })
+        }, stdout=PIPE)
 
-    def tearDown(self):
-        self.server.terminate()
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.feed_runner_1.cleanup())
+        async def tear_down():
+            server.terminate()
+            await feed_runner_1.cleanup()
+
+        self.add_async_cleanup(tear_down)
+        return server
 
     @async_test
-    async def test_server_accepts_http(self):
+    async def test_http_and_exit_clean(self):
+        server = await self.setup_manual(mock_env())
         self.assertTrue(await is_http_accepted_eventually())
+
+        output = await self.terminate_with_output(server)
+
+        final_string = b'Reached end of main. Exiting now.\n'
+        self.assertEqual(final_string, output[-len(final_string):])
+        self.assertEqual(server.returncode, 0)
+
+    @async_test
+    async def test_if_es_down_exit_clean(self):
+        server = await self.setup_manual({
+            **mock_env(), 'ELASTICSEARCH__PORT': '9202'  # Nothing listening
+        })
+        self.assertTrue(await is_http_accepted_eventually())
+
+        output = await self.terminate_with_output(server)
+
+        final_string = b'Reached end of main. Exiting now.\n'
+        self.assertEqual(final_string, output[-len(final_string):])
+        self.assertEqual(server.returncode, 0)
+
+    @async_test
+    async def test_if_es_slow_exit_clean(self):
+        async def return_200_slow(_):
+            await asyncio.sleep(30)
+
+        routes = [
+            web.post('/_bulk', return_200_slow),
+        ]
+        es_runner = await run_es_application(port=9201, override_routes=routes)
+        self.add_async_cleanup(es_runner.cleanup)
+
+        server = await self.setup_manual({
+            **mock_env(), 'ELASTICSEARCH__PORT': '9201'
+        })
+        self.assertTrue(await is_http_accepted_eventually())
+
+        output = await self.terminate_with_output(server)
+
+        final_string = b'Reached end of main. Exiting now.\n'
+        self.assertEqual(final_string, output[-len(final_string):])
+        self.assertEqual(server.returncode, 0)
 
 
 async def fast_sleep(_):

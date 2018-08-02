@@ -157,25 +157,32 @@ def normalise_environment(key_values):
         nested_structured_dict
 
 
-def async_repeat_while(coroutine):
+def async_repeat_until_cancelled(coroutine):
 
     async def wrapper(*args, **kwargs):
         app_logger = logging.getLogger('activity-stream')
 
-        kwargs_to_pass, (predicate, raven_client, exception_interval, logging_title) = \
+        kwargs_to_pass, (raven_client, exception_interval, logging_title) = \
             extract_keys(kwargs, [
-                '_async_repeat_while', '_async_repeat_while_raven_client',
-                '_async_repeat_while_exception_interval', '_async_repeat_while_logging_title',
+                '_async_repeat_until_cancelled_raven_client',
+                '_async_repeat_until_cancelled_exception_interval',
+                '_async_repeat_until_cancelled_logging_title',
             ])
 
-        while predicate():
+        while True:
             try:
                 await coroutine(*args, **kwargs_to_pass)
+            except asyncio.CancelledError:
+                break
             except BaseException as exception:
                 app_logger.exception('%s raised exception: %s', logging_title, exception)
                 raven_client.captureException()
                 app_logger.warning('Waiting %s seconds until restarting', exception_interval)
-                await asyncio.sleep(exception_interval)
+
+                try:
+                    await asyncio.sleep(exception_interval)
+                except asyncio.CancelledError:
+                    break
 
     return wrapper
 

@@ -52,7 +52,7 @@ from .app_utils import (
     ExpiringDict,
     ExpiringSet,
     normalise_environment,
-    async_repeat_while,
+    async_repeat_until_cancelled,
 )
 
 EXCEPTION_INTERVAL = 60
@@ -102,28 +102,35 @@ async def run_application():
         environment=sentry['environment'],
         transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
-    running = True
 
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
     await create_outgoing_application(
-        lambda: running, metrics, raven_client, session,
-        feed_endpoints, es_endpoint,
+        metrics, raven_client, session, feed_endpoints, es_endpoint,
     )
     runner = await create_incoming_application(
         port, ip_whitelist, incoming_key_pairs, metrics_registry,
         raven_client, session, es_endpoint,
     )
     await create_es_metrics_application(
-        lambda: running, metrics, raven_client, session, feed_endpoints, es_endpoint,
+        metrics, raven_client, session, feed_endpoints, es_endpoint,
     )
 
     async def cleanup():
-        nonlocal running
-        running = False
+        current_task = asyncio.Task.current_task()
+        all_tasks = asyncio.Task.all_tasks()
+        non_current_tasks = [task for task in all_tasks if task != current_task]
+        for task in non_current_tasks:
+            task.cancel()
+        # Allow CancelledException to be thrown at the location of all awaits
+        await asyncio.sleep(0)
+
         await runner.cleanup()
         await raven_client.remote.get_transport().close()
+
         await session.close()
+        # https://github.com/aio-libs/aiohttp/issues/1925
+        await asyncio.sleep(0.250)
 
     return cleanup
 
@@ -170,23 +177,20 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
     return runner
 
 
-async def create_outgoing_application(is_running, metrics, raven_client, session,
-                                      feed_endpoints, es_endpoint):
-    asyncio.ensure_future(ingest_feeds(
-        is_running, metrics, session, feed_endpoints, es_endpoint,
-        _async_repeat_while=is_running,
-        _async_repeat_while_raven_client=raven_client,
-        _async_repeat_while_exception_interval=EXCEPTION_INTERVAL,
-        _async_repeat_while_logging_title='Polling feed',
+async def create_outgoing_application(metrics, raven_client, session, feed_endpoints, es_endpoint):
+    asyncio.get_event_loop().create_task(ingest_feeds(
+        metrics, session, feed_endpoints, es_endpoint,
+        _async_repeat_until_cancelled_raven_client=raven_client,
+        _async_repeat_until_cancelled_exception_interval=EXCEPTION_INTERVAL,
+        _async_repeat_until_cancelled_logging_title='Polling feed',
         _async_timer=metrics['ingest_feeds_duration_seconds'],
         _async_timer_labels=[],
-        _async_timer_is_running=is_running,
     ))
 
 
-@async_repeat_while
+@async_repeat_until_cancelled
 @async_timer
-async def ingest_feeds(is_running, metrics, session, feed_endpoints, es_endpoint, **_):
+async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint, **_):
     all_feed_ids = feed_unique_ids(feed_endpoints)
     new_index_names = get_new_index_names(all_feed_ids)
     old_index_names = await get_old_index_names(session, es_endpoint)
@@ -197,10 +201,9 @@ async def ingest_feeds(is_running, metrics, session, feed_endpoints, es_endpoint
 
     ingest_results = await asyncio.gather(*[
         ingest_feed(
-            is_running, metrics, session, feed_endpoint, es_endpoint, new_index_names[i],
+            metrics, session, feed_endpoint, es_endpoint, new_index_names[i],
             _async_timer=metrics['ingest_feed_duration_seconds'],
             _async_timer_labels=[feed_endpoint.unique_id],
-            _async_timer_is_running=is_running,
             _async_inprogress=metrics['ingest_inprogress_ingests_total'],
         )
         for i, feed_endpoint in enumerate(feed_endpoints)
@@ -228,19 +231,18 @@ def feed_unique_ids(feed_endpoints):
 
 @async_inprogress
 @async_timer
-async def ingest_feed(is_running, metrics, session, feed, es_endpoint, index_name, **_):
+async def ingest_feed(metrics, session, feed, es_endpoint, index_name, **_):
     href = feed.seed
     while href:
         href = await ingest_feed_page(
-            is_running, metrics, session, feed, es_endpoint, index_name, href,
+            metrics, session, feed, es_endpoint, index_name, href,
             _async_timer=metrics['ingest_page_duration_seconds'],
             _async_timer_labels=[feed.unique_id, 'total'],
-            _async_timer_is_running=is_running,
         )
 
 
 @async_timer
-async def ingest_feed_page(is_running, metrics, session, feed, es_endpoint, index_name, href, **_):
+async def ingest_feed_page(metrics, session, feed, es_endpoint, index_name, href, **_):
     app_logger = logging.getLogger('activity-stream')
 
     app_logger.debug('Polling')
@@ -248,7 +250,6 @@ async def ingest_feed_page(is_running, metrics, session, feed, es_endpoint, inde
         session, href, feed.auth_headers(href),
         _async_timer=metrics['ingest_page_duration_seconds'],
         _async_timer_labels=[feed.unique_id, 'pull'],
-        _async_timer_is_running=is_running,
     )
 
     app_logger.debug('Parsing JSON...')
@@ -260,7 +261,6 @@ async def ingest_feed_page(is_running, metrics, session, feed, es_endpoint, inde
         session, es_endpoint, es_bulk_items,
         _async_timer=metrics['ingest_page_duration_seconds'],
         _async_timer_labels=[feed.unique_id, 'push'],
-        _async_timer_is_running=is_running,
         _async_counter=metrics['ingest_activities_nonunique_total'],
         _async_counter_labels=[feed.unique_id],
         _async_counter_increment_by=len(es_bulk_items),
@@ -308,10 +308,10 @@ def parse_feed_config(feed_config):
     return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
 
-async def create_es_metrics_application(
-        is_running, metrics, raven_client, session, feed_endpoints, es_endpoint):
+async def create_es_metrics_application(metrics, raven_client, session, feed_endpoints,
+                                        es_endpoint):
 
-    @async_repeat_while
+    @async_repeat_until_cancelled
     async def poll_metrics(**_):
         searchable, nonsearchable = await es_activities_total(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
@@ -328,11 +328,10 @@ async def create_es_metrics_application(
 
         await asyncio.sleep(STATS_INTERVAL)
 
-    asyncio.ensure_future(poll_metrics(
-        _async_repeat_while=is_running,
-        _async_repeat_while_raven_client=raven_client,
-        _async_repeat_while_exception_interval=STATS_INTERVAL,
-        _async_repeat_while_logging_title='Elasticsearch polling',
+    asyncio.get_event_loop().create_task(poll_metrics(
+        _async_repeat_until_cancelled_raven_client=raven_client,
+        _async_repeat_until_cancelled_exception_interval=STATS_INTERVAL,
+        _async_repeat_until_cancelled_logging_title='Elasticsearch polling',
     ))
 
 
@@ -355,8 +354,8 @@ def main():
         return 'anything-to-avoid-pylint-assignment-from-none-error'
 
     cleanup_then_stop = cleanup_then_stop_loop()
-    loop.add_signal_handler(signal.SIGINT, asyncio.ensure_future, cleanup_then_stop)
-    loop.add_signal_handler(signal.SIGTERM, asyncio.ensure_future, cleanup_then_stop)
+    loop.add_signal_handler(signal.SIGINT, loop.create_task, cleanup_then_stop)
+    loop.add_signal_handler(signal.SIGTERM, loop.create_task, cleanup_then_stop)
     loop.run_forever()
     app_logger.info('Reached end of main. Exiting now.')
 
