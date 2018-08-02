@@ -1,6 +1,14 @@
 import asyncio
+import functools
 import itertools
+import json
 import logging
+import os
+import signal
+import sys
+
+from raven import Client
+from raven_aiohttp import QueuedAioHttpTransport
 
 
 def flatten(list_to_flatten):
@@ -163,3 +171,66 @@ def extract_keys(dictionary, keys):
         if key not in keys
     }
     return without_keys, extracted
+
+
+async def cancel_non_current_tasks():
+    current_task = asyncio.Task.current_task()
+    all_tasks = asyncio.Task.all_tasks()
+    non_current_tasks = [task for task in all_tasks if task != current_task]
+    for task in non_current_tasks:
+        task.cancel()
+    # Allow CancelledException to be thrown at the location of all awaits
+    await asyncio.sleep(0)
+
+
+def get_common_config(env):
+    es_endpoint = {
+        'host': env['ELASTICSEARCH']['HOST'],
+        'access_key_id': env['ELASTICSEARCH']['AWS_ACCESS_KEY_ID'],
+        'secret_key': env['ELASTICSEARCH']['AWS_SECRET_ACCESS_KEY'],
+        'region': env['ELASTICSEARCH']['REGION'],
+        'protocol': env['ELASTICSEARCH']['PROTOCOL'],
+        'base_url': (
+            env['ELASTICSEARCH']['PROTOCOL'] + '://' +
+            env['ELASTICSEARCH']['HOST'] + ':' + env['ELASTICSEARCH']['PORT']
+        ),
+        'port': env['ELASTICSEARCH']['PORT'],
+    }
+    redis_uri = json.loads(os.environ['VCAP_SERVICES'])['redis'][0]['credentials']['uri']
+    sentry = {
+        'dsn': env['SENTRY_DSN'],
+        'environment': env['SENTRY_ENVIRONMENT'],
+    }
+    return es_endpoint, redis_uri, sentry
+
+
+def get_raven_client(sentry):
+    return Client(
+        sentry['dsn'],
+        environment=sentry['environment'],
+        transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
+
+
+def main(run_application_coroutine):
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    aiohttp_log = logging.getLogger('aiohttp.access')
+    aiohttp_log.setLevel(logging.DEBUG)
+    aiohttp_log.addHandler(stdout_handler)
+
+    app_logger = logging.getLogger('activity-stream')
+    app_logger.setLevel(logging.DEBUG)
+    app_logger.addHandler(stdout_handler)
+
+    loop = asyncio.get_event_loop()
+    cleanup = loop.run_until_complete(run_application_coroutine())
+
+    async def cleanup_then_stop_loop():
+        await cleanup()
+        asyncio.get_event_loop().stop()
+        return 'anything-to-avoid-pylint-assignment-from-none-error'
+
+    cleanup_then_stop = cleanup_then_stop_loop()
+    loop.add_signal_handler(signal.SIGINT, loop.create_task, cleanup_then_stop)
+    loop.add_signal_handler(signal.SIGTERM, loop.create_task, cleanup_then_stop)
+    loop.run_forever()
+    app_logger.info('Reached end of main. Exiting now.')

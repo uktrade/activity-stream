@@ -5,7 +5,8 @@ import aiohttp
 from aiohttp import web
 import mohawk
 
-from core.app import run_application
+from core.app_incoming import run_incoming_application
+from core.app_outgoing import run_outgoing_application
 
 
 ORIGINAL_SLEEP = asyncio.sleep
@@ -24,8 +25,13 @@ def async_test(func):
 
 
 async def run_app_until_accepts_http():
-    cleanup = await run_application()
+    cleanup_inc = await run_incoming_application()
+    cleanup_out = await run_outgoing_application()
     await is_http_accepted_eventually()
+
+    async def cleanup():
+        await cleanup_inc()
+        await cleanup_out()
     return cleanup
 
 
@@ -54,7 +60,7 @@ async def is_http_accepted_eventually():
 async def wait_until_get_working():
     # Assume can already connect on HTTP
     attempts = 0
-    while attempts < 20:
+    while attempts < 50:
         async with aiohttp.ClientSession() as session:
             url = 'http://127.0.0.1:8080/v1/'
             auth = hawk_auth_header(
