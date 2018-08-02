@@ -8,6 +8,7 @@ import sys
 
 import aiohttp
 from aiohttp import web
+import aioredis
 from prometheus_client import (
     CollectorRegistry,
 )
@@ -49,14 +50,13 @@ from .app_server import (
     raven_reporter,
 )
 from .app_utils import (
-    ExpiringDict,
-    ExpiringSet,
     normalise_environment,
     async_repeat_until_cancelled,
 )
 
 EXCEPTION_INTERVAL = 60
 NONCE_EXPIRE = 120
+PAGINATION_EXPIRE = 60
 STATS_INTERVAL = 3
 
 
@@ -90,6 +90,8 @@ async def run_application():
         'port': env['ELASTICSEARCH']['PORT'],
     }
 
+    redis_uri = json.loads(os.environ['VCAP_SERVICES'])['redis'][0]['credentials']['uri']
+
     sentry = {
         'dsn': env['SENTRY_DSN'],
         'environment': env['SENTRY_ENVIRONMENT'],
@@ -103,6 +105,8 @@ async def run_application():
         transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
 
+    redis_client = await aioredis.create_redis(redis_uri)
+
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
     await create_outgoing_application(
@@ -110,7 +114,7 @@ async def run_application():
     )
     runner = await create_incoming_application(
         port, ip_whitelist, incoming_key_pairs, metrics_registry,
-        raven_client, session, es_endpoint,
+        redis_client, raven_client, session, es_endpoint,
     )
     await create_es_metrics_application(
         metrics, raven_client, session, feed_endpoints, es_endpoint,
@@ -135,15 +139,12 @@ async def run_application():
     return cleanup
 
 
-async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
-                                      metrics_registry, raven_client, session, es_endpoint):
+async def create_incoming_application(
+        port, ip_whitelist, incoming_key_pairs, metrics_registry,
+        redis_client, raven_client, session, es_endpoint):
     app_logger = logging.getLogger('activity-stream')
 
     app_logger.debug('Creating listening web application...')
-
-    # These would need to be stored externally if this was ever to be load balanced
-    public_to_private_scroll_ids = ExpiringDict(30)
-    seen_nonces = ExpiringSet(NONCE_EXPIRE)
 
     app = web.Application(middlewares=[
         convert_errors_to_json(),
@@ -151,15 +152,16 @@ async def create_incoming_application(port, ip_whitelist, incoming_key_pairs,
     ])
 
     private_app = web.Application(middlewares=[
-        authenticator(ip_whitelist, incoming_key_pairs, seen_nonces),
+        authenticator(ip_whitelist, incoming_key_pairs, redis_client, NONCE_EXPIRE),
         authorizer(),
     ])
     private_app.add_routes([
         web.post('/', handle_post),
-        web.get('/', handle_get_new(session, public_to_private_scroll_ids, es_endpoint)),
+        web.get('/', handle_get_new(session, redis_client, PAGINATION_EXPIRE, es_endpoint)),
         web.get(
             '/{public_scroll_id}',
-            handle_get_existing(session, public_to_private_scroll_ids, es_endpoint), name='scroll',
+            handle_get_existing(session, redis_client, PAGINATION_EXPIRE, es_endpoint),
+            name='scroll',
         ),
     ])
     app.add_subapp('/v1/', private_app)

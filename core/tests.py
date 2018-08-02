@@ -12,9 +12,11 @@ from aiohttp import web
 from freezegun import freeze_time
 
 from core.tests_utils import (
+    ORIGINAL_SLEEP,
     append_until,
     async_test,
     delete_all_es_data,
+    fast_sleep,
     fetch_all_es_data_until,
     fetch_es_index_names,
     get,
@@ -33,8 +35,6 @@ from core.tests_utils import (
     run_feed_application,
     wait_until_get_working,
 )
-
-ORIGINAL_SLEEP = asyncio.sleep
 
 
 class TestBase(unittest.TestCase):
@@ -220,26 +220,23 @@ class TestAuthentication(TestBase):
             is shorter then the allowed Hawk skew. The second request succeeding gives
             evidence that the cache of nonces was cleared.
         '''
-
-        now = datetime.datetime.now()
-        past = now + datetime.timedelta(seconds=-45)
-
-        with patch('core.app.NONCE_EXPIRE', 30):
+        with patch('core.app.NONCE_EXPIRE', 1):
             await self.setup_manual(env=mock_env(), mock_feed=read_file)
 
-            url = 'http://127.0.0.1:8080/v1/'
-            x_forwarded_for = '1.2.3.4, 127.0.0.0'
+        url = 'http://127.0.0.1:8080/v1/'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
 
-            with freeze_time(past):
-                auth = hawk_auth_header(
-                    'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
-                )
-                _, status_1 = await post(url, auth, x_forwarded_for)
-            self.assertEqual(status_1, 200)
+        auth = hawk_auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
+        )
 
-            with freeze_time(now):
-                _, status_2 = await post(url, auth, x_forwarded_for)
-            self.assertEqual(status_2, 200)
+        _, status_1 = await post(url, auth, x_forwarded_for)
+        self.assertEqual(status_1, 200)
+
+        await asyncio.sleep(1)
+
+        _, status_2 = await post(url, auth, x_forwarded_for)
+        self.assertEqual(status_2, 200)
 
     @async_test
     async def test_no_x_fwd_for_401(self):
@@ -414,7 +411,9 @@ class TestApplication(TestBase):
 
     @async_test
     async def test_pagination_expiry(self):
-        with patch('asyncio.sleep', wraps=fast_sleep):
+        with \
+                patch('core.app.PAGINATION_EXPIRE', 1), \
+                patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file)
             await wait_until_get_working()
 
@@ -422,30 +421,27 @@ class TestApplication(TestBase):
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
         await get_until(url_1, x_forwarded_for, has_at_least_ordered_items(2), asyncio.sleep)
 
-        now = datetime.datetime.now()
-        past = now + datetime.timedelta(seconds=-60)
-
         query = json.dumps({
             'size': '1',
         }).encode('utf-8')
 
-        with freeze_time(past):
-            auth = hawk_auth_header(
-                'incoming-some-id-3', 'incoming-some-secret-3', url_1,
-                'GET', query, 'application/json',
-            )
-            result_1, _, _ = await get(url_1, auth, x_forwarded_for, query)
-            result_1_json = json.loads(result_1)
-            url_2 = result_1_json['next']
+        auth = hawk_auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url_1,
+            'GET', query, 'application/json',
+        )
+        result_1, _, _ = await get(url_1, auth, x_forwarded_for, query)
+        result_1_json = json.loads(result_1)
+        url_2 = result_1_json['next']
 
-        with freeze_time(now):
-            auth_2 = hawk_auth_header(
-                'incoming-some-id-3', 'incoming-some-secret-3', url_2,
-                'GET', b'', 'application/json',
-            )
-            result_2, status_2, _ = await get(url_2, auth_2, x_forwarded_for, b'')
-            self.assertEqual(json.loads(result_2)['details'], 'Scroll ID not found.')
-            self.assertEqual(status_2, 404)
+        await asyncio.sleep(1)
+
+        auth_2 = hawk_auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url_2,
+            'GET', b'', 'application/json',
+        )
+        result_2, status_2, _ = await get(url_2, auth_2, x_forwarded_for, b'')
+        self.assertEqual(json.loads(result_2)['details'], 'Scroll ID not found.')
+        self.assertEqual(status_2, 404)
 
     @async_test
     async def test_get_can_filter(self):
@@ -606,10 +602,16 @@ class TestApplication(TestBase):
         es_runner = await run_es_application(port=9201, override_routes=routes)
 
         with \
-                freeze_time('2012-01-15 12:00:01'), \
-                patch('os.urandom', return_value=b'something-random'):
+                freeze_time('2012-01-15 12:00:01'):
             await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                     mock_feed=read_file)
+
+            url = 'http://127.0.0.1:8080/v1/'
+            auth = hawk_auth_header(
+                'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
+            )
+            x_forwarded_for = '1.2.3.4, 127.0.0.0'
+            await get(url, auth, x_forwarded_for, b'')
             await es_runner.cleanup()
             [[_, es_headers]] = await get_es_once
 
@@ -993,7 +995,3 @@ class TestProcess(unittest.TestCase):
         final_string = b'Reached end of main. Exiting now.\n'
         self.assertEqual(final_string, output[-len(final_string):])
         self.assertEqual(server.returncode, 0)
-
-
-async def fast_sleep(_):
-    await ORIGINAL_SLEEP(0.5)

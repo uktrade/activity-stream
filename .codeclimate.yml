@@ -2,7 +2,7 @@ version: "2"
 checks:
   argument-count:
     config:
-      threshold: 7
+      threshold: 8
 plugins:
   duplication:
     enabled: true
@@ -14,4 +14,4 @@ plugins:
   sonar-python:
     enabled: true
     config:
-      minimum_severity: major
+      minimum_severity: critical

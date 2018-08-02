@@ -8,6 +8,13 @@ import mohawk
 from core.app import run_application
 
 
+ORIGINAL_SLEEP = asyncio.sleep
+
+
+async def fast_sleep(_):
+    await ORIGINAL_SLEEP(0.5)
+
+
 def async_test(func):
     def wrapper(*args, **kwargs):
         future = func(*args, **kwargs)
@@ -260,4 +267,5 @@ def mock_env():
         'INCOMING_IP_WHITELIST__2': '2.3.4.5',
         'SENTRY_DSN': 'http://abc:cvb@localhost:9872/123',
         'SENTRY_ENVIRONMENT': 'test',
+        'VCAP_SERVICES': '{"redis":[{"credentials":{"uri":"redis://127.0.0.1:6379"}}]}',
     }

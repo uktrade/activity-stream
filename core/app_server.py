@@ -1,4 +1,3 @@
-import functools
 import hmac
 import logging
 import uuid
@@ -24,19 +23,8 @@ NOT_AUTHORIZED = 'You are not authorized to perform this action.'
 UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
-def authenticator(ip_whitelist, incoming_key_pairs, seen_nonces):
+def authenticator(ip_whitelist, incoming_key_pairs, redis_client, nonce_expire):
     app_logger = logging.getLogger('activity-stream')
-
-    async def authenticate_or_raise(request):
-        return mohawk.Receiver(
-            functools.partial(_lookup_credentials, incoming_key_pairs),
-            request.headers['Authorization'],
-            str(request.url.with_scheme(request.headers['X-Forwarded-Proto'])),
-            request.method,
-            content=await request.read(),
-            content_type=request.headers['Content-Type'],
-            seen_nonce=functools.partial(_seen_nonce, seen_nonces),
-        )
 
     @web.middleware
     async def authenticate(request, handler):
@@ -77,7 +65,8 @@ def authenticator(ip_whitelist, incoming_key_pairs, seen_nonces):
             raise web.HTTPUnauthorized(text=MISSING_CONTENT_TYPE)
 
         try:
-            receiver = await authenticate_or_raise(request)
+            receiver = await _authenticate_or_raise(incoming_key_pairs, redis_client,
+                                                    nonce_expire, request)
         except HawkFail as exception:
             app_logger.warning('Failed authentication %s', exception)
             raise web.HTTPUnauthorized(text=INCORRECT)
@@ -88,30 +77,45 @@ def authenticator(ip_whitelist, incoming_key_pairs, seen_nonces):
     return authenticate
 
 
-def _lookup_credentials(incoming_key_pairs, passed_access_key_id):
-    matching_key_pairs = [
-        key_pair
-        for key_pair in incoming_key_pairs
-        if hmac.compare_digest(key_pair['key_id'], passed_access_key_id)
-    ]
+async def _authenticate_or_raise(incoming_key_pairs, redis_client, nonce_expire, request):
+    def lookup_credentials(passed_access_key_id):
+        matching_key_pairs = [
+            key_pair
+            for key_pair in incoming_key_pairs
+            if hmac.compare_digest(key_pair['key_id'], passed_access_key_id)
+        ]
 
-    if not matching_key_pairs:
-        raise HawkFail(f'No Hawk ID of {passed_access_key_id}')
+        if not matching_key_pairs:
+            raise HawkFail(f'No Hawk ID of {passed_access_key_id}')
 
-    return {
-        'id': matching_key_pairs[0]['key_id'],
-        'key': matching_key_pairs[0]['secret_key'],
-        'permissions': matching_key_pairs[0]['permissions'],
-        'algorithm': 'sha256',
-    }
+        return {
+            'id': matching_key_pairs[0]['key_id'],
+            'key': matching_key_pairs[0]['secret_key'],
+            'permissions': matching_key_pairs[0]['permissions'],
+            'algorithm': 'sha256',
+        }
 
+    receiver = mohawk.Receiver(
+        lookup_credentials,
+        request.headers['Authorization'],
+        str(request.url.with_scheme(request.headers['X-Forwarded-Proto'])),
+        request.method,
+        content=await request.read(),
+        content_type=request.headers['Content-Type'],
+        # Mohawk doesn't provide an async way of checking nonce
+        seen_nonce=lambda _, __, ___: False,
+    )
 
-def _seen_nonce(seen_nonces, access_key_id, nonce, _):
-    nonce_tuple = (access_key_id, nonce)
-    seen = nonce_tuple in seen_nonces
-    if not seen:
-        seen_nonces.add(nonce_tuple)
-    return seen
+    nonce = receiver.resource.nonce
+    access_key_id = receiver.resource.credentials['id']
+    nonce_key = f'nonce-{access_key_id}-{nonce}'
+    redis_response = await redis_client.execute('SET', nonce_key, '1',
+                                                'EX', nonce_expire, 'NX')
+    seen_nonce = not redis_response == b'OK'
+    if seen_nonce:
+        raise web.HTTPUnauthorized(text=INCORRECT)
+
+    return receiver
 
 
 def authorizer():
@@ -168,25 +172,26 @@ async def handle_post(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
-def handle_get_new(session, public_to_private_scroll_ids, es_endpoint):
-    return _handle_get(session, public_to_private_scroll_ids,
-                       es_endpoint, es_search_new_scroll)
+def handle_get_new(session, redis_client, pagination_expire, es_endpoint):
+    return _handle_get(session, redis_client, pagination_expire, es_endpoint,
+                       es_search_new_scroll)
 
 
-def handle_get_existing(session, public_to_private_scroll_ids, es_endpoint):
-    return _handle_get(session, public_to_private_scroll_ids,
-                       es_endpoint, es_search_existing_scroll)
+def handle_get_existing(session, redis_client, pagination_expire, es_endpoint):
+    return _handle_get(session, redis_client, pagination_expire, es_endpoint,
+                       es_search_existing_scroll)
 
 
-def _handle_get(session, public_to_private_scroll_ids, es_endpoint, get_path_query):
+def _handle_get(session, redis_client, pagination_expire, es_endpoint, get_path_query):
     async def handle(request):
         incoming_body = await request.read()
-        path, query_string, body = get_path_query(public_to_private_scroll_ids,
-                                                  request.match_info, incoming_body)
+        path, query_string, body = await get_path_query(redis_client, request.match_info,
+                                                        incoming_body)
 
-        def to_public_scroll_url(private_scroll_id):
+        async def to_public_scroll_url(private_scroll_id):
             public_scroll_id = uuid.uuid4().hex
-            public_to_private_scroll_ids[public_scroll_id] = private_scroll_id
+            await redis_client.set(f'private-scroll-id-{public_scroll_id}', private_scroll_id,
+                                   expire=pagination_expire)
             return str(request.url.join(
                 request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)))
 
