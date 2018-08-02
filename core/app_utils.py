@@ -1,7 +1,9 @@
 import asyncio
 import functools
 import itertools
+import json
 import logging
+import os
 import signal
 import sys
 
@@ -181,11 +183,25 @@ async def cancel_non_current_tasks():
     await asyncio.sleep(0)
 
 
-def get_sentry_config(env):
-    return {
+def get_common_config(env):
+    es_endpoint = {
+        'host': env['ELASTICSEARCH']['HOST'],
+        'access_key_id': env['ELASTICSEARCH']['AWS_ACCESS_KEY_ID'],
+        'secret_key': env['ELASTICSEARCH']['AWS_SECRET_ACCESS_KEY'],
+        'region': env['ELASTICSEARCH']['REGION'],
+        'protocol': env['ELASTICSEARCH']['PROTOCOL'],
+        'base_url': (
+            env['ELASTICSEARCH']['PROTOCOL'] + '://' +
+            env['ELASTICSEARCH']['HOST'] + ':' + env['ELASTICSEARCH']['PORT']
+        ),
+        'port': env['ELASTICSEARCH']['PORT'],
+    }
+    redis_uri = json.loads(os.environ['VCAP_SERVICES'])['redis'][0]['credentials']['uri']
+    sentry = {
         'dsn': env['SENTRY_DSN'],
         'environment': env['SENTRY_ENVIRONMENT'],
     }
+    return es_endpoint, redis_uri, sentry
 
 
 def get_raven_client(sentry):

@@ -12,7 +12,6 @@ from prometheus_client import (
 )
 
 from .app_elasticsearch import (
-    get_endpoint,
     es_bulk,
     es_activities_total,
     es_feed_activities_total,
@@ -48,7 +47,7 @@ from .app_server import (
 )
 from .app_utils import (
     normalise_environment,
-    get_sentry_config,
+    get_common_config,
     get_raven_client,
     async_repeat_until_cancelled,
     cancel_non_current_tasks,
@@ -67,9 +66,7 @@ async def run_outgoing_application():
     app_logger.debug('Examining environment...')
     env = normalise_environment(os.environ)
 
-    es_endpoint = get_endpoint(env)
-    redis_uri = json.loads(os.environ['VCAP_SERVICES'])['redis'][0]['credentials']['uri']
-    sentry = get_sentry_config(env)
+    es_endpoint, redis_uri, sentry = get_common_config(env)
     port = env['PORT']
     feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
     incoming_key_pairs = [{
