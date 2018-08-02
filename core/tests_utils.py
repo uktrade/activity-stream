@@ -54,7 +54,7 @@ async def is_http_accepted_eventually():
 async def wait_until_get_working():
     # Assume can already connect on HTTP
     attempts = 0
-    while attempts < 20:
+    while attempts < 50:
         async with aiohttp.ClientSession() as session:
             url = 'http://127.0.0.1:8080/v1/'
             auth = hawk_auth_header(

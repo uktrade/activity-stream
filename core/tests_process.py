@@ -11,6 +11,9 @@ from core.tests_utils import (
     async_test,
     delete_all_es_data,
     is_http_accepted_eventually,
+    wait_until_get_working,
+    has_at_least_ordered_items,
+    get_until,
     mock_env,
     read_file,
     run_es_application,
@@ -52,6 +55,14 @@ class TestProcess(unittest.TestCase):
     async def test_http_and_exit_clean(self):
         server = await self.setup_manual(mock_env())
         self.assertTrue(await is_http_accepted_eventually())
+        await wait_until_get_working()
+
+        url = 'http://127.0.0.1:8080/v1/'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+        result, _, _ = await get_until(url, x_forwarded_for,
+                                       has_at_least_ordered_items(2), asyncio.sleep)
+        self.assertEqual(result['orderedItems'][0]['id'],
+                         'dit:exportOpportunities:Enquiry:49863:Create')
 
         output = await self.terminate_with_output(server)
 
