@@ -866,7 +866,6 @@ class TestApplication(TestBase):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file_broken_then_fixed)
             results = await fetch_all_es_data_until(has_at_least(1), ORIGINAL_SLEEP)
-            return results
 
         self.assertIn(
             'dit:exportOpportunities:Enquiry:49863:Create',
