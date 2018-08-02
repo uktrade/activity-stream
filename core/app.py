@@ -11,6 +11,7 @@ from aiohttp import web
 import aioredis
 from prometheus_client import (
     CollectorRegistry,
+    generate_latest,
 )
 from raven import Client
 from raven_aiohttp import QueuedAioHttpTransport
@@ -57,7 +58,7 @@ from .app_utils import (
 EXCEPTION_INTERVAL = 60
 NONCE_EXPIRE = 120
 PAGINATION_EXPIRE = 60
-STATS_INTERVAL = 3
+METRICS_INTERVAL = 1
 
 
 async def run_application():
@@ -113,11 +114,12 @@ async def run_application():
         metrics, raven_client, session, feed_endpoints, es_endpoint,
     )
     runner = await create_incoming_application(
-        port, ip_whitelist, incoming_key_pairs, metrics_registry,
+        port, ip_whitelist, incoming_key_pairs,
         redis_client, raven_client, session, es_endpoint,
     )
-    await create_es_metrics_application(
-        metrics, raven_client, session, feed_endpoints, es_endpoint,
+    await create_metrics_application(
+        metrics, metrics_registry, redis_client, raven_client,
+        session, feed_endpoints, es_endpoint,
     )
 
     async def cleanup():
@@ -140,7 +142,7 @@ async def run_application():
 
 
 async def create_incoming_application(
-        port, ip_whitelist, incoming_key_pairs, metrics_registry,
+        port, ip_whitelist, incoming_key_pairs,
         redis_client, raven_client, session, es_endpoint):
     app_logger = logging.getLogger('activity-stream')
 
@@ -166,7 +168,7 @@ async def create_incoming_application(
     ])
     app.add_subapp('/v1/', private_app)
     app.add_routes([
-        web.get('/metrics', handle_get_metrics(metrics_registry)),
+        web.get('/metrics', handle_get_metrics(redis_client)),
     ])
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 
@@ -310,8 +312,8 @@ def parse_feed_config(feed_config):
     return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
 
-async def create_es_metrics_application(metrics, raven_client, session, feed_endpoints,
-                                        es_endpoint):
+async def create_metrics_application(metrics, metrics_registry, redis_client,
+                                     raven_client, session, feed_endpoints, es_endpoint):
 
     @async_repeat_until_cancelled
     async def poll_metrics(**_):
@@ -328,11 +330,12 @@ async def create_es_metrics_application(metrics, raven_client, session, feed_end
             metrics['elasticsearch_feed_activities_total'].labels(
                 feed_id, 'nonsearchable').set(nonsearchable)
 
-        await asyncio.sleep(STATS_INTERVAL)
+        await redis_client.set('metrics', generate_latest(metrics_registry))
+        await asyncio.sleep(METRICS_INTERVAL)
 
     asyncio.get_event_loop().create_task(poll_metrics(
         _async_repeat_until_cancelled_raven_client=raven_client,
-        _async_repeat_until_cancelled_exception_interval=STATS_INTERVAL,
+        _async_repeat_until_cancelled_exception_interval=METRICS_INTERVAL,
         _async_repeat_until_cancelled_logging_title='Elasticsearch polling',
     ))
 

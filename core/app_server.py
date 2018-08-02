@@ -5,7 +5,6 @@ import uuid
 from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
-from prometheus_client import generate_latest
 
 from .app_elasticsearch import (
     es_search,
@@ -204,9 +203,9 @@ def _handle_get(session, redis_client, pagination_expire, es_endpoint, get_path_
     return handle
 
 
-def handle_get_metrics(registry):
+def handle_get_metrics(redis_client):
     async def handle(_):
-        return web.Response(body=generate_latest(registry), status=200, headers={
+        return web.Response(body=await redis_client.get('metrics'), status=200, headers={
             'Content-Type': 'text/plain; charset=utf-8',
         })
 
