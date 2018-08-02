@@ -67,6 +67,9 @@ async def run_outgoing_application():
     app_logger.debug('Examining environment...')
     env = normalise_environment(os.environ)
 
+    es_endpoint = get_endpoint(env)
+    redis_uri = json.loads(os.environ['VCAP_SERVICES'])['redis'][0]['credentials']['uri']
+    sentry = get_sentry_config(env)
     port = env['PORT']
     feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
     incoming_key_pairs = [{
@@ -75,9 +78,6 @@ async def run_outgoing_application():
         'permissions': key_pair['PERMISSIONS'],
     } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
     ip_whitelist = env['INCOMING_IP_WHITELIST']
-    es_endpoint = get_endpoint(env)
-    redis_uri = json.loads(os.environ['VCAP_SERVICES'])['redis'][0]['credentials']['uri']
-    sentry = get_sentry_config(env)
 
     app_logger.debug('Examining environment: done')
 
