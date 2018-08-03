@@ -77,11 +77,9 @@ class TestProcess(unittest.TestCase):
         url = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
         result, _, _ = await get_until(url, x_forwarded_for,
-                                       has_at_least_ordered_items(3))
-        self.assertEqual(result['orderedItems'][0]['id'],
-                         'dit:exportOpportunities:Enquiry:49863:Create')
-        self.assertEqual(result['orderedItems'][2]['id'],
-                         'dit:activityStreamVerificationFeed:Verifier:1:Create')
+                                       has_at_least_ordered_items(500))
+        ids = [item['id'] for item in result['orderedItems']]
+        self.assertIn('dit:activityStreamVerificationFeed:Verifier', str(ids))
 
         output_out, output_inc = await self.terminate_with_output(server_out, server_inc)
 
