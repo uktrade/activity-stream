@@ -21,6 +21,12 @@ and then to run the tests themselves
 
     ./tests.sh
 
+## Verification Feed
+
+A small separate application in [verification_feed](verification_feed) is provided to allow the stream to be tested, even in production, without using real data. It provides a single activity, published date of the moment the feed is queried.
+
+The application is not deployed automatically. To update the verification feed you must `cf push` from inside the [verification_feed](verification_feed) directory.
+
 ## Running locally
 
     PORT=8080 \

@@ -43,14 +43,24 @@ class TestProcess(unittest.TestCase):
         env = {
             **common_env,
             'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
+            'FEEDS__2__UNIQUE_ID': 'verification',
+            'FEEDS__2__SEED': 'http://localhost:8082/',
+            'FEEDS__2__ACCESS_KEY_ID': '',
+            'FEEDS__2__SECRET_ACCESS_KEY': '',
+            'FEEDS__2__TYPE': 'activity_stream',
         }
         feed_runner_1 = await run_feed_application(read_file, lambda: 200, Mock(), 8081)
+        feed_runner_2 = Popen([sys.executable, '-m', 'verification_feed.app'], env={
+            **env,
+            'PORT': '8082',
+        }, stdout=PIPE)
         server_out = Popen([sys.executable, '-m', 'core.app_outgoing'], env=env, stdout=PIPE)
         server_inc = Popen([sys.executable, '-m', 'core.app_incoming'], env=env, stdout=PIPE)
 
         async def tear_down():
             server_inc.terminate()
             server_out.terminate()
+            feed_runner_2.terminate()
             await feed_runner_1.cleanup()
 
         self.add_async_cleanup(tear_down)
@@ -65,9 +75,11 @@ class TestProcess(unittest.TestCase):
         url = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
         result, _, _ = await get_until(url, x_forwarded_for,
-                                       has_at_least_ordered_items(2), asyncio.sleep)
+                                       has_at_least_ordered_items(3), asyncio.sleep)
         self.assertEqual(result['orderedItems'][0]['id'],
                          'dit:exportOpportunities:Enquiry:49863:Create')
+        self.assertEqual(result['orderedItems'][2]['id'],
+                         'dit:activityStreamVerificationFeed:Verifier:1:Create')
 
         output_out, output_inc = await self.terminate_with_output(server_out, server_inc)
 
