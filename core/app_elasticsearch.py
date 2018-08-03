@@ -262,12 +262,12 @@ async def es_bulk(session, es_endpoint, items, **_):
     app_logger.debug('Converting to ES bulk ingest commands: done')
 
     app_logger.debug('POSTing bulk import to ES...')
-    es_result = await es_request_non_200_exception(
+    await es_request_non_200_exception(
         session=session, endpoint=es_endpoint,
         method='POST', path='/_bulk', query_string='',
         content_type='application/x-ndjson', payload=es_bulk_contents,
     )
-    app_logger.debug('Pushing to ES: done (%s)', await es_result.text())
+    app_logger.debug('Pushing to ES: done')
 
 
 async def es_activities_total(session, es_endpoint):
