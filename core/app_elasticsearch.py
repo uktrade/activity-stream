@@ -259,7 +259,7 @@ async def es_bulk(session, es_endpoint, items, **_):
          json.dumps(item['source'], sort_keys=True)]
         for item in items
     ])) + '\n').encode('utf-8')
-    app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
+    app_logger.debug('Converting to ES bulk ingest commands: done')
 
     app_logger.debug('POSTing bulk import to ES...')
     es_result = await es_request_non_200_exception(
