@@ -40,15 +40,13 @@ class TestProcess(unittest.TestCase):
     async def setup_manual(self, common_env):
         await delete_all_es_data()
 
+        env = {
+            **common_env,
+            'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
+        }
         feed_runner_1 = await run_feed_application(read_file, lambda: 200, Mock(), 8081)
-        server_out = Popen([sys.executable, '-m', 'core.app_outgoing'], env={
-            **common_env,
-            'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
-        }, stdout=PIPE)
-        server_inc = Popen([sys.executable, '-m', 'core.app_incoming'], env={
-            **common_env,
-            'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
-        }, stdout=PIPE)
+        server_out = Popen([sys.executable, '-m', 'core.app_outgoing'], env=env, stdout=PIPE)
+        server_inc = Popen([sys.executable, '-m', 'core.app_incoming'], env=env, stdout=PIPE)
 
         async def tear_down():
             server_inc.terminate()
