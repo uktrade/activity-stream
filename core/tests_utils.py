@@ -148,7 +148,7 @@ async def get(url, auth, x_forwarded_for, body):
             'Content-Type': 'application/json',
             'X-Forwarded-For': x_forwarded_for,
             'X-Forwarded-Proto': 'http',
-        }, data=body, timeout=1)
+        }, data=body, timeout=3)
     return (await result.text(), result.status, result.headers)
 
 
@@ -164,6 +164,19 @@ async def get_until(url, x_forwarded_for, condition, sleep):
         await sleep(0.05)
 
     return dict_data, status, headers
+
+
+async def get_until_raw(url, x_forwarded_for, condition, sleep):
+    for _ in range(0, 20):
+        auth = hawk_auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
+        )
+        all_data, status, headers = await get(url, auth, x_forwarded_for, b'')
+        if condition(all_data):
+            break
+        await sleep(1)
+
+    return all_data, status, headers
 
 
 async def post(url, auth, x_forwarded_for):

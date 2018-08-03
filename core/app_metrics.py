@@ -31,6 +31,10 @@ METRICS_CONF = [
     (Gauge, 'elasticsearch_feed_activities_total',
      'The number of activities from a feed stored in Elasticsearch',
      ['feed_unique_id', 'searchable']),
+    # Only need verification, but keeping it consistent with other metrics
+    (Gauge, 'elasticsearch_activities_age_minimum_seconds',
+     'The minimum age of activites from a feed stored in Elasticsearch in seconds',
+     ['feed_unique_id']),
 ]
 
 

@@ -596,7 +596,8 @@ class TestApplication(TestBase):
 
         async def return_200_and_callback(request):
             content, headers = (await request.content.read(), request.headers)
-            asyncio.get_event_loop().call_soon(append_es, (content, headers))
+            if content == b'{}':
+                asyncio.get_event_loop().call_soon(append_es, (content, headers))
             return await respond_http('{"hits":{},"_scroll_id":{}}', 200)(request)
 
         routes = [

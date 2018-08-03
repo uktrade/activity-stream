@@ -14,6 +14,7 @@ from .app_elasticsearch import (
     es_bulk,
     es_activities_total,
     es_feed_activities_total,
+    es_min_verification_age,
     create_indexes,
     create_mappings,
     get_new_index_names,
@@ -220,8 +221,12 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
     @async_repeat_until_cancelled
     async def poll_metrics(**_):
         searchable, nonsearchable = await es_activities_total(session, es_endpoint)
+        min_activity_age = await es_min_verification_age(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
         metrics['elasticsearch_activities_total'].labels('nonsearchable').set(nonsearchable)
+        if min_activity_age is not None:
+            metrics['elasticsearch_activities_age_minimum_seconds'].labels(
+                'verification').set(min_activity_age)
 
         feed_ids = feed_unique_ids(feed_endpoints)
         for feed_id in feed_ids:

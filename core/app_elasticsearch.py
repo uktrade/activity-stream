@@ -4,6 +4,7 @@ import hmac
 import json
 import logging
 import os
+import time
 import urllib.parse
 
 from aiohttp.web import (
@@ -318,6 +319,47 @@ async def es_feed_activities_total(session, es_endpoint, feed_id):
     searchable = max((await total_result.json())['count'] - nonsearchable, 0)
 
     return searchable, nonsearchable
+
+
+async def es_min_verification_age(session, es_endpoint):
+    payload = json.dumps({
+        'size': 0,
+        'aggs': {
+            'verifier_activities': {
+                'filter': {
+                    'term': {
+                        'object.type': 'dit:activityStreamVerificationFeed:Verifier'
+                    }
+                },
+                'aggs': {
+                    'max_published': {
+                        'max': {
+                            'field': 'published'
+                        }
+                    }
+                }
+            }
+        }
+    }).encode('utf-8')
+    result = await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='GET',
+        path=f'/{ALIAS}/_search',
+        query_string='ignore_unavailable=true',
+        content_type='application/json',
+        payload=payload,
+    )
+    result_dict = await result.json()
+    try:
+        max_published = int(result_dict['aggregations']
+                            ['verifier_activities']['max_published']['value'] / 1000)
+        now = int(time.time())
+        age = now - max_published
+    except (KeyError, TypeError):
+        # If there aren't any activities yet, don't error
+        age = None
+    return age
 
 
 async def es_request_non_200_exception(session, endpoint, method, path, query_string,

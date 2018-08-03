@@ -14,6 +14,7 @@ from core.tests_utils import (
     wait_until_get_working,
     has_at_least_ordered_items,
     get_until,
+    get_until_raw,
     mock_env,
     read_file,
     run_es_application,
@@ -62,6 +63,7 @@ class TestProcess(unittest.TestCase):
             server_out.terminate()
             feed_runner_2.terminate()
             await feed_runner_1.cleanup()
+            await asyncio.sleep(1)
 
         self.add_async_cleanup(tear_down)
         return server_out, server_inc
@@ -127,3 +129,21 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(final_string, output_out[-len(final_string):])
         self.assertEqual(server_inc.returncode, 0)
         self.assertEqual(server_out.returncode, 0)
+
+    @async_test
+    async def test_verification_metrics(self):
+        _, _ = await self.setup_manual(mock_env())
+        self.assertTrue(await is_http_accepted_eventually())
+        await wait_until_get_working()
+
+        url = 'http://127.0.0.1:8080/metrics'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
+        def has_success(text):
+            return 'status="success"' in text and \
+                   'elasticsearch_activities_age_minimum_seconds' \
+                   '{feed_unique_id="verification"}' in text
+        text, _, _ = await get_until_raw(url, x_forwarded_for, has_success, asyncio.sleep)
+
+        self.assertIn('elasticsearch_activities_age_minimum_seconds'
+                      '{feed_unique_id="verification"}', text)
