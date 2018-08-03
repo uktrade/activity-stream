@@ -906,12 +906,16 @@ class TestApplication(TestBase):
                                     mock_feed_status=lambda: 200)
             await fetch_all_es_data_until(has_at_least(2), ORIGINAL_SLEEP)
 
-        # Might be a bit flaky
-        await ORIGINAL_SLEEP(4)
         async with aiohttp.ClientSession() as session:
-            url = 'http://127.0.0.1:8080/metrics'
-            result = await session.get(url)
-        text = await result.text()
+            for _ in range(0, 20):
+                url = 'http://127.0.0.1:8080/metrics'
+                result = await session.get(url)
+                text = await result.text()
+                is_success = 'status="success"' in text and \
+                    '{feed_unique_id="first_feed",searchable="searchable"} 2.0' in text
+                sleep_time = 0 if is_success else 1
+                await ORIGINAL_SLEEP(sleep_time)
+
         self.assertIn('python_info', text)
         self.assertIn('ingest_feed_duration_seconds_count', text)
         self.assertIn('feed_unique_id="first_feed"', text)
