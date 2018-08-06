@@ -153,11 +153,12 @@ async def get(url, auth, x_forwarded_for, body):
 
 
 async def get_until(url, x_forwarded_for, condition):
+    body = b'{"sort": ["_doc"]}'
     while True:
         auth = hawk_auth_header(
-            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', body, 'application/json',
         )
-        all_data, status, headers = await get(url, auth, x_forwarded_for, b'')
+        all_data, status, headers = await get(url, auth, x_forwarded_for, body)
         dict_data = json.loads(all_data)
         if condition(dict_data):
             break
@@ -169,7 +170,7 @@ async def get_until(url, x_forwarded_for, condition):
 async def get_until_raw(url, x_forwarded_for, condition):
     for _ in range(0, 20):
         auth = hawk_auth_header(
-            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', b'', 'application/json',
         )
         all_data, status, headers = await get(url, auth, x_forwarded_for, b'')
         if condition(all_data):
