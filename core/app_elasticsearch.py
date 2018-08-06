@@ -140,17 +140,16 @@ async def create_index(session, es_endpoint, index_name):
     )
 
 
-async def refresh_indexes(session, es_endpoint, index_names):
-    for index_name in index_names:
-        await es_request_non_200_exception(
-            session=session,
-            endpoint=es_endpoint,
-            method='POST',
-            path=f'/{index_name}/_refresh',
-            query_string='',
-            content_type='application/json',
-            payload=b'',
-        )
+async def refresh_index(session, es_endpoint, index_name):
+    await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='POST',
+        path=f'/{index_name}/_refresh',
+        query_string='',
+        content_type='application/json',
+        payload=b'',
+    )
 
 
 async def create_mapping(session, es_endpoint, index_name):

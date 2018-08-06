@@ -23,7 +23,7 @@ from .app_elasticsearch import (
     indexes_matching_no_feeds,
     add_remove_aliases_atomically,
     delete_indexes,
-    refresh_indexes,
+    refresh_index,
 )
 
 from .app_feeds import (
@@ -124,8 +124,6 @@ async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint, **_):
 
     indexes_to_add_to_alias = indexes_matching_feeds(new_index_names, successful_feed_ids)
     indexes_to_remove_from_alias = indexes_matching_feeds(indexes_with_alias, successful_feed_ids)
-
-    await refresh_indexes(session, es_endpoint, new_index_names)
     await add_remove_aliases_atomically(session, es_endpoint,
                                         indexes_to_add_to_alias, indexes_to_remove_from_alias)
 
@@ -153,6 +151,8 @@ async def ingest_feed(metrics, session, feed, es_endpoint, index_name, **_):
         app_logger.debug('Sleeping for %s seconds', interval)
 
         await asyncio.sleep(interval)
+
+    await refresh_index(session, es_endpoint, index_name)
 
 
 @async_timer
