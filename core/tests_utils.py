@@ -98,6 +98,17 @@ async def fetch_es_index_names():
         return json.loads(await response.text()).keys()
 
 
+async def fetch_es_index_names_with_alias():
+    async with aiohttp.ClientSession() as session:
+        response = await session.get('http://127.0.0.1:9200/_alias')
+        indexes = json.loads(await response.text())
+    return [
+        index_name
+        for index_name, index_details in indexes.items()
+        if index_details['aliases']
+    ]
+
+
 async def fetch_until(url, condition):
     async def fetch_all_es_data():
         async with aiohttp.ClientSession() as session:

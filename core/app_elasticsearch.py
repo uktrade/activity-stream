@@ -40,12 +40,12 @@ def get_new_index_name(feed_unique_id):
 
 def indexes_matching_feeds(index_names, feed_unique_ids):
     return flatten([
-        _indexes_matching_feed(index_names, feed_unique_id)
+        indexes_matching_feed(index_names, feed_unique_id)
         for feed_unique_id in feed_unique_ids
     ])
 
 
-def _indexes_matching_feed(index_names, feed_unique_id):
+def indexes_matching_feed(index_names, feed_unique_id):
     return [
         index_name
         for index_name in index_names

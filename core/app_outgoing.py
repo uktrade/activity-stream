@@ -19,6 +19,7 @@ from .app_elasticsearch import (
     create_mapping,
     get_new_index_name,
     get_old_index_names,
+    indexes_matching_feeds,
     indexes_matching_no_feeds,
     add_remove_aliases_atomically,
     delete_indexes,
@@ -85,44 +86,49 @@ async def run_outgoing_application():
 
 async def create_outgoing_application(metrics, raven_client, session, feed_endpoints, es_endpoint):
     asyncio.get_event_loop().create_task(ingest_feeds(
-        metrics, session, feed_endpoints, es_endpoint,
+        metrics, raven_client, session, feed_endpoints, es_endpoint,
         _async_repeat_until_cancelled_raven_client=raven_client,
         _async_repeat_until_cancelled_exception_interval=EXCEPTION_INTERVAL,
-        _async_repeat_until_cancelled_logging_title='Polling feed',
-        _async_timer=metrics['ingest_feeds_duration_seconds'],
-        _async_timer_labels=[],
+        _async_repeat_until_cancelled_logging_title='Polling feeds',
     ))
 
 
 @async_repeat_until_cancelled
-@async_timer
-async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint, **_):
+async def ingest_feeds(metrics, raven_client, session, feed_endpoints, es_endpoint, **_):
     all_feed_ids = feed_unique_ids(feed_endpoints)
     indexes_without_alias, indexes_with_alias = await get_old_index_names(session, es_endpoint)
 
-    indexes_to_delete = indexes_without_alias + \
-        indexes_matching_no_feeds(indexes_with_alias, all_feed_ids)
+    indexes_to_delete = indexes_matching_no_feeds(
+        indexes_without_alias + indexes_with_alias, all_feed_ids)
     await delete_indexes(session, es_endpoint, indexes_to_delete)
 
     await asyncio.gather(*[
         ingest_feed(
             metrics, session, feed_endpoint, es_endpoint,
+            _async_repeat_until_cancelled_raven_client=raven_client,
+            _async_repeat_until_cancelled_exception_interval=EXCEPTION_INTERVAL,
+            _async_repeat_until_cancelled_logging_title='Polling feed',
             _async_timer=metrics['ingest_feed_duration_seconds'],
             _async_timer_labels=[feed_endpoint.unique_id],
             _async_inprogress=metrics['ingest_inprogress_ingests_total'],
         )
         for feed_endpoint in feed_endpoints
-    ], return_exceptions=True)
+    ])
 
 
 def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
+@async_repeat_until_cancelled
 @async_inprogress
 @async_timer
 async def ingest_feed(metrics, session, feed, es_endpoint, **_):
     app_logger = logging.getLogger('activity-stream')
+
+    indexes_without_alias, _ = await get_old_index_names(session, es_endpoint)
+    indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
+    await delete_indexes(session, es_endpoint, indexes_to_delete)
 
     index_name = get_new_index_name(feed.unique_id)
     await create_index(session, es_endpoint, index_name)

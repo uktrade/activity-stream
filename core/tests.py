@@ -17,6 +17,7 @@ from core.tests_utils import (
     fast_sleep,
     fetch_all_es_data_until,
     fetch_es_index_names,
+    fetch_es_index_names_with_alias,
     get,
     get_until,
     has_at_least,
@@ -690,17 +691,19 @@ class TestApplication(TestBase):
 
             await wait_until_get_working()
 
-        url = 'http://127.0.0.1:8080/v1/'
-        x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        result, status, _ = await get_until(url, x_forwarded_for,
-                                            has_at_least_ordered_items(2))
-        server.close()
-        await server.wait_closed()
-        self.assertEqual(status, 200)
-        self.assertEqual(result['orderedItems'][0]['id'],
-                         'dit:exportOpportunities:Enquiry:49863:Create')
+            url = 'http://127.0.0.1:8080/v1/'
+            x_forwarded_for = '1.2.3.4, 127.0.0.0'
+            result, status, _ = await get_until(url, x_forwarded_for,
+                                                has_at_least_ordered_items(2))
+            server.close()
+            await server.wait_closed()
+            self.assertEqual(status, 200)
+            self.assertEqual(result['orderedItems'][0]['id'],
+                             'dit:exportOpportunities:Enquiry:49863:Create')
 
-        self.assertLessEqual(len(await fetch_es_index_names()), 2)
+            self.assertLessEqual(len(await fetch_es_index_names_with_alias()), 2)
+            await ORIGINAL_SLEEP(2)
+            self.assertLessEqual(len(await fetch_es_index_names()), 2)
 
     @async_test
     async def test_es_no_connect_recovered(self):
