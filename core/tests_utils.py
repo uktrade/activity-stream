@@ -143,7 +143,8 @@ async def get(url, auth, x_forwarded_for, body):
             'X-Forwarded-For': x_forwarded_for,
             'X-Forwarded-Proto': 'http',
         }, data=body, timeout=3)
-    return (await result.text(), result.status, result.headers)
+        text = await result.text()
+    return (text, result.status, result.headers)
 
 
 async def get_until(url, x_forwarded_for, condition):
