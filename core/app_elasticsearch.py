@@ -76,18 +76,17 @@ async def get_old_index_names(session, es_endpoint):
     )
     indexes = await results.json()
 
-    return {
-        'without-alias': [
-            index_name
-            for index_name, index_details in indexes.items()
-            if index_name.startswith(f'{ALIAS}_') and not index_details['aliases']
-        ],
-        'with-alias': [
-            index_name
-            for index_name, index_details in indexes.items()
-            if index_name.startswith(f'{ALIAS}_') and index_details['aliases']
-        ],
-    }
+    without_alias = [
+        index_name
+        for index_name, index_details in indexes.items()
+        if index_name.startswith(f'{ALIAS}_') and not index_details['aliases']
+    ]
+    with_alias = [
+        index_name
+        for index_name, index_details in indexes.items()
+        if index_name.startswith(f'{ALIAS}_') and index_details['aliases']
+    ]
+    return without_alias, with_alias
 
 
 async def add_remove_aliases_atomically(session, es_endpoint, indexes_to_add, indexes_to_remove):

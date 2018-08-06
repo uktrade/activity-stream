@@ -100,9 +100,9 @@ async def create_outgoing_application(metrics, raven_client, session, feed_endpo
 async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint, **_):
     all_feed_ids = feed_unique_ids(feed_endpoints)
     new_index_names = get_new_index_names(all_feed_ids)
-    old_index_names = await get_old_index_names(session, es_endpoint)
+    indexes_without_alias, indexes_with_alias = await get_old_index_names(session, es_endpoint)
 
-    await delete_indexes(session, es_endpoint, old_index_names['without-alias'])
+    await delete_indexes(session, es_endpoint, indexes_without_alias)
     await create_indexes(session, es_endpoint, new_index_names)
     await create_mappings(session, es_endpoint, new_index_names)
 
@@ -124,8 +124,8 @@ async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint, **_):
 
     indexes_to_add_to_alias = indexes_matching_feeds(new_index_names, successful_feed_ids)
     indexes_to_remove_from_alias = \
-        indexes_matching_feeds(old_index_names['with-alias'], successful_feed_ids) + \
-        indexes_matching_no_feeds(old_index_names['with-alias'], all_feed_ids)
+        indexes_matching_feeds(indexes_with_alias, successful_feed_ids) + \
+        indexes_matching_no_feeds(indexes_with_alias, all_feed_ids)
 
     await refresh_indexes(session, es_endpoint, new_index_names)
     await add_remove_aliases_atomically(session, es_endpoint,
