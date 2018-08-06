@@ -15,8 +15,8 @@ from .app_elasticsearch import (
     es_activities_total,
     es_feed_activities_total,
     es_min_verification_age,
-    create_indexes,
-    create_mappings,
+    create_index,
+    create_mapping,
     get_new_index_names,
     get_old_index_names,
     indexes_matching_feeds,
@@ -106,9 +106,6 @@ async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint, **_):
     await delete_indexes(session, es_endpoint, indexes_to_delete)
 
     new_index_names = get_new_index_names(all_feed_ids)
-    await create_indexes(session, es_endpoint, new_index_names)
-    await create_mappings(session, es_endpoint, new_index_names)
-
     ingest_results = await asyncio.gather(*[
         ingest_feed(
             metrics, session, feed_endpoint, es_endpoint, new_index_names[i],
@@ -141,6 +138,9 @@ def feed_unique_ids(feed_endpoints):
 @async_timer
 async def ingest_feed(metrics, session, feed, es_endpoint, index_name, **_):
     app_logger = logging.getLogger('activity-stream')
+
+    await create_index(session, es_endpoint, index_name)
+    await create_mapping(session, es_endpoint, index_name)
 
     href = feed.seed
     while href:

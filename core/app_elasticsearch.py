@@ -127,18 +127,17 @@ async def delete_indexes(session, es_endpoint, index_names):
         )
 
 
-async def create_indexes(session, es_endpoint, index_names):
+async def create_index(session, es_endpoint, index_name):
     index_definition = json.dumps({}).encode('utf-8')
-    for index_name in index_names:
-        await es_request_non_200_exception(
-            session=session,
-            endpoint=es_endpoint,
-            method='PUT',
-            path=f'/{index_name}',
-            query_string='',
-            content_type='application/json',
-            payload=index_definition,
-        )
+    await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='PUT',
+        path=f'/{index_name}',
+        query_string='',
+        content_type='application/json',
+        payload=index_definition,
+    )
 
 
 async def refresh_indexes(session, es_endpoint, index_names):
@@ -154,7 +153,7 @@ async def refresh_indexes(session, es_endpoint, index_names):
         )
 
 
-async def create_mappings(session, es_endpoint, index_names):
+async def create_mapping(session, es_endpoint, index_name):
     mapping_definition = json.dumps({
         'properties': {
             'published_date': {
@@ -168,16 +167,15 @@ async def create_mappings(session, es_endpoint, index_names):
             },
         },
     }).encode('utf-8')
-    for index_name in index_names:
-        await es_request_non_200_exception(
-            session=session,
-            endpoint=es_endpoint,
-            method='PUT',
-            path=f'/{index_name}/_mapping/_doc',
-            query_string='',
-            content_type='application/json',
-            payload=mapping_definition,
-        )
+    await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='PUT',
+        path=f'/{index_name}/_mapping/_doc',
+        query_string='',
+        content_type='application/json',
+        payload=mapping_definition,
+    )
 
 
 async def es_search_new_scroll(_, __, query):
