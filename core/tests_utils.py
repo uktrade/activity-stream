@@ -54,7 +54,7 @@ async def is_http_accepted_eventually():
             return True
         except aiohttp.client_exceptions.ClientConnectorError:
             attempts += 1
-            await asyncio.sleep(0.2)
+            await ORIGINAL_SLEEP(0.2)
 
 
 async def wait_until_get_working():
@@ -78,7 +78,7 @@ async def wait_until_get_working():
         if 'orderedItems' in json.loads(content):
             return True
         attempts += 1
-        await asyncio.sleep(0.2)
+        await ORIGINAL_SLEEP(0.2)
 
 
 def read_file(path):
@@ -91,11 +91,11 @@ async def delete_all_es_data():
         await session.delete('http://127.0.0.1:9200/*')
         await session.post('http://127.0.0.1:9200/_refresh')
 
-    await fetch_until('http://127.0.0.1:9200/_search', has_exactly(0), asyncio.sleep)
+    await fetch_until('http://127.0.0.1:9200/_search', has_exactly(0))
 
 
-async def fetch_all_es_data_until(condition, sleep):
-    return await fetch_until('http://127.0.0.1:9200/activities/_search', condition, sleep)
+async def fetch_all_es_data_until(condition):
+    return await fetch_until('http://127.0.0.1:9200/activities/_search', condition)
 
 
 async def fetch_es_index_names():
@@ -104,7 +104,7 @@ async def fetch_es_index_names():
         return json.loads(await response.text()).keys()
 
 
-async def fetch_until(url, condition, sleep):
+async def fetch_until(url, condition):
     async def fetch_all_es_data():
         async with aiohttp.ClientSession() as session:
             results = await session.get(url)
@@ -114,7 +114,7 @@ async def fetch_until(url, condition, sleep):
         all_es_data = await fetch_all_es_data()
         if condition(all_es_data):
             break
-        await sleep(0.2)
+        await ORIGINAL_SLEEP(0.2)
 
     return all_es_data
 
@@ -152,7 +152,7 @@ async def get(url, auth, x_forwarded_for, body):
     return (await result.text(), result.status, result.headers)
 
 
-async def get_until(url, x_forwarded_for, condition, sleep):
+async def get_until(url, x_forwarded_for, condition):
     while True:
         auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
@@ -161,12 +161,12 @@ async def get_until(url, x_forwarded_for, condition, sleep):
         dict_data = json.loads(all_data)
         if condition(dict_data):
             break
-        await sleep(0.05)
+        await ORIGINAL_SLEEP(0.05)
 
     return dict_data, status, headers
 
 
-async def get_until_raw(url, x_forwarded_for, condition, sleep):
+async def get_until_raw(url, x_forwarded_for, condition):
     for _ in range(0, 20):
         auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
@@ -174,7 +174,7 @@ async def get_until_raw(url, x_forwarded_for, condition, sleep):
         all_data, status, headers = await get(url, auth, x_forwarded_for, b'')
         if condition(all_data):
             break
-        await sleep(1)
+        await ORIGINAL_SLEEP(1)
 
     return all_data, status, headers
 

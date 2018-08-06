@@ -77,7 +77,7 @@ class TestProcess(unittest.TestCase):
         url = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
         result, _, _ = await get_until(url, x_forwarded_for,
-                                       has_at_least_ordered_items(3), asyncio.sleep)
+                                       has_at_least_ordered_items(3))
         self.assertEqual(result['orderedItems'][0]['id'],
                          'dit:exportOpportunities:Enquiry:49863:Create')
         self.assertEqual(result['orderedItems'][2]['id'],
@@ -143,7 +143,7 @@ class TestProcess(unittest.TestCase):
             return 'status="success"' in text and \
                    'elasticsearch_activities_age_minimum_seconds' \
                    '{feed_unique_id="verification"}' in text
-        text, _, _ = await get_until_raw(url, x_forwarded_for, has_success, asyncio.sleep)
+        text, _, _ = await get_until_raw(url, x_forwarded_for, has_success)
 
         self.assertIn('elasticsearch_activities_age_minimum_seconds'
                       '{feed_unique_id="verification"}', text)
