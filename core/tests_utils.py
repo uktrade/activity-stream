@@ -127,7 +127,7 @@ def append_until(condition):
     def append(data):
         if not future.done():
             all_data.append(data)
-        if condition(all_data):
+        if condition(all_data) and not future.done():
             future.set_result(all_data)
 
     return (future, append)

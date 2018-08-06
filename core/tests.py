@@ -612,10 +612,11 @@ class TestApplication(TestBase):
 
             url = 'http://127.0.0.1:8080/v1/'
             auth = hawk_auth_header(
-                'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
+                'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '{}',
+                'application/json',
             )
             x_forwarded_for = '1.2.3.4, 127.0.0.0'
-            await get(url, auth, x_forwarded_for, b'')
+            await get(url, auth, x_forwarded_for, b'{}')
             await es_runner.cleanup()
             [[_, es_headers]] = await get_es_once
 
