@@ -182,7 +182,7 @@ async def create_mappings(session, es_endpoint, index_names):
 
 
 async def es_search_new_scroll(_, __, query):
-    return f'/{ALIAS}/_search', 'scroll=30s', query
+    return f'/{ALIAS}/_search', 'scroll=15s', query
 
 
 async def es_search_existing_scroll(redis_client, match_info, _):

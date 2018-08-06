@@ -624,8 +624,8 @@ class TestApplication(TestBase):
                          'AWS4-HMAC-SHA256 '
                          'Credential=some-id/20120115/us-east-2/es/aws4_request, '
                          'SignedHeaders=content-type;host;x-amz-date, '
-                         'Signature=210234795d8e908f10d6374144ae3ac9b49b2f84f10a8b'
-                         'a189a207ae8955c505')
+                         'Signature=144585a76bf689176d9c3e42fa0dea10a22c1cc0acbc32'
+                         'e3ade9f2f7438013dd')
 
     @async_test
     async def test_es_401_is_proxied(self):
