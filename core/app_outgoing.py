@@ -17,7 +17,7 @@ from .app_elasticsearch import (
     es_min_verification_age,
     create_index,
     create_mapping,
-    get_new_index_names,
+    get_new_index_name,
     get_old_index_names,
     indexes_matching_no_feeds,
     add_remove_aliases_atomically,
@@ -104,15 +104,14 @@ async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint, **_):
         indexes_matching_no_feeds(indexes_with_alias, all_feed_ids)
     await delete_indexes(session, es_endpoint, indexes_to_delete)
 
-    new_index_names = get_new_index_names(all_feed_ids)
     await asyncio.gather(*[
         ingest_feed(
-            metrics, session, feed_endpoint, es_endpoint, new_index_names[i],
+            metrics, session, feed_endpoint, es_endpoint,
             _async_timer=metrics['ingest_feed_duration_seconds'],
             _async_timer_labels=[feed_endpoint.unique_id],
             _async_inprogress=metrics['ingest_inprogress_ingests_total'],
         )
-        for i, feed_endpoint in enumerate(feed_endpoints)
+        for feed_endpoint in feed_endpoints
     ], return_exceptions=True)
 
 
@@ -122,9 +121,10 @@ def feed_unique_ids(feed_endpoints):
 
 @async_inprogress
 @async_timer
-async def ingest_feed(metrics, session, feed, es_endpoint, index_name, **_):
+async def ingest_feed(metrics, session, feed, es_endpoint, **_):
     app_logger = logging.getLogger('activity-stream')
 
+    index_name = get_new_index_name(feed.unique_id)
     await create_index(session, es_endpoint, index_name)
     await create_mapping(session, es_endpoint, index_name)
 
