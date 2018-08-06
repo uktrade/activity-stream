@@ -379,10 +379,13 @@ async def es_request(session, endpoint, method, path, query_string, content_type
     )
 
     url = endpoint['base_url'] + path + (('?' + query_string) if query_string != '' else '')
-    return await session.request(
+    result = await session.request(
         method, url,
         data=payload, headers={**{'Content-Type': content_type}, **auth_headers}
     )
+    # Without this, after some number of requests, they end up hanging
+    await result.read()
+    return result
 
 
 def es_auth_headers(endpoint, method, path, query_string, content_type, payload):
