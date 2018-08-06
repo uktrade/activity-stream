@@ -69,7 +69,10 @@ async def wait_until_get_working():
         if 'orderedItems' in json.loads(content):
             return True
         attempts += 1
-        await ORIGINAL_SLEEP(1)
+        # Each call makes a new ES scroll context, which is expensive
+        # and can slow the tests. If/when this isn't the case, the sleep
+        # can be shortened
+        await ORIGINAL_SLEEP(3)
 
 
 def read_file(path):
