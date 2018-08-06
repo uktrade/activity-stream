@@ -540,7 +540,12 @@ class TestApplication(TestBase):
         routes = [
             web.post('/_bulk', return_200_and_callback),
         ]
+
+        def add_async_cleanup(coroutine):
+            loop = asyncio.get_event_loop()
+            self.addCleanup(loop.run_until_complete, coroutine())
         es_runner = await run_es_application(port=9201, override_routes=routes)
+        add_async_cleanup(es_runner.cleanup)
         await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                 mock_feed=read_file, mock_feed_status=lambda: 200)
 
@@ -549,8 +554,6 @@ class TestApplication(TestBase):
             json.loads(line)
             for line in es_bulk_content.split(b'\n')[0:-1]
         ]
-
-        await es_runner.cleanup()
 
         self.assertEqual(self.feed_requested[0].result(
         ).headers['Authorization'], (

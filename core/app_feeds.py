@@ -9,7 +9,7 @@ from .app_utils import sub_dict_lower
 class ActivityStreamFeed:
 
     polling_page_interval = 0
-    polling_seed_interval = 5
+    polling_seed_interval = 0
 
     @classmethod
     def parse_config(cls, config):
