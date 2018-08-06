@@ -19,7 +19,6 @@ from .app_elasticsearch import (
     create_mapping,
     get_new_index_names,
     get_old_index_names,
-    indexes_matching_feeds,
     indexes_matching_no_feeds,
     add_remove_aliases_atomically,
     delete_indexes,
@@ -106,7 +105,7 @@ async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint, **_):
     await delete_indexes(session, es_endpoint, indexes_to_delete)
 
     new_index_names = get_new_index_names(all_feed_ids)
-    ingest_results = await asyncio.gather(*[
+    await asyncio.gather(*[
         ingest_feed(
             metrics, session, feed_endpoint, es_endpoint, new_index_names[i],
             _async_timer=metrics['ingest_feed_duration_seconds'],
@@ -115,17 +114,6 @@ async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint, **_):
         )
         for i, feed_endpoint in enumerate(feed_endpoints)
     ], return_exceptions=True)
-
-    successful_feed_ids = feed_unique_ids([
-        feed_endpoint
-        for i, feed_endpoint in enumerate(feed_endpoints)
-        if not isinstance(ingest_results[i], BaseException)
-    ])
-
-    indexes_to_add_to_alias = indexes_matching_feeds(new_index_names, successful_feed_ids)
-    indexes_to_remove_from_alias = indexes_matching_feeds(indexes_with_alias, successful_feed_ids)
-    await add_remove_aliases_atomically(session, es_endpoint,
-                                        indexes_to_add_to_alias, indexes_to_remove_from_alias)
 
 
 def feed_unique_ids(feed_endpoints):
@@ -153,6 +141,7 @@ async def ingest_feed(metrics, session, feed, es_endpoint, index_name, **_):
         await asyncio.sleep(interval)
 
     await refresh_index(session, es_endpoint, index_name)
+    await add_remove_aliases_atomically(session, es_endpoint, index_name, feed.unique_id)
 
 
 @async_timer

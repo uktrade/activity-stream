@@ -89,17 +89,12 @@ async def get_old_index_names(session, es_endpoint):
     return without_alias, with_alias
 
 
-async def add_remove_aliases_atomically(session, es_endpoint, indexes_to_add, indexes_to_remove):
-    if not indexes_to_add and not indexes_to_remove:
-        return
-
+async def add_remove_aliases_atomically(session, es_endpoint, index_name, feed_unique_id):
+    remove_pattern = f'{ALIAS}__feed_id_{feed_unique_id}__*'
     actions = json.dumps({
         'actions': [
-            {'remove': {'index': index_name, 'alias': ALIAS}}
-            for index_name in indexes_to_remove
-        ] + [
+            {'remove': {'index': remove_pattern, 'alias': ALIAS}},
             {'add': {'index': index_name, 'alias': ALIAS}}
-            for index_name in indexes_to_add
         ]
     }).encode('utf-8')
 
