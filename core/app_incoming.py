@@ -25,7 +25,7 @@ from .app_utils import (
 )
 
 NONCE_EXPIRE = 120
-PAGINATION_EXPIRE = 60
+PAGINATION_EXPIRE = 10
 
 
 async def run_incoming_application():

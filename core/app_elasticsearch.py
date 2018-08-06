@@ -4,6 +4,7 @@ import hmac
 import json
 import logging
 import os
+import time
 import urllib.parse
 
 from aiohttp.web import (
@@ -181,7 +182,7 @@ async def create_mappings(session, es_endpoint, index_names):
 
 
 async def es_search_new_scroll(_, __, query):
-    return f'/{ALIAS}/_search', 'scroll=30s', query
+    return f'/{ALIAS}/_search', 'scroll=15s', query
 
 
 async def es_search_existing_scroll(redis_client, match_info, _):
@@ -258,15 +259,15 @@ async def es_bulk(session, es_endpoint, items, **_):
          json.dumps(item['source'], sort_keys=True)]
         for item in items
     ])) + '\n').encode('utf-8')
-    app_logger.debug('Converting to ES bulk ingest commands: done (%s)', es_bulk_contents)
+    app_logger.debug('Converting to ES bulk ingest commands: done')
 
     app_logger.debug('POSTing bulk import to ES...')
-    es_result = await es_request_non_200_exception(
+    await es_request_non_200_exception(
         session=session, endpoint=es_endpoint,
         method='POST', path='/_bulk', query_string='',
         content_type='application/x-ndjson', payload=es_bulk_contents,
     )
-    app_logger.debug('Pushing to ES: done (%s)', await es_result.text())
+    app_logger.debug('Pushing to ES: done')
 
 
 async def es_activities_total(session, es_endpoint):
@@ -320,6 +321,47 @@ async def es_feed_activities_total(session, es_endpoint, feed_id):
     return searchable, nonsearchable
 
 
+async def es_min_verification_age(session, es_endpoint):
+    payload = json.dumps({
+        'size': 0,
+        'aggs': {
+            'verifier_activities': {
+                'filter': {
+                    'term': {
+                        'object.type': 'dit:activityStreamVerificationFeed:Verifier'
+                    }
+                },
+                'aggs': {
+                    'max_published': {
+                        'max': {
+                            'field': 'published'
+                        }
+                    }
+                }
+            }
+        }
+    }).encode('utf-8')
+    result = await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='GET',
+        path=f'/{ALIAS}/_search',
+        query_string='ignore_unavailable=true',
+        content_type='application/json',
+        payload=payload,
+    )
+    result_dict = await result.json()
+    try:
+        max_published = int(result_dict['aggregations']
+                            ['verifier_activities']['max_published']['value'] / 1000)
+        now = int(time.time())
+        age = now - max_published
+    except (KeyError, TypeError):
+        # If there aren't any activities yet, don't error
+        age = None
+    return age
+
+
 async def es_request_non_200_exception(session, endpoint, method, path, query_string,
                                        content_type, payload):
     results = await es_request(session, endpoint, method, path, query_string,
@@ -337,10 +379,13 @@ async def es_request(session, endpoint, method, path, query_string, content_type
     )
 
     url = endpoint['base_url'] + path + (('?' + query_string) if query_string != '' else '')
-    return await session.request(
+    result = await session.request(
         method, url,
         data=payload, headers={**{'Content-Type': content_type}, **auth_headers}
     )
+    # Without this, after some number of requests, they end up hanging
+    await result.read()
+    return result
 
 
 def es_auth_headers(endpoint, method, path, query_string, content_type, payload):

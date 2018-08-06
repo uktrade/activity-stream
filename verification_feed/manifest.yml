@@ -1,0 +1,6 @@
+---
+applications:
+- name: activity-stream-verification-feed
+  buildpack: https://github.com/cloudfoundry/python-buildpack.git#v1.6.20
+  memory: 64M
+  disk_quota: 256M

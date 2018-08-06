@@ -348,10 +348,10 @@ class TestApplication(TestBase):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_specific_file,
                                     mock_feed_status=lambda: 200)
-            await fetch_all_es_data_until(has_at_least(2), ORIGINAL_SLEEP)
+            await fetch_all_es_data_until(has_at_least(2))
 
         result, status, headers = await get_until(url, x_forwarded_for,
-                                                  has_at_least_ordered_items(2), asyncio.sleep)
+                                                  has_at_least_ordered_items(2))
         self.assertEqual(status, 200)
         self.assertEqual(result['orderedItems'][0]['id'],
                          'dit:exportOpportunities:Enquiry:49863:Create')
@@ -365,7 +365,7 @@ class TestApplication(TestBase):
         path = 'tests_fixture_activity_stream_2.json'
         with patch('asyncio.sleep', wraps=fast_sleep):
             result, status, headers = await get_until(url, x_forwarded_for,
-                                                      does_not_have_previous_items, asyncio.sleep)
+                                                      does_not_have_previous_items)
         self.assertEqual(status, 200)
         self.assertEqual(result['orderedItems'][0]['id'],
                          'dit:exportOpportunities:Enquiry:42863:Create')
@@ -378,11 +378,11 @@ class TestApplication(TestBase):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                     mock_feed_status=lambda: 200)
-            await fetch_all_es_data_until(has_at_least(2), ORIGINAL_SLEEP)
+            await fetch_all_es_data_until(has_at_least(2))
 
         url_1 = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        await get_until(url_1, x_forwarded_for, has_at_least_ordered_items(2), asyncio.sleep)
+        await get_until(url_1, x_forwarded_for, has_at_least_ordered_items(2))
 
         query = json.dumps({
             'size': '1',
@@ -422,7 +422,7 @@ class TestApplication(TestBase):
 
         url_1 = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        await get_until(url_1, x_forwarded_for, has_at_least_ordered_items(2), asyncio.sleep)
+        await get_until(url_1, x_forwarded_for, has_at_least_ordered_items(2))
 
         query = json.dumps({
             'size': '1',
@@ -463,7 +463,7 @@ class TestApplication(TestBase):
 
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=env, mock_feed=read_file, mock_feed_status=lambda: 200)
-            await fetch_all_es_data_until(has_at_least(4), ORIGINAL_SLEEP)
+            await fetch_all_es_data_until(has_at_least(4))
 
         url = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -596,7 +596,8 @@ class TestApplication(TestBase):
 
         async def return_200_and_callback(request):
             content, headers = (await request.content.read(), request.headers)
-            asyncio.get_event_loop().call_soon(append_es, (content, headers))
+            if content == b'{}':
+                asyncio.get_event_loop().call_soon(append_es, (content, headers))
             return await respond_http('{"hits":{},"_scroll_id":{}}', 200)(request)
 
         routes = [
@@ -611,10 +612,11 @@ class TestApplication(TestBase):
 
             url = 'http://127.0.0.1:8080/v1/'
             auth = hawk_auth_header(
-                'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
+                'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '{}',
+                'application/json',
             )
             x_forwarded_for = '1.2.3.4, 127.0.0.0'
-            await get(url, auth, x_forwarded_for, b'')
+            await get(url, auth, x_forwarded_for, b'{}')
             await es_runner.cleanup()
             [[_, es_headers]] = await get_es_once
 
@@ -622,8 +624,8 @@ class TestApplication(TestBase):
                          'AWS4-HMAC-SHA256 '
                          'Credential=some-id/20120115/us-east-2/es/aws4_request, '
                          'SignedHeaders=content-type;host;x-amz-date, '
-                         'Signature=210234795d8e908f10d6374144ae3ac9b49b2f84f10a8b'
-                         'a189a207ae8955c505')
+                         'Signature=144585a76bf689176d9c3e42fa0dea10a22c1cc0acbc32'
+                         'e3ade9f2f7438013dd')
 
     @async_test
     async def test_es_401_is_proxied(self):
@@ -684,14 +686,14 @@ class TestApplication(TestBase):
             await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                     mock_feed=read_file, mock_feed_status=lambda: 200)
             while modified < max_modifications:
-                await ORIGINAL_SLEEP(0.1)
+                await ORIGINAL_SLEEP(1)
 
             await wait_until_get_working()
 
         url = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
         result, status, _ = await get_until(url, x_forwarded_for,
-                                            has_at_least_ordered_items(2), asyncio.sleep)
+                                            has_at_least_ordered_items(2))
         server.close()
         await server.wait_closed()
         self.assertEqual(status, 200)
@@ -732,16 +734,14 @@ class TestApplication(TestBase):
         with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
             await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                     mock_feed=read_file, mock_feed_status=lambda: 200)
-            while modified < max_modifications:
-                await ORIGINAL_SLEEP(0.1)
-
             await wait_until_get_working()
-            mock_sleep.assert_any_call(60)
+            await ORIGINAL_SLEEP(3)
 
         url = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
         result, status, _ = await get_until(url, x_forwarded_for,
-                                            has_at_least_ordered_items(2), asyncio.sleep)
+                                            has_at_least_ordered_items(2))
+        mock_sleep.assert_any_call(60)
         server.close()
         await server.wait_closed()
         self.assertEqual(status, 200)
@@ -770,7 +770,7 @@ class TestApplication(TestBase):
 
     @async_test
     async def test_multipage(self):
-        with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
+        with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(
                 {**mock_env(), 'FEEDS__1__SEED': (
                     'http://localhost:8081/'
@@ -779,8 +779,7 @@ class TestApplication(TestBase):
                 },
                 mock_feed=read_file, mock_feed_status=lambda: 200,
             )
-            results = await fetch_all_es_data_until(has_at_least(2), ORIGINAL_SLEEP)
-            mock_sleep.assert_any_call(0)
+            results = await fetch_all_es_data_until(has_at_least(2))
 
         self.assertIn('dit:exportOpportunities:Enquiry:4986999:Create',
                       str(results))
@@ -798,7 +797,7 @@ class TestApplication(TestBase):
 
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=env, mock_feed=read_file, mock_feed_status=lambda: 200)
-            results = await fetch_all_es_data_until(has_at_least(4), ORIGINAL_SLEEP)
+            results = await fetch_all_es_data_until(has_at_least(4))
 
         self.assertIn('dit:exportOpportunities:Enquiry:49863:Create', str(results))
         self.assertIn('dit:exportOpportunities:Enquiry:42863:Create', str(results))
@@ -816,7 +815,7 @@ class TestApplication(TestBase):
 
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=env, mock_feed=read_file, mock_feed_status=lambda: 200)
-            results = await fetch_all_es_data_until(has_at_least(2), ORIGINAL_SLEEP)
+            results = await fetch_all_es_data_until(has_at_least(2))
 
         self.assertIn('dit:exportOpportunities:Enquiry:49863:Create', str(results))
 
@@ -845,7 +844,7 @@ class TestApplication(TestBase):
 
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=env, mock_feed=read_file, mock_feed_status=lambda: 200)
-            results_dict = await fetch_all_es_data_until(has_two_zendesk_tickets, ORIGINAL_SLEEP)
+            results_dict = await fetch_all_es_data_until(has_two_zendesk_tickets)
 
         results = json.dumps(results_dict)
         self.assertIn('"dit:zendesk:Ticket:1"', results)
@@ -872,7 +871,7 @@ class TestApplication(TestBase):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file_broken_then_fixed,
                                     mock_feed_status=lambda: 200)
-            results = await fetch_all_es_data_until(has_at_least(1), ORIGINAL_SLEEP)
+            results = await fetch_all_es_data_until(has_at_least(1))
 
         self.assertIn(
             'dit:exportOpportunities:Enquiry:49863:Create',
@@ -892,7 +891,7 @@ class TestApplication(TestBase):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                     mock_feed_status=send_401_then_200)
-            results = await fetch_all_es_data_until(has_at_least(1), ORIGINAL_SLEEP)
+            results = await fetch_all_es_data_until(has_at_least(1))
 
         self.assertIn(
             'dit:exportOpportunities:Enquiry:49863:Create',
@@ -904,14 +903,18 @@ class TestApplication(TestBase):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                     mock_feed_status=lambda: 200)
-            await fetch_all_es_data_until(has_at_least(2), ORIGINAL_SLEEP)
+            await fetch_all_es_data_until(has_at_least(2))
 
-        # Might be a bit flaky
-        await ORIGINAL_SLEEP(4)
         async with aiohttp.ClientSession() as session:
-            url = 'http://127.0.0.1:8080/metrics'
-            result = await session.get(url)
-        text = await result.text()
+            for _ in range(0, 20):
+                url = 'http://127.0.0.1:8080/metrics'
+                result = await session.get(url)
+                text = await result.text()
+                is_success = 'status="success"' in text and \
+                    '{feed_unique_id="first_feed",searchable="searchable"} 2.0' in text
+                sleep_time = 0 if is_success else 1
+                await ORIGINAL_SLEEP(sleep_time)
+
         self.assertIn('python_info', text)
         self.assertIn('ingest_feed_duration_seconds_count', text)
         self.assertIn('feed_unique_id="first_feed"', text)
@@ -936,6 +939,7 @@ class TestApplication(TestBase):
 
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=env, mock_feed=read_file, mock_feed_status=lambda: 200)
+            await wait_until_get_working()
             await ORIGINAL_SLEEP(2)
 
             async with aiohttp.ClientSession() as session:

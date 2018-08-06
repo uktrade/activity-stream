@@ -14,6 +14,7 @@ from .app_elasticsearch import (
     es_bulk,
     es_activities_total,
     es_feed_activities_total,
+    es_min_verification_age,
     create_indexes,
     create_mappings,
     get_new_index_names,
@@ -138,13 +139,19 @@ def feed_unique_ids(feed_endpoints):
 @async_inprogress
 @async_timer
 async def ingest_feed(metrics, session, feed, es_endpoint, index_name, **_):
+    app_logger = logging.getLogger('activity-stream')
+
     href = feed.seed
     while href:
-        href = await ingest_feed_page(
+        href, interval, message = await ingest_feed_page(
             metrics, session, feed, es_endpoint, index_name, href,
             _async_timer=metrics['ingest_page_duration_seconds'],
             _async_timer_labels=[feed.unique_id, 'total'],
         )
+        app_logger.debug(message)
+        app_logger.debug('Sleeping for %s seconds', interval)
+
+        await asyncio.sleep(interval)
 
 
 @async_timer
@@ -180,12 +187,7 @@ async def ingest_feed_page(metrics, session, feed, es_endpoint, index_name, href
         (feed.polling_page_interval, 'Will poll next page in feed') if next_href else \
         (feed.polling_seed_interval, 'Will poll seed page')
 
-    app_logger.debug(message)
-    app_logger.debug('Sleeping for %s seconds', interval)
-
-    await asyncio.sleep(interval)
-
-    return next_href
+    return next_href, interval, message
 
 
 @async_timer
@@ -200,7 +202,7 @@ async def get_feed_contents(session, href, headers, **_):
         raise Exception(await result.text())
 
     app_logger.debug('Fetching feed contents...')
-    contents = await result.content.read()
+    contents = await result.read()
     app_logger.debug('Fetched feed contents: done')
 
     return contents
@@ -220,8 +222,12 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
     @async_repeat_until_cancelled
     async def poll_metrics(**_):
         searchable, nonsearchable = await es_activities_total(session, es_endpoint)
+        min_activity_age = await es_min_verification_age(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
         metrics['elasticsearch_activities_total'].labels('nonsearchable').set(nonsearchable)
+        if min_activity_age is not None:
+            metrics['elasticsearch_activities_age_minimum_seconds'].labels(
+                'verification').set(min_activity_age)
 
         feed_ids = feed_unique_ids(feed_endpoints)
         for feed_id in feed_ids:

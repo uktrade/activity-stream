@@ -14,6 +14,7 @@ from core.tests_utils import (
     wait_until_get_working,
     has_at_least_ordered_items,
     get_until,
+    get_until_raw,
     mock_env,
     read_file,
     run_es_application,
@@ -37,23 +38,32 @@ class TestProcess(unittest.TestCase):
         output_inc, _ = server_inc.communicate()
         return output_out, output_inc
 
-    async def setup_manual(self, env):
+    async def setup_manual(self, common_env):
         await delete_all_es_data()
 
+        env = {
+            **common_env,
+            'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
+            'FEEDS__2__UNIQUE_ID': 'verification',
+            'FEEDS__2__SEED': 'http://localhost:8082/',
+            'FEEDS__2__ACCESS_KEY_ID': '',
+            'FEEDS__2__SECRET_ACCESS_KEY': '',
+            'FEEDS__2__TYPE': 'activity_stream',
+        }
         feed_runner_1 = await run_feed_application(read_file, lambda: 200, Mock(), 8081)
-        server_out = Popen([sys.executable, '-m', 'core.app_outgoing'], env={
+        feed_runner_2 = Popen([sys.executable, '-m', 'verification_feed.app'], env={
             **env,
-            'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
+            'PORT': '8082',
         }, stdout=PIPE)
-        server_inc = Popen([sys.executable, '-m', 'core.app_incoming'], env={
-            **env,
-            'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
-        }, stdout=PIPE)
+        server_out = Popen([sys.executable, '-m', 'core.app_outgoing'], env=env, stdout=PIPE)
+        server_inc = Popen([sys.executable, '-m', 'core.app_incoming'], env=env, stdout=PIPE)
 
         async def tear_down():
             server_inc.terminate()
             server_out.terminate()
+            feed_runner_2.terminate()
             await feed_runner_1.cleanup()
+            await asyncio.sleep(1)
 
         self.add_async_cleanup(tear_down)
         return server_out, server_inc
@@ -67,9 +77,9 @@ class TestProcess(unittest.TestCase):
         url = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
         result, _, _ = await get_until(url, x_forwarded_for,
-                                       has_at_least_ordered_items(2), asyncio.sleep)
-        self.assertEqual(result['orderedItems'][0]['id'],
-                         'dit:exportOpportunities:Enquiry:49863:Create')
+                                       has_at_least_ordered_items(500))
+        ids = [item['id'] for item in result['orderedItems']]
+        self.assertIn('dit:activityStreamVerificationFeed:Verifier', str(ids))
 
         output_out, output_inc = await self.terminate_with_output(server_out, server_inc)
 
@@ -117,3 +127,21 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(final_string, output_out[-len(final_string):])
         self.assertEqual(server_inc.returncode, 0)
         self.assertEqual(server_out.returncode, 0)
+
+    @async_test
+    async def test_verification_metrics(self):
+        _, _ = await self.setup_manual(mock_env())
+        self.assertTrue(await is_http_accepted_eventually())
+        await wait_until_get_working()
+
+        url = 'http://127.0.0.1:8080/metrics'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
+        def has_success(text):
+            return 'status="success"' in text and \
+                   'elasticsearch_activities_age_minimum_seconds' \
+                   '{feed_unique_id="verification"}' in text
+        text, _, _ = await get_until_raw(url, x_forwarded_for, has_success)
+
+        self.assertIn('elasticsearch_activities_age_minimum_seconds'
+                      '{feed_unique_id="verification"}', text)
