@@ -939,6 +939,7 @@ class TestApplication(TestBase):
 
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=env, mock_feed=read_file, mock_feed_status=lambda: 200)
+            await wait_until_get_working()
             await ORIGINAL_SLEEP(2)
 
             async with aiohttp.ClientSession() as session:
