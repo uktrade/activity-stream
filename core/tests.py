@@ -685,7 +685,7 @@ class TestApplication(TestBase):
             await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                     mock_feed=read_file, mock_feed_status=lambda: 200)
             while modified < max_modifications:
-                await ORIGINAL_SLEEP(0.1)
+                await ORIGINAL_SLEEP(1)
 
             await wait_until_get_working()
 
@@ -734,7 +734,7 @@ class TestApplication(TestBase):
             await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                     mock_feed=read_file, mock_feed_status=lambda: 200)
             while modified < max_modifications:
-                await ORIGINAL_SLEEP(0.1)
+                await ORIGINAL_SLEEP(1)
 
             await wait_until_get_working()
             mock_sleep.assert_any_call(60)

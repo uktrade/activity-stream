@@ -54,7 +54,7 @@ async def is_http_accepted_eventually():
             return True
         except aiohttp.client_exceptions.ClientConnectorError:
             attempts += 1
-            await ORIGINAL_SLEEP(0.2)
+            await ORIGINAL_SLEEP(1)
 
 
 async def wait_until_get_working():
@@ -78,7 +78,7 @@ async def wait_until_get_working():
         if 'orderedItems' in json.loads(content):
             return True
         attempts += 1
-        await ORIGINAL_SLEEP(0.2)
+        await ORIGINAL_SLEEP(1)
 
 
 def read_file(path):
@@ -114,7 +114,7 @@ async def fetch_until(url, condition):
         all_es_data = await fetch_all_es_data()
         if condition(all_es_data):
             break
-        await ORIGINAL_SLEEP(0.2)
+        await ORIGINAL_SLEEP(1)
 
     return all_es_data
 
@@ -161,7 +161,7 @@ async def get_until(url, x_forwarded_for, condition):
         dict_data = json.loads(all_data)
         if condition(dict_data):
             break
-        await ORIGINAL_SLEEP(0.05)
+        await ORIGINAL_SLEEP(1)
 
     return dict_data, status, headers
 
