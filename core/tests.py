@@ -734,16 +734,14 @@ class TestApplication(TestBase):
         with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
             await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                     mock_feed=read_file, mock_feed_status=lambda: 200)
-            while modified < max_modifications:
-                await ORIGINAL_SLEEP(1)
-
             await wait_until_get_working()
-            mock_sleep.assert_any_call(60)
+            await ORIGINAL_SLEEP(3)
 
         url = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
         result, status, _ = await get_until(url, x_forwarded_for,
                                             has_at_least_ordered_items(2))
+        mock_sleep.assert_any_call(60)
         server.close()
         await server.wait_closed()
         self.assertEqual(status, 200)

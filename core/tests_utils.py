@@ -168,9 +168,10 @@ async def get_until_raw(url, x_forwarded_for, condition):
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', b'', 'application/json',
         )
         all_data, status, headers = await get(url, auth, x_forwarded_for, b'')
-        if condition(all_data):
+        passed = condition(all_data)
+        await ORIGINAL_SLEEP(0 if passed else 1)
+        if passed:
             break
-        await ORIGINAL_SLEEP(1)
 
     return all_data, status, headers
 
