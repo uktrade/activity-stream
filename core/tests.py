@@ -772,7 +772,7 @@ class TestApplication(TestBase):
 
     @async_test
     async def test_multipage(self):
-        with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
+        with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(
                 {**mock_env(), 'FEEDS__1__SEED': (
                     'http://localhost:8081/'
@@ -782,7 +782,6 @@ class TestApplication(TestBase):
                 mock_feed=read_file, mock_feed_status=lambda: 200,
             )
             results = await fetch_all_es_data_until(has_at_least(2))
-            mock_sleep.assert_any_call(0)
 
         self.assertIn('dit:exportOpportunities:Enquiry:4986999:Create',
                       str(results))

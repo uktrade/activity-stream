@@ -139,13 +139,19 @@ def feed_unique_ids(feed_endpoints):
 @async_inprogress
 @async_timer
 async def ingest_feed(metrics, session, feed, es_endpoint, index_name, **_):
+    app_logger = logging.getLogger('activity-stream')
+
     href = feed.seed
     while href:
-        href = await ingest_feed_page(
+        href, interval, message = await ingest_feed_page(
             metrics, session, feed, es_endpoint, index_name, href,
             _async_timer=metrics['ingest_page_duration_seconds'],
             _async_timer_labels=[feed.unique_id, 'total'],
         )
+        app_logger.debug(message)
+        app_logger.debug('Sleeping for %s seconds', interval)
+
+        await asyncio.sleep(interval)
 
 
 @async_timer
@@ -181,12 +187,7 @@ async def ingest_feed_page(metrics, session, feed, es_endpoint, index_name, href
         (feed.polling_page_interval, 'Will poll next page in feed') if next_href else \
         (feed.polling_seed_interval, 'Will poll seed page')
 
-    app_logger.debug(message)
-    app_logger.debug('Sleeping for %s seconds', interval)
-
-    await asyncio.sleep(interval)
-
-    return next_href
+    return next_href, interval, message
 
 
 @async_timer
