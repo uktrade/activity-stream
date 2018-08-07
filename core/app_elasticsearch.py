@@ -267,6 +267,7 @@ async def es_bulk(session, es_endpoint, items, **_):
 
 
 async def es_searchable_total(session, es_endpoint):
+    # This metric is expected to be available
     searchable_result = await es_request_non_200_exception(
         session=session,
         endpoint=es_endpoint,
@@ -280,7 +281,7 @@ async def es_searchable_total(session, es_endpoint):
 
 
 async def es_nonsearchable_total(session, es_endpoint):
-    nonsearchable_result = await es_request_non_200_exception(
+    nonsearchable_result = await es_maybe_unvailable_metrics(
         session=session,
         endpoint=es_endpoint,
         method='GET',
@@ -293,7 +294,7 @@ async def es_nonsearchable_total(session, es_endpoint):
 
 
 async def es_feed_activities_total(session, es_endpoint, feed_id):
-    nonsearchable_result = await es_request_non_200_exception(
+    nonsearchable_result = await es_maybe_unvailable_metrics(
         session=session,
         endpoint=es_endpoint,
         method='GET',
@@ -304,7 +305,7 @@ async def es_feed_activities_total(session, es_endpoint, feed_id):
     )
     nonsearchable = (await nonsearchable_result.json())['count']
 
-    total_result = await es_request_non_200_exception(
+    total_result = await es_maybe_unvailable_metrics(
         session=session,
         endpoint=es_endpoint,
         method='GET',
@@ -363,6 +364,18 @@ async def es_request_non_200_exception(session, endpoint, method, path, query_st
                                        content_type, payload):
     results = await es_request(session, endpoint, method, path, query_string,
                                content_type, payload)
+    if results.status != 200:
+        raise Exception(await results.text())
+    return results
+
+
+async def es_maybe_unvailable_metrics(session, endpoint, method, path, query_string,
+                                      content_type, payload):
+    ''' Some metrics may be unavailable since they query newly created indexes '''
+    results = await es_request(session, endpoint, method, path, query_string,
+                               content_type, payload)
+    if results.status == 503:
+        raise ESMetricsUnavailable()
     if results.status != 200:
         raise Exception(await results.text())
     return results

@@ -221,8 +221,12 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
     async def poll_metrics(**_):
         searchable = await es_searchable_total(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
-        nonsearchable = await es_nonsearchable_total(session, es_endpoint)
-        metrics['elasticsearch_activities_total'].labels('nonsearchable').set(nonsearchable)
+
+        try:
+            nonsearchable = await es_nonsearchable_total(session, es_endpoint)
+            metrics['elasticsearch_activities_total'].labels('nonsearchable').set(nonsearchable)
+        except ESMetricsUnavailable:
+            pass
 
         try:
             min_activity_age = await es_min_verification_age(session, es_endpoint)
@@ -233,12 +237,15 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
 
         feed_ids = feed_unique_ids(feed_endpoints)
         for feed_id in feed_ids:
-            searchable, nonsearchable = await es_feed_activities_total(session,
-                                                                       es_endpoint, feed_id)
-            metrics['elasticsearch_feed_activities_total'].labels(
-                feed_id, 'searchable').set(searchable)
-            metrics['elasticsearch_feed_activities_total'].labels(
-                feed_id, 'nonsearchable').set(nonsearchable)
+            try:
+                searchable, nonsearchable = await es_feed_activities_total(session,
+                                                                           es_endpoint, feed_id)
+                metrics['elasticsearch_feed_activities_total'].labels(
+                    feed_id, 'searchable').set(searchable)
+                metrics['elasticsearch_feed_activities_total'].labels(
+                    feed_id, 'nonsearchable').set(nonsearchable)
+            except ESMetricsUnavailable:
+                pass
 
         await redis_client.set('metrics', generate_latest(metrics_registry))
         await asyncio.sleep(METRICS_INTERVAL)
