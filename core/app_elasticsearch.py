@@ -126,6 +126,7 @@ async def create_index(session, es_endpoint, index_name):
             'index': {
                 'number_of_shards': 4,
                 'number_of_replicas': 1,
+                'refresh_interval': -1,
             }
         }
     }).encode('utf-8')
