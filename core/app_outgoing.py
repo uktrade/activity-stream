@@ -13,8 +13,9 @@ from prometheus_client import (
 from .app_elasticsearch import (
     ESMetricsUnavailable,
     es_bulk,
-    es_activities_total,
     es_feed_activities_total,
+    es_searchable_total,
+    es_nonsearchable_total,
     es_min_verification_age,
     create_index,
     create_mapping,
@@ -218,8 +219,9 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
 
     @async_repeat_until_cancelled
     async def poll_metrics(**_):
-        searchable, nonsearchable = await es_activities_total(session, es_endpoint)
+        searchable = await es_searchable_total(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
+        nonsearchable = await es_nonsearchable_total(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('nonsearchable').set(nonsearchable)
 
         try:

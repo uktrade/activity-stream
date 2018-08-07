@@ -266,7 +266,7 @@ async def es_bulk(session, es_endpoint, items, **_):
     app_logger.debug('Pushing to ES: done')
 
 
-async def es_activities_total(session, es_endpoint):
+async def es_searchable_total(session, es_endpoint):
     searchable_result = await es_request_non_200_exception(
         session=session,
         endpoint=es_endpoint,
@@ -276,7 +276,10 @@ async def es_activities_total(session, es_endpoint):
         content_type='application/json',
         payload=b'',
     )
-    searchable = (await searchable_result.json())['count']
+    return (await searchable_result.json())['count']
+
+
+async def es_nonsearchable_total(session, es_endpoint):
     nonsearchable_result = await es_request_non_200_exception(
         session=session,
         endpoint=es_endpoint,
@@ -286,9 +289,7 @@ async def es_activities_total(session, es_endpoint):
         content_type='application/json',
         payload=b'',
     )
-    nonsearchable = (await nonsearchable_result.json())['count']
-
-    return searchable, nonsearchable
+    return (await nonsearchable_result.json())['count']
 
 
 async def es_feed_activities_total(session, es_endpoint, feed_id):
