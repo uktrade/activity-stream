@@ -218,9 +218,9 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
     @async_repeat_until_cancelled
     async def poll_metrics(**_):
         searchable, nonsearchable = await es_activities_total(session, es_endpoint)
-        min_activity_age = await es_min_verification_age(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
         metrics['elasticsearch_activities_total'].labels('nonsearchable').set(nonsearchable)
+        min_activity_age = await es_min_verification_age(session, es_endpoint)
         if min_activity_age is not None:
             metrics['elasticsearch_activities_age_minimum_seconds'].labels(
                 'verification').set(min_activity_age)
