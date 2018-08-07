@@ -125,7 +125,7 @@ def normalise_environment(key_values):
 
 def async_repeat_until_cancelled(coroutine):
 
-    async def wrapper(*args, **kwargs):
+    async def _async_repeat_until_cancelled(*args, **kwargs):
         app_logger = logging.getLogger('activity-stream')
 
         kwargs_to_pass, (raven_client, exception_interval, logging_title) = \
@@ -150,7 +150,7 @@ def async_repeat_until_cancelled(coroutine):
                 except asyncio.CancelledError:
                     break
 
-    return wrapper
+    return _async_repeat_until_cancelled
 
 
 def sub_dict_lower(super_dict, keys):
