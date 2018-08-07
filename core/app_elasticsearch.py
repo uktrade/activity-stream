@@ -121,7 +121,14 @@ async def delete_indexes(session, es_endpoint, index_names):
 
 
 async def create_index(session, es_endpoint, index_name):
-    index_definition = json.dumps({}).encode('utf-8')
+    index_definition = json.dumps({
+        'settings': {
+            'index': {
+                'number_of_shards': 4,
+                'number_of_replicas': 1,
+            }
+        }
+    }).encode('utf-8')
     await es_request_non_200_exception(
         session=session,
         endpoint=es_endpoint,

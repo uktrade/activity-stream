@@ -37,6 +37,10 @@ from core.tests_utils import (
 
 class TestBase(unittest.TestCase):
 
+    def add_async_cleanup(self, coroutine):
+        loop = asyncio.get_event_loop()
+        self.addCleanup(loop.run_until_complete, coroutine())
+
     async def setup_manual(self, env, mock_feed, mock_feed_status):
         ''' Test setUp function that can be customised on a per-test basis '''
 
@@ -45,10 +49,6 @@ class TestBase(unittest.TestCase):
         os_environ_patcher = patch.dict(os.environ, env)
         os_environ_patcher.start()
         self.addCleanup(os_environ_patcher.stop)
-
-        def add_async_cleanup(coroutine):
-            loop = asyncio.get_event_loop()
-            self.addCleanup(loop.run_until_complete, coroutine())
 
         self.feed_requested = [asyncio.Future(), asyncio.Future()]
 
@@ -63,10 +63,10 @@ class TestBase(unittest.TestCase):
 
         feed_runner = await run_feed_application(mock_feed, mock_feed_status,
                                                  feed_requested_callback, 8081)
-        add_async_cleanup(feed_runner.cleanup)
+        self.add_async_cleanup(feed_runner.cleanup)
 
         cleanup = await run_app_until_accepts_http()
-        add_async_cleanup(cleanup)
+        self.add_async_cleanup(cleanup)
 
 
 class TestAuthentication(TestBase):
@@ -354,10 +354,9 @@ class TestApplication(TestBase):
         result, status, headers = await get_until(url, x_forwarded_for,
                                                   has_at_least_ordered_items(2))
         self.assertEqual(status, 200)
-        self.assertEqual(result['orderedItems'][0]['id'],
-                         'dit:exportOpportunities:Enquiry:49863:Create')
-        self.assertEqual(result['orderedItems'][1]['id'],
-                         'dit:exportOpportunities:Enquiry:49862:Create')
+        ids = [item['id'] for item in result['orderedItems']]
+        self.assertIn('dit:exportOpportunities:Enquiry:49863:Create', ids)
+        self.assertIn('dit:exportOpportunities:Enquiry:49862:Create', ids)
         self.assertEqual(headers['Server'], 'activity-stream')
 
         def does_not_have_previous_items(results):
@@ -368,10 +367,9 @@ class TestApplication(TestBase):
             result, status, headers = await get_until(url, x_forwarded_for,
                                                       does_not_have_previous_items)
         self.assertEqual(status, 200)
-        self.assertEqual(result['orderedItems'][0]['id'],
-                         'dit:exportOpportunities:Enquiry:42863:Create')
-        self.assertEqual(result['orderedItems'][1]['id'],
-                         'dit:exportOpportunities:Enquiry:42862:Create')
+        ids = [item['id'] for item in result['orderedItems']]
+        self.assertIn('dit:exportOpportunities:Enquiry:42863:Create', ids)
+        self.assertIn('dit:exportOpportunities:Enquiry:42862:Create', ids)
         self.assertEqual(headers['Server'], 'activity-stream')
 
     @async_test
@@ -541,11 +539,8 @@ class TestApplication(TestBase):
             web.post('/_bulk', return_200_and_callback),
         ]
 
-        def add_async_cleanup(coroutine):
-            loop = asyncio.get_event_loop()
-            self.addCleanup(loop.run_until_complete, coroutine())
         es_runner = await run_es_application(port=9201, override_routes=routes)
-        add_async_cleanup(es_runner.cleanup)
+        self.add_async_cleanup(es_runner.cleanup)
         await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                 mock_feed=read_file, mock_feed_status=lambda: 200)
 
@@ -608,6 +603,7 @@ class TestApplication(TestBase):
             web.get('/activities/_search', return_200_and_callback),
         ]
         es_runner = await run_es_application(port=9201, override_routes=routes)
+        self.add_async_cleanup(es_runner.cleanup)
 
         with \
                 freeze_time('2012-01-15 12:00:01'):
@@ -621,7 +617,6 @@ class TestApplication(TestBase):
             )
             x_forwarded_for = '1.2.3.4, 127.0.0.0'
             await get(url, auth, x_forwarded_for, b'{}')
-            await es_runner.cleanup()
             [[_, es_headers]] = await get_es_once
 
         self.assertEqual(es_headers['Authorization'],
