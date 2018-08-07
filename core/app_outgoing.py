@@ -11,6 +11,7 @@ from prometheus_client import (
 )
 
 from .app_elasticsearch import (
+    ESMetricsUnavailable,
     es_bulk,
     es_activities_total,
     es_feed_activities_total,
@@ -220,10 +221,13 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
         searchable, nonsearchable = await es_activities_total(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
         metrics['elasticsearch_activities_total'].labels('nonsearchable').set(nonsearchable)
-        min_activity_age = await es_min_verification_age(session, es_endpoint)
-        if min_activity_age is not None:
+
+        try:
+            min_activity_age = await es_min_verification_age(session, es_endpoint)
             metrics['elasticsearch_activities_age_minimum_seconds'].labels(
                 'verification').set(min_activity_age)
+        except ESMetricsUnavailable:
+            pass
 
         feed_ids = feed_unique_ids(feed_endpoints)
         for feed_id in feed_ids:

@@ -354,7 +354,7 @@ async def es_min_verification_age(session, es_endpoint):
         age = now - max_published
     except (KeyError, TypeError):
         # If there aren't any activities yet, don't error
-        age = None
+        raise ESMetricsUnavailable()
     return age
 
 
@@ -427,3 +427,7 @@ def es_auth_headers(endpoint, method, path, query_string, content_type, payload)
             f'SignedHeaders={signed_headers}, Signature=' + signature()
         ),
     }
+
+
+class ESMetricsUnavailable(Exception):
+    pass
