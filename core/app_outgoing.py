@@ -222,18 +222,16 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
         searchable = await es_searchable_total(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
 
-        try:
-            nonsearchable = await es_nonsearchable_total(session, es_endpoint)
-            metrics['elasticsearch_activities_total'].labels('nonsearchable').set(nonsearchable)
-        except ESMetricsUnavailable:
-            pass
-
-        try:
-            min_activity_age = await es_min_verification_age(session, es_endpoint)
-            metrics['elasticsearch_activities_age_minimum_seconds'].labels(
-                'verification').set(min_activity_age)
-        except ESMetricsUnavailable:
-            pass
+        await set_metric_if_can(
+            metrics['elasticsearch_activities_total'],
+            ['nonsearchable'],
+            es_nonsearchable_total(session, es_endpoint),
+        )
+        await set_metric_if_can(
+            metrics['elasticsearch_activities_age_minimum_seconds'],
+            ['verification'],
+            es_min_verification_age(session, es_endpoint),
+        )
 
         feed_ids = feed_unique_ids(feed_endpoints)
         for feed_id in feed_ids:
@@ -255,6 +253,13 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
         _async_repeat_until_cancelled_exception_interval=METRICS_INTERVAL,
         _async_repeat_until_cancelled_logging_title='Elasticsearch polling',
     ))
+
+
+async def set_metric_if_can(metric, labels, get_value_coroutine):
+    try:
+        metric.labels(*labels).set(await get_value_coroutine)
+    except ESMetricsUnavailable:
+        pass
 
 
 if __name__ == '__main__':
