@@ -67,6 +67,9 @@ async def run_outgoing_application():
 
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
+
+    await acquire_and_keep_lock(redis_client)
+
     await create_outgoing_application(
         metrics, raven_client, session, feed_endpoints, es_endpoint,
     )
@@ -84,6 +87,45 @@ async def run_outgoing_application():
         await asyncio.sleep(0.250)
 
     return cleanup
+
+
+async def acquire_and_keep_lock(redis_client):
+    ''' Prevents Elasticsearch errors during deployments
+
+    The exceptions would be caused by a new deployment deleting indexes while
+    the previous deployment is still ingesting into them
+
+    We do not offer a delete for simplicity: the lock will just expire if it's
+    not extended, which happens on destroy of the application
+
+    We don't use Redlock, since we don't care too much if a Redis failure causes
+    multiple clients to have the lock for a period of time. It would only cause
+    Elasticsearch errors to appear in sentry, but otherwise there would be no
+    harm
+
+    We don't try to re-aquire the lock if we've lost it. This would happen if
+    we've blocked for > ttl and lost the lock. We _want_ to have more evidence
+    of this so we can address the problem.
+    '''
+    ttl = 2
+    aquire_interval = 1
+    extend_interval = 1
+    key = 'lock'
+
+    async def acquire():
+        while True:
+            response = await redis_client.execute('SET', key, '1', 'EX', ttl, 'NX')
+            if response == b'OK':
+                break
+            await asyncio.sleep(aquire_interval)
+
+    async def extend_forever():
+        while True:
+            await asyncio.sleep(extend_interval)
+            await redis_client.execute('EXPIRE', key, ttl)
+
+    await acquire()
+    asyncio.get_event_loop().create_task(extend_forever())
 
 
 async def create_outgoing_application(metrics, raven_client, session, feed_endpoints, es_endpoint):
