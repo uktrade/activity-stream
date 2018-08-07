@@ -647,19 +647,28 @@ class TestApplication(TestBase):
         self.assertEqual(text, '{"elasticsearch": "error"}')
 
     @async_test
-    async def test_es_503_recovered_from(self):
-        modified = 0
-        max_modifications = 2
+    async def test_es_5xx_recovered_from(self):
+        modified_500 = 0
+        modified_503 = 0
+        max_modifications = 10
 
         http_200 = b'HTTP/1.1 200 OK'
-        http_500 = b'HTTP/1.1 503 Service Unavailable'
+        http_500 = b'HTTP/1.1 500 Service Unavailable'
+        http_503 = b'HTTP/1.1 503 Internal Server Error'
 
         def modify(data):
-            nonlocal modified
-            should_modify = modified < max_modifications and b'"status":201' in data
-            data, modified = \
-                (data.replace(http_200, http_500), modified + 1) if should_modify else \
-                (data, modified)
+            nonlocal modified_500
+            nonlocal modified_503
+            should_modify_500 = modified_500 < max_modifications and \
+                (b'"status":201' in data or b'"count"' in data)
+            should_modify_503 = modified_503 < max_modifications and \
+                (b'"status":201' in data or b'"count"' in data)
+            with_500 = data.replace(http_200, http_500)
+            with_503 = data.replace(http_200, http_503)
+            data, modified_500, modified_503 = \
+                (with_500, modified_500 + 1, modified_503) if should_modify_500 else \
+                (with_503, modified_500, modified_503 + 1) if should_modify_503 else \
+                (data, modified_500, modified_503)
             return data
 
         async def handle_client(local_reader, local_writer):
@@ -684,7 +693,7 @@ class TestApplication(TestBase):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                     mock_feed=read_file, mock_feed_status=lambda: 200)
-            while modified < max_modifications:
+            while modified_500 < max_modifications or modified_503 < max_modifications:
                 await ORIGINAL_SLEEP(1)
 
             await wait_until_get_working()
@@ -702,6 +711,11 @@ class TestApplication(TestBase):
             self.assertLessEqual(len(await fetch_es_index_names_with_alias()), 2)
             await ORIGINAL_SLEEP(2)
             self.assertLessEqual(len(await fetch_es_index_names()), 2)
+
+        async with aiohttp.ClientSession() as session:
+            metrics_result = await session.get('http://127.0.0.1:8080/metrics')
+            metrics_text = await metrics_result.text()
+            self.assertIn('status="success"', metrics_text)
 
     @async_test
     async def test_es_no_connect_recovered(self):
