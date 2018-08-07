@@ -45,7 +45,7 @@ class TestProcess(unittest.TestCase):
             **common_env,
             'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
             'FEEDS__2__UNIQUE_ID': 'verification',
-            'FEEDS__2__SEED': 'http://localhost:8082/',
+            'FEEDS__2__SEED': 'http://localhost:8082/0',
             'FEEDS__2__ACCESS_KEY_ID': '',
             'FEEDS__2__SECRET_ACCESS_KEY': '',
             'FEEDS__2__TYPE': 'activity_stream',
