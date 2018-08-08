@@ -31,13 +31,13 @@ async def run_application():
                          .with_host(es_endpoint['host']) \
                          .with_port(int(es_endpoint['port']))
         request_body = await request.read()
-        headers = {
+        source_headers = {
             header: request.headers[header]
             for header in ['kbn-version', 'content-type']
             if header in request.headers
         }
         response = await session.request(request.method, str(url), data=request_body,
-                                         headers=headers)
+                                         headers=source_headers)
         response_body = await response.read()
         return web.Response(status=response.status, body=response_body, headers=response.headers)
 
