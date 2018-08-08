@@ -1,14 +1,14 @@
 import datetime
-import hashlib
-import hmac
 import json
 import logging
 import os
 import time
-import urllib.parse
 
 from aiohttp.web import (
     HTTPNotFound,
+)
+from shared.utils import (
+    es_auth_headers,
 )
 
 from .app_metrics import (
@@ -398,67 +398,6 @@ async def es_request(session, endpoint, method, path, query, headers, payload):
     # Without this, after some number of requests, they end up hanging
     await result.read()
     return result
-
-
-def es_auth_headers(endpoint, method, path, query, headers, payload):
-    algorithm = 'AWS4-HMAC-SHA256'
-    service = 'es'
-
-    now = datetime.datetime.utcnow()
-    amzdate = now.strftime('%Y%m%dT%H%M%SZ')
-    datestamp = now.strftime('%Y%m%d')
-    credential_scope = f'{datestamp}/{endpoint["region"]}/{service}/aws4_request'
-    headers_lower = {
-        header_key.lower().strip(): header_value.strip()
-        for header_key, header_value in headers.items()
-    }
-    signed_header_keys = sorted([header_key
-                                 for header_key in headers_lower.keys()] + ['host', 'x-amz-date'])
-    signed_headers = ';'.join([header_key for header_key in signed_header_keys])
-
-    def signature():
-        def canonical_request():
-            header_values = {
-                **headers_lower,
-                'host': endpoint['host'],
-                'x-amz-date': amzdate,
-            }
-
-            canonical_uri = urllib.parse.quote(path, safe='/~')
-            query_keys = sorted(query.keys())
-            canonical_querystring = '&'.join([
-                urllib.parse.quote(key, safe='~') + '=' + urllib.parse.quote(query[key], safe='~')
-                for key in query_keys
-            ])
-            canonical_headers = ''.join([
-                header_key + ':' + header_values[header_key] + '\n'
-                for header_key in signed_header_keys
-            ])
-            payload_hash = hashlib.sha256(payload).hexdigest()
-
-            return f'{method}\n{canonical_uri}\n{canonical_querystring}\n' + \
-                   f'{canonical_headers}\n{signed_headers}\n{payload_hash}'
-
-        def sign(key, msg):
-            return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
-
-        string_to_sign = \
-            f'{algorithm}\n{amzdate}\n{credential_scope}\n' + \
-            hashlib.sha256(canonical_request().encode('utf-8')).hexdigest()
-
-        date_key = sign(('AWS4' + endpoint['secret_key']).encode('utf-8'), datestamp)
-        region_key = sign(date_key, endpoint['region'])
-        service_key = sign(region_key, service)
-        request_key = sign(service_key, 'aws4_request')
-        return sign(request_key, string_to_sign).hex()
-
-    return {
-        'x-amz-date': amzdate,
-        'Authorization': (
-            f'{algorithm} Credential={endpoint["access_key_id"]}/{credential_scope}, ' +
-            f'SignedHeaders={signed_headers}, Signature=' + signature()
-        ),
-    }
 
 
 class ESMetricsUnavailable(Exception):
