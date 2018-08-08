@@ -33,7 +33,7 @@ async def run_application():
         request_body = await request.read()
         source_headers = {
             header: request.headers[header]
-            for header in ['kbn-version', 'content-type']
+            for header in ['Kbn-Version', 'Content-Type']
             if header in request.headers
         }
         response = await session.request(request.method, str(url), data=request_body,
