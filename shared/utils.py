@@ -1,4 +1,26 @@
 import itertools
+import json
+
+
+def get_common_config(env):
+    es_endpoint = {
+        'host': env['ELASTICSEARCH']['HOST'],
+        'access_key_id': env['ELASTICSEARCH']['AWS_ACCESS_KEY_ID'],
+        'secret_key': env['ELASTICSEARCH']['AWS_SECRET_ACCESS_KEY'],
+        'region': env['ELASTICSEARCH']['REGION'],
+        'protocol': env['ELASTICSEARCH']['PROTOCOL'],
+        'base_url': (
+            env['ELASTICSEARCH']['PROTOCOL'] + '://' +
+            env['ELASTICSEARCH']['HOST'] + ':' + env['ELASTICSEARCH']['PORT']
+        ),
+        'port': env['ELASTICSEARCH']['PORT'],
+    }
+    redis_uri = json.loads(env['VCAP_SERVICES'])['redis'][0]['credentials']['uri']
+    sentry = {
+        'dsn': env['SENTRY_DSN'],
+        'environment': env['SENTRY_ENVIRONMENT'],
+    }
+    return es_endpoint, redis_uri, sentry
 
 
 def normalise_environment(key_values):

@@ -10,6 +10,7 @@ from prometheus_client import (
     generate_latest,
 )
 from shared.utils import (
+    get_common_config,
     normalise_environment,
 )
 
@@ -41,7 +42,6 @@ from .app_metrics import (
     get_metrics,
 )
 from .app_utils import (
-    get_common_config,
     get_raven_client,
     async_repeat_until_cancelled,
     cancel_non_current_tasks,
