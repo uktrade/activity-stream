@@ -126,7 +126,9 @@ async def acquire_and_keep_lock(redis_client, raven_client):
     @async_repeat_until_cancelled
     async def extend_forever(**_):
         await asyncio.sleep(extend_interval)
-        await redis_client.execute('EXPIRE', key, ttl)
+        response = await redis_client.execute('EXPIRE', key, ttl)
+        if response != 1:
+            raise Exception('Lock has been lost')
 
     await acquire()
     asyncio.get_event_loop().create_task(extend_forever(

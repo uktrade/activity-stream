@@ -7,7 +7,7 @@ import os
 import signal
 import sys
 
-from raven import Client
+import raven
 from raven_aiohttp import QueuedAioHttpTransport
 
 
@@ -205,7 +205,7 @@ def get_common_config(env):
 
 
 def get_raven_client(sentry):
-    return Client(
+    return raven.Client(
         sentry['dsn'],
         environment=sentry['environment'],
         transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))

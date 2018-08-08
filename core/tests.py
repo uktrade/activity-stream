@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import aiohttp
 from aiohttp import web
+import aioredis
 from freezegun import freeze_time
 
 from core.tests_utils import (
@@ -962,3 +963,18 @@ class TestApplication(TestBase):
                 result = await session.get(url)
 
         self.assertIn('status="success"', await result.text())
+
+    @async_test
+    async def test_if_lost_lock_then_raise(self):
+        async def mock_close():
+            await ORIGINAL_SLEEP(0)
+
+        with patch('asyncio.sleep', wraps=fast_sleep), patch('raven.Client') as raven_client:
+            raven_client().remote.get_transport().close = mock_close
+            await self.setup_manual(env=mock_env(), mock_feed=read_file,
+                                    mock_feed_status=lambda: 200)
+            redis_client = await aioredis.create_redis('redis://127.0.0.1:6379')
+            await redis_client.execute('DEL', 'lock')
+            await ORIGINAL_SLEEP(2)
+
+        raven_client().captureException.assert_called()
