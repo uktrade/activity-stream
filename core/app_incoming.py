@@ -5,6 +5,9 @@ import os
 import aiohttp
 from aiohttp import web
 import aioredis
+from shared.utils import (
+    normalise_environment,
+)
 
 from .app_server import (
     authenticator,
@@ -17,12 +20,12 @@ from .app_server import (
     raven_reporter,
 )
 from .app_utils import (
-    normalise_environment,
     get_common_config,
     get_raven_client,
     cancel_non_current_tasks,
     main,
 )
+
 
 NONCE_EXPIRE = 120
 PAGINATION_EXPIRE = 10

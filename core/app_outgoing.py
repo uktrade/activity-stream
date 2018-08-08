@@ -9,6 +9,9 @@ from prometheus_client import (
     CollectorRegistry,
     generate_latest,
 )
+from shared.utils import (
+    normalise_environment,
+)
 
 from .app_elasticsearch import (
     ESMetricsUnavailable,
@@ -38,7 +41,6 @@ from .app_metrics import (
     get_metrics,
 )
 from .app_utils import (
-    normalise_environment,
     get_common_config,
     get_raven_client,
     async_repeat_until_cancelled,
