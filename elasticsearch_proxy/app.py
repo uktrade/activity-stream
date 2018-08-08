@@ -3,9 +3,11 @@ import logging
 import os
 import sys
 
+import aiohttp
 from aiohttp import web
 
 from shared.utils import (
+    get_common_config,
     normalise_environment,
 )
 
@@ -19,14 +21,35 @@ async def run_application():
     app_logger.debug('Examining environment...')
     env = normalise_environment(os.environ)
     port = env['PORT']
+    es_endpoint, _, _ = get_common_config(env)
     app_logger.debug('Examining environment: done')
 
-    async def handle(_):
-        return web.json_response({})
+    session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
+
+    async def handle(request):
+        url = request.url.with_scheme(es_endpoint['protocol']) \
+                         .with_host(es_endpoint['host']) \
+                         .with_port(int(es_endpoint['port']))
+        request_body = await request.read()
+        headers = {
+            header: request.headers[header]
+            for header in ['kbn-version', 'content-type']
+            if header in request.headers
+        }
+        response = await session.request(request.method, str(url), data=request_body,
+                                         headers=headers)
+        response_body = await response.read()
+        return web.Response(status=response.status, body=response_body, headers=response.headers)
 
     app_logger.debug('Creating listening web application...')
     app = web.Application()
-    app.add_routes([web.get(r'/', handle)])
+    app.add_routes([
+        web.delete(r'/{path:.*}', handle),
+        web.get(r'/{path:.*}', handle),
+        web.post(r'/{path:.*}', handle),
+        web.put(r'/{path:.*}', handle),
+        web.head(r'/{path:.*}', handle),
+    ])
 
     runner = web.AppRunner(app, access_log_format=ACCESS_LOG_FORMAT)
     await runner.setup()
