@@ -7,6 +7,7 @@ import aiohttp
 from aiohttp import web
 
 from shared.utils import (
+    aws_auth_headers,
     get_common_config,
     normalise_environment,
 )
@@ -36,8 +37,12 @@ async def run_application():
             for header in ['Kbn-Version', 'Content-Type']
             if header in request.headers
         }
+        auth_headers = aws_auth_headers(
+            'es', es_endpoint, request.method, request.path,
+            dict(request.query), source_headers, request_body,
+        )
         response = await session.request(request.method, str(url), data=request_body,
-                                         headers=source_headers)
+                                         headers={**source_headers, **auth_headers})
         response_body = await response.read()
         return web.Response(status=response.status, body=response_body, headers=response.headers)
 
