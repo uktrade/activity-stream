@@ -184,8 +184,8 @@ def handle_get_existing(session, redis_client, pagination_expire, es_endpoint):
 def _handle_get(session, redis_client, pagination_expire, es_endpoint, get_path_query):
     async def handle(request):
         incoming_body = await request.read()
-        path, query_string, body = await get_path_query(redis_client, request.match_info,
-                                                        incoming_body)
+        path, query, body = await get_path_query(redis_client, request.match_info,
+                                                 incoming_body)
 
         async def to_public_scroll_url(private_scroll_id):
             public_scroll_id = uuid.uuid4().hex
@@ -194,8 +194,8 @@ def _handle_get(session, redis_client, pagination_expire, es_endpoint, get_path_
             return str(request.url.join(
                 request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)))
 
-        results, status = await es_search(session, es_endpoint, path, query_string, body,
-                                          request.headers['Content-Type'],
+        results, status = await es_search(session, es_endpoint, path, query, body,
+                                          {'Content-Type': request.headers['Content-Type']},
                                           to_public_scroll_url)
 
         return json_response(results, status=status)

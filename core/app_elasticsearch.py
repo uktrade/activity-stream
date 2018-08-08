@@ -68,8 +68,8 @@ async def get_old_index_names(session, es_endpoint):
         endpoint=es_endpoint,
         method='GET',
         path=f'/_aliases',
-        query_string='',
-        content_type='application/json',
+        query={},
+        headers={'Content-Type': 'application/json'},
         payload=b'',
     )
     indexes = await results.json()
@@ -101,8 +101,8 @@ async def add_remove_aliases_atomically(session, es_endpoint, index_name, feed_u
         endpoint=es_endpoint,
         method='POST',
         path=f'/_aliases',
-        query_string='',
-        content_type='application/json',
+        query={},
+        headers={'Content-Type': 'application/json'},
         payload=actions,
     )
 
@@ -114,8 +114,8 @@ async def delete_indexes(session, es_endpoint, index_names):
             endpoint=es_endpoint,
             method='DELETE',
             path=f'/{index_name}',
-            query_string='',
-            content_type='application/json',
+            query={},
+            headers={'Content-Type': 'application/json'},
             payload=b'',
         )
 
@@ -135,8 +135,8 @@ async def create_index(session, es_endpoint, index_name):
         endpoint=es_endpoint,
         method='PUT',
         path=f'/{index_name}',
-        query_string='',
-        content_type='application/json',
+        query={},
+        headers={'Content-Type': 'application/json'},
         payload=index_definition,
     )
 
@@ -147,8 +147,8 @@ async def refresh_index(session, es_endpoint, index_name):
         endpoint=es_endpoint,
         method='POST',
         path=f'/{index_name}/_refresh',
-        query_string='',
-        content_type='application/json',
+        query={},
+        headers={'Content-Type': 'application/json'},
         payload=b'',
     )
 
@@ -172,14 +172,14 @@ async def create_mapping(session, es_endpoint, index_name):
         endpoint=es_endpoint,
         method='PUT',
         path=f'/{index_name}/_mapping/_doc',
-        query_string='',
-        content_type='application/json',
+        query={},
+        headers={'Content-Type': 'application/json'},
         payload=mapping_definition,
     )
 
 
 async def es_search_new_scroll(_, __, query):
-    return f'/{ALIAS}/_search', 'scroll=15s', query
+    return f'/{ALIAS}/_search', {'scroll': '15s'}, query
 
 
 async def es_search_existing_scroll(redis_client, match_info, _):
@@ -196,20 +196,20 @@ async def es_search_existing_scroll(redis_client, match_info, _):
         # so KISS, and not introduce more layers unless needed
         raise HTTPNotFound(text='Scroll ID not found.')
 
-    return '/_search/scroll', 'scroll=30s', json.dumps({
+    return '/_search/scroll', {'scroll': '30s'}, json.dumps({
         'scroll_id': private_scroll_id.decode('utf-8'),
     }).encode('utf-8')
 
 
-async def es_search(session, es_endpoint, path, query_string, body,
-                    content_type, to_public_scroll_url):
+async def es_search(session, es_endpoint, path, query, body,
+                    headers, to_public_scroll_url):
     results = await es_request(
         session=session,
         endpoint=es_endpoint,
         method='GET',
         path=path,
-        query_string=query_string,
-        content_type=content_type,
+        query=query,
+        headers=headers,
         payload=body,
     )
 
@@ -261,8 +261,8 @@ async def es_bulk(session, es_endpoint, items, **_):
     app_logger.debug('POSTing bulk import to ES...')
     await es_request_non_200_exception(
         session=session, endpoint=es_endpoint,
-        method='POST', path='/_bulk', query_string='',
-        content_type='application/x-ndjson', payload=es_bulk_contents,
+        method='POST', path='/_bulk', query={},
+        headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,
     )
     app_logger.debug('Pushing to ES: done')
 
@@ -274,8 +274,8 @@ async def es_searchable_total(session, es_endpoint):
         endpoint=es_endpoint,
         method='GET',
         path=f'/{ALIAS}/_count',
-        query_string='ignore_unavailable=true',
-        content_type='application/json',
+        query={'ignore_unavailable': 'true'},
+        headers={'Content-Type': 'application/json'},
         payload=b'',
     )
     return (await searchable_result.json())['count']
@@ -287,8 +287,8 @@ async def es_nonsearchable_total(session, es_endpoint):
         endpoint=es_endpoint,
         method='GET',
         path=f'/{ALIAS}_*,-*{ALIAS}/_count',
-        query_string='ignore_unavailable=true',
-        content_type='application/json',
+        query={'ignore_unavailable': 'true'},
+        headers={'Content-Type': 'application/json'},
         payload=b'',
     )
     return (await nonsearchable_result.json())['count']
@@ -300,8 +300,8 @@ async def es_feed_activities_total(session, es_endpoint, feed_id):
         endpoint=es_endpoint,
         method='GET',
         path=f'/{ALIAS}__feed_id_{feed_id}__*,-*{ALIAS}/_count',
-        query_string='ignore_unavailable=true',
-        content_type='application/json',
+        query={'ignore_unavailable': 'true'},
+        headers={'Content-Type': 'application/json'},
         payload=b'',
     )
     nonsearchable = (await nonsearchable_result.json())['count']
@@ -311,8 +311,8 @@ async def es_feed_activities_total(session, es_endpoint, feed_id):
         endpoint=es_endpoint,
         method='GET',
         path=f'/{ALIAS}__feed_id_{feed_id}__*/_count',
-        query_string='ignore_unavailable=true',
-        content_type='application/json',
+        query={'ignore_unavailable': 'true'},
+        headers={'Content-Type': 'application/json'},
         payload=b'',
     )
     searchable = max((await total_result.json())['count'] - nonsearchable, 0)
@@ -345,8 +345,8 @@ async def es_min_verification_age(session, es_endpoint):
         endpoint=es_endpoint,
         method='GET',
         path=f'/{ALIAS}/_search',
-        query_string='ignore_unavailable=true',
-        content_type='application/json',
+        query={'ignore_unavailable': 'true'},
+        headers={'Content-Type': 'application/json'},
         payload=payload,
     )
     result_dict = await result.json()
@@ -361,20 +361,20 @@ async def es_min_verification_age(session, es_endpoint):
     return age
 
 
-async def es_request_non_200_exception(session, endpoint, method, path, query_string,
-                                       content_type, payload):
-    results = await es_request(session, endpoint, method, path, query_string,
-                               content_type, payload)
+async def es_request_non_200_exception(session, endpoint, method, path, query,
+                                       headers, payload):
+    results = await es_request(session, endpoint, method, path, query,
+                               headers, payload)
     if results.status != 200:
         raise Exception(await results.text())
     return results
 
 
-async def es_maybe_unvailable_metrics(session, endpoint, method, path, query_string,
-                                      content_type, payload):
+async def es_maybe_unvailable_metrics(session, endpoint, method, path, query,
+                                      headers, payload):
     ''' Some metrics may be unavailable since they query newly created indexes '''
-    results = await es_request(session, endpoint, method, path, query_string,
-                               content_type, payload)
+    results = await es_request(session, endpoint, method, path, query,
+                               headers, payload)
     if results.status == 503:
         raise ESMetricsUnavailable()
     if results.status != 200:
@@ -382,41 +382,58 @@ async def es_maybe_unvailable_metrics(session, endpoint, method, path, query_str
     return results
 
 
-async def es_request(session, endpoint, method, path, query_string, content_type, payload):
+async def es_request(session, endpoint, method, path, query, headers, payload):
     auth_headers = es_auth_headers(
         endpoint=endpoint, method=method,
-        path=path, query_string=query_string,
-        content_type=content_type, payload=payload,
+        path=path, query=query,
+        headers=headers, payload=payload,
     )
 
+    query_string = '&'.join([key + '=' + query[key] for key in query.keys()])
     url = endpoint['base_url'] + path + (('?' + query_string) if query_string != '' else '')
     result = await session.request(
         method, url,
-        data=payload, headers={**{'Content-Type': content_type}, **auth_headers}
+        data=payload, headers={**headers, **auth_headers}
     )
     # Without this, after some number of requests, they end up hanging
     await result.read()
     return result
 
 
-def es_auth_headers(endpoint, method, path, query_string, content_type, payload):
-    service = 'es'
-    signed_headers = 'content-type;host;x-amz-date'
+def es_auth_headers(endpoint, method, path, query, headers, payload):
     algorithm = 'AWS4-HMAC-SHA256'
+    service = 'es'
 
     now = datetime.datetime.utcnow()
     amzdate = now.strftime('%Y%m%dT%H%M%SZ')
     datestamp = now.strftime('%Y%m%d')
-
     credential_scope = f'{datestamp}/{endpoint["region"]}/{service}/aws4_request'
+    headers_lower = {
+        header_key.lower().strip(): header_value.strip()
+        for header_key, header_value in headers.items()
+    }
+    signed_header_keys = sorted([header_key
+                                 for header_key in headers_lower.keys()] + ['host', 'x-amz-date'])
+    signed_headers = ';'.join([header_key for header_key in signed_header_keys])
 
     def signature():
         def canonical_request():
-            canonical_uri = urllib.parse.quote(path)
-            canonical_querystring = query_string
-            canonical_headers = \
-                f'content-type:{content_type}\n' + \
-                f'host:{endpoint["host"]}\nx-amz-date:{amzdate}\n'
+            header_values = {
+                **headers_lower,
+                'host': endpoint['host'],
+                'x-amz-date': amzdate,
+            }
+
+            canonical_uri = urllib.parse.quote(path, safe='/~')
+            query_keys = sorted(query.keys())
+            canonical_querystring = '&'.join([
+                urllib.parse.quote(key, safe='~') + '=' + urllib.parse.quote(query[key], safe='~')
+                for key in query_keys
+            ])
+            canonical_headers = ''.join([
+                header_key + ':' + header_values[header_key] + '\n'
+                for header_key in signed_header_keys
+            ])
             payload_hash = hashlib.sha256(payload).hexdigest()
 
             return f'{method}\n{canonical_uri}\n{canonical_querystring}\n' + \
