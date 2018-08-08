@@ -107,6 +107,7 @@ async def acquire_and_keep_lock(redis_client):
     we've blocked for > ttl and lost the lock. We _want_ to have more evidence
     of this so we can address the problem.
     '''
+    app_logger = logging.getLogger('activity-stream')
     ttl = 2
     aquire_interval = 1
     extend_interval = 1
@@ -114,9 +115,12 @@ async def acquire_and_keep_lock(redis_client):
 
     async def acquire():
         while True:
+            app_logger.debug('Acquiring lock...')
             response = await redis_client.execute('SET', key, '1', 'EX', ttl, 'NX')
             if response == b'OK':
+                app_logger.debug('Acquiring lock: success')
                 break
+            app_logger.debug('Acquiring lock: failure. Sleeping.')
             await asyncio.sleep(aquire_interval)
 
     async def extend_forever():
