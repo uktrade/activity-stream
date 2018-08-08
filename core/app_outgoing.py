@@ -68,7 +68,7 @@ async def run_outgoing_application():
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
 
-    await acquire_and_keep_lock(redis_client)
+    await acquire_and_keep_lock(redis_client, raven_client)
 
     await create_outgoing_application(
         metrics, raven_client, session, feed_endpoints, es_endpoint,
@@ -89,7 +89,7 @@ async def run_outgoing_application():
     return cleanup
 
 
-async def acquire_and_keep_lock(redis_client):
+async def acquire_and_keep_lock(redis_client, raven_client):
     ''' Prevents Elasticsearch errors during deployments
 
     The exceptions would be caused by a new deployment deleting indexes while
@@ -123,13 +123,17 @@ async def acquire_and_keep_lock(redis_client):
             app_logger.debug('Acquiring lock: failure. Sleeping.')
             await asyncio.sleep(aquire_interval)
 
-    async def extend_forever():
-        while True:
-            await asyncio.sleep(extend_interval)
-            await redis_client.execute('EXPIRE', key, ttl)
+    @async_repeat_until_cancelled
+    async def extend_forever(**_):
+        await asyncio.sleep(extend_interval)
+        await redis_client.execute('EXPIRE', key, ttl)
 
     await acquire()
-    asyncio.get_event_loop().create_task(extend_forever())
+    asyncio.get_event_loop().create_task(extend_forever(
+        _async_repeat_until_cancelled_raven_client=raven_client,
+        _async_repeat_until_cancelled_exception_interval=extend_interval,
+        _async_repeat_until_cancelled_logging_title='Extending lock',
+    ))
 
 
 async def create_outgoing_application(metrics, raven_client, session, feed_endpoints, es_endpoint):
