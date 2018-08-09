@@ -6,11 +6,13 @@ import aiohttp
 from aiohttp import web
 import aioredis
 from shared.utils import (
+    authenticate_by_ip,
     get_common_config,
     normalise_environment,
 )
 
 from .app_server import (
+    INCORRECT,
     authenticator,
     authorizer,
     convert_errors_to_json,
@@ -81,7 +83,8 @@ async def create_incoming_application(
     ])
 
     private_app = web.Application(middlewares=[
-        authenticator(ip_whitelist, incoming_key_pairs, redis_client, NONCE_EXPIRE),
+        authenticate_by_ip(app_logger, INCORRECT, ip_whitelist),
+        authenticator(incoming_key_pairs, redis_client, NONCE_EXPIRE),
         authorizer(),
     ])
     private_app.add_routes([
