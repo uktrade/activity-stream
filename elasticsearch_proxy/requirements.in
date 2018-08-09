@@ -1,1 +1,2 @@
 aiohttp==3.3.2
+aiohttp_session[aioredis]==2.5.1

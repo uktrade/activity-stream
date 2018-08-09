@@ -5,9 +5,12 @@
 #    pip-compile --output-file requirements.txt requirements.in
 #
 aiohttp==3.3.2
-async-timeout==3.0.0      # via aiohttp
+aiohttp_session[aioredis]==2.5.1
+aioredis==1.1.0           # via aiohttp-session
+async-timeout==3.0.0      # via aiohttp, aioredis
 attrs==18.1.0             # via aiohttp
 chardet==3.0.4            # via aiohttp
+hiredis==0.2.0            # via aioredis
 idna-ssl==1.1.0           # via aiohttp
 idna==2.7                 # via idna-ssl, yarl
 multidict==4.3.1          # via aiohttp, yarl
