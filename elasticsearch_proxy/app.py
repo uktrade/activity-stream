@@ -7,12 +7,14 @@ import aiohttp
 from aiohttp import web
 
 from shared.utils import (
+    authenticate_by_ip,
     aws_auth_headers,
     get_common_config,
     normalise_environment,
 )
 
 ACCESS_LOG_FORMAT = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
+INCORRECT = 'Incorrect authentication credentials.'
 LOGGER_NAME = 'activity-stream-elasticsearch-proxy'
 
 
@@ -22,6 +24,7 @@ async def run_application():
     app_logger.debug('Examining environment...')
     env = normalise_environment(os.environ)
     port = env['PORT']
+    ip_whitelist = env['INCOMING_IP_WHITELIST']
     es_endpoint, _, _ = get_common_config(env)
     app_logger.debug('Examining environment: done')
 
@@ -47,7 +50,9 @@ async def run_application():
         return web.Response(status=response.status, body=response_body, headers=response.headers)
 
     app_logger.debug('Creating listening web application...')
-    app = web.Application()
+    app = web.Application(middlewares=[
+        authenticate_by_ip(app_logger, INCORRECT, ip_whitelist),
+    ])
     app.add_routes([
         web.delete(r'/{path:.*}', handle),
         web.get(r'/{path:.*}', handle),
