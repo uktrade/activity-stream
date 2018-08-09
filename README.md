@@ -37,20 +37,8 @@ from inside the [elasticsearch_proxy](elasticsearch_proxy) directory.
 
 ## Running locally
 
-    PORT=8080 \
-    FEEDS__1__SEED=http://some-endpoint/ \
-    FEEDS__1__ACCESS_KEY_ID=feed-some-id \
-    FEEDS__1__SECRET_ACCESS_KEY=feed-some-secret \
-    FEEDS__1__TYPE=elasticsearch_bulk \
-    ELASTICSEARCH__AWS_ACCESS_KEY_ID=some-id \
-    ELASTICSEARCH__AWS_SECRET_ACCESS_KEY=aws-secret \
-    ELASTICSEARCH__HOST=127.0.0.1 \
-    ELASTICSEARCH__PORT=8082 \
-    ELASTICSEARCH__PROTOCOL=http \
-    ELASTICSEARCH__REGION=us-east-2 \
-    INCOMING_ACCESS_KEY_PAIRS__1__KEY_ID=some-id \
-    INCOMING_ACCESS_KEY_PAIRS__1__SECRET_KEY=some-secret \
-    INCOMING_IP_WHITELIST=1.2.3.4 \
+You must have a number of environment variables set. The up-to-date list of these are in the `mock_env` function defined in [tests_utils.py](core/tests_utils.py). Then to run the main application
+
     python -m core.app
 
 ## Managing Requirements
