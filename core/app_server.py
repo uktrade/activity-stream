@@ -46,8 +46,8 @@ def authenticator(ip_whitelist, incoming_key_pairs, redis_client, nonce_expire):
 
         if remote_address not in ip_whitelist:
             app_logger.warning(
-                'Failed authentication: the X-Forwarded-For header did not '
-                'start with an IP in the whitelist'
+                'Failed authentication: the IP address derived from the '
+                'X-Forwarded-For header is not in the whitelist'
             )
             raise web.HTTPUnauthorized(text=INCORRECT)
 
