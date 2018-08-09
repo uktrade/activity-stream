@@ -33,7 +33,7 @@ jobs:
             - ./cc-test-reporter
       - run:
           name: Run linting
-          command: pre-commit run --all-files
+          command: pre-commit run --files core/* verification_feed/* shared/*
       - run:
           name: Run tests
           command: |
@@ -43,3 +43,23 @@ jobs:
             coverage combine
             coverage xml
             ./cc-test-reporter after-build --exit-code $?
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "elasticsearch_proxy/requirements.txt" }}-{{ checksum ".pre-commit-config.yaml" }}
+          paths:
+            - /root/cache/pip
+            - /root/cache/pre-commit
+      - run:
+          name: Install dependencies
+          command: |
+            pip install --cache-dir /root/cache/pip -r elasticsearch_proxy/requirements.txt
+            pip install --cache-dir /root/cache/pip pre-commit==1.8.2
+            pre-commit install --install-hooks
+      - save_cache:
+          key: v1-dependencies-{{ checksum "elasticsearch_proxy/requirements.txt" }}-{{ checksum ".pre-commit-config.yaml" }}
+          paths:
+            - /root/cache/pip
+            - /root/cache/pre-commit
+      - run:
+          name: Run linting
+          command: cp -r shared elasticsearch_proxy && pre-commit run --files elasticsearch_proxy/* shared/*
