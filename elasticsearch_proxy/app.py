@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import secrets
 import sys
 import urllib
 
@@ -97,8 +98,9 @@ def authenticate_by_staff_sso(client_session, base, client_id, client_secret):
     redirect_from_sso_path = '/__redirect_from_sso'
     session_token_key = 'staff_sso_access_token'
 
-    def get_redirect_uri_authenticate(request):
-        state = 'should-be-more-unique'
+    def get_redirect_uri_authenticate(session, request):
+        state = secrets.token_urlsafe(32)
+        set_redirect_uri_final(session, state, request)
         redirect_uri_callback = urllib.parse.quote(get_redirect_uri_callback(request), safe='')
         return f'{base}{auth_path}?' \
                f'scope={scope}&state={state}&' \
@@ -112,8 +114,12 @@ def authenticate_by_staff_sso(client_session, base, client_id, client_secret):
                          .with_query({})
         return str(uri)
 
-    def get_redirect_uri_final(_):
-        return '/'
+    def set_redirect_uri_final(session, state, request):
+        session[state] = str(request.url)
+
+    def get_redirect_uri_final(session, request):
+        state = request.query['state']
+        return session[state]
 
     @web.middleware
     async def _authenticate_by_sso(request, handler):
@@ -121,11 +127,12 @@ def authenticate_by_staff_sso(client_session, base, client_id, client_secret):
 
         if request.path != redirect_from_sso_path and session_token_key not in session:
             return web.Response(status=302, headers={
-                'Location': get_redirect_uri_authenticate(request),
+                'Location': get_redirect_uri_authenticate(session, request),
             })
 
         if request.path == redirect_from_sso_path:
             code = request.query['code']
+            redirect_uri_final = get_redirect_uri_final(session, request)
             sso_response = await client_session.post(
                 f'{base}{token_path}',
                 data={
@@ -137,7 +144,7 @@ def authenticate_by_staff_sso(client_session, base, client_id, client_secret):
                 },
             )
             session[session_token_key] = (await sso_response.json())['access_token']
-            return web.Response(status=302, headers={'Location': get_redirect_uri_final(request)})
+            return web.Response(status=302, headers={'Location': redirect_uri_final})
 
         token = session[session_token_key]
         me_response = await client_session.get(f'{base}{me_path}', headers={
@@ -147,7 +154,9 @@ def authenticate_by_staff_sso(client_session, base, client_id, client_secret):
         await me_response.read()
         return \
             await handler(request) if me_response.status == 200 else \
-            web.Response(status=302, headers={'Location': get_redirect_uri_authenticate(request)})
+            web.Response(status=302, headers={
+                'Location': get_redirect_uri_authenticate(session, request),
+            })
 
     return _authenticate_by_sso
 
