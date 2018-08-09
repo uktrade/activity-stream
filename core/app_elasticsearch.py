@@ -8,7 +8,7 @@ from aiohttp.web import (
     HTTPNotFound,
 )
 from shared.utils import (
-    es_auth_headers,
+    aws_auth_headers,
 )
 
 from .app_metrics import (
@@ -383,7 +383,8 @@ async def es_maybe_unvailable_metrics(session, endpoint, method, path, query,
 
 
 async def es_request(session, endpoint, method, path, query, headers, payload):
-    auth_headers = es_auth_headers(
+    auth_headers = aws_auth_headers(
+        service='es',
         endpoint=endpoint, method=method,
         path=path, query=query,
         headers=headers, payload=payload,

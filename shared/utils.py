@@ -131,9 +131,8 @@ def normalise_environment(key_values):
         nested_structured_dict
 
 
-def es_auth_headers(endpoint, method, path, query, headers, payload):
+def aws_auth_headers(service, endpoint, method, path, query, headers, payload):
     algorithm = 'AWS4-HMAC-SHA256'
-    service = 'es'
 
     now = datetime.datetime.utcnow()
     amzdate = now.strftime('%Y%m%dT%H%M%SZ')
