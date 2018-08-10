@@ -9,21 +9,27 @@ from prometheus_client import (
     CollectorRegistry,
     generate_latest,
 )
+from shared.utils import (
+    get_common_config,
+    normalise_environment,
+)
 
 from .app_elasticsearch import (
+    ESMetricsUnavailable,
     es_bulk,
-    es_activities_total,
     es_feed_activities_total,
+    es_searchable_total,
+    es_nonsearchable_total,
     es_min_verification_age,
-    create_indexes,
-    create_mappings,
-    get_new_index_names,
+    create_index,
+    create_mapping,
+    get_new_index_name,
     get_old_index_names,
     indexes_matching_feeds,
     indexes_matching_no_feeds,
     add_remove_aliases_atomically,
     delete_indexes,
-    refresh_indexes,
+    refresh_index,
 )
 
 from .app_feeds import (
@@ -36,8 +42,6 @@ from .app_metrics import (
     get_metrics,
 )
 from .app_utils import (
-    normalise_environment,
-    get_common_config,
     get_raven_client,
     async_repeat_until_cancelled,
     cancel_non_current_tasks,
@@ -65,6 +69,9 @@ async def run_outgoing_application():
 
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
+
+    await acquire_and_keep_lock(redis_client, raven_client)
+
     await create_outgoing_application(
         metrics, raven_client, session, feed_endpoints, es_endpoint,
     )
@@ -84,62 +91,104 @@ async def run_outgoing_application():
     return cleanup
 
 
+async def acquire_and_keep_lock(redis_client, raven_client):
+    ''' Prevents Elasticsearch errors during deployments
+
+    The exceptions would be caused by a new deployment deleting indexes while
+    the previous deployment is still ingesting into them
+
+    We do not offer a delete for simplicity: the lock will just expire if it's
+    not extended, which happens on destroy of the application
+
+    We don't use Redlock, since we don't care too much if a Redis failure causes
+    multiple clients to have the lock for a period of time. It would only cause
+    Elasticsearch errors to appear in sentry, but otherwise there would be no
+    harm
+
+    We don't try to re-aquire the lock if we've lost it. This would happen if
+    we've blocked for > ttl and lost the lock. We _want_ to have more evidence
+    of this so we can address the problem.
+    '''
+    app_logger = logging.getLogger('activity-stream')
+    ttl = 2
+    aquire_interval = 1
+    extend_interval = 1
+    key = 'lock'
+
+    async def acquire():
+        while True:
+            app_logger.debug('Acquiring lock...')
+            response = await redis_client.execute('SET', key, '1', 'EX', ttl, 'NX')
+            if response == b'OK':
+                app_logger.debug('Acquiring lock: success')
+                break
+            app_logger.debug('Acquiring lock: failure. Sleeping.')
+            await asyncio.sleep(aquire_interval)
+
+    @async_repeat_until_cancelled
+    async def extend_forever(**_):
+        await asyncio.sleep(extend_interval)
+        response = await redis_client.execute('EXPIRE', key, ttl)
+        if response != 1:
+            raise Exception('Lock has been lost')
+
+    await acquire()
+    asyncio.get_event_loop().create_task(extend_forever(
+        _async_repeat_until_cancelled_raven_client=raven_client,
+        _async_repeat_until_cancelled_exception_interval=extend_interval,
+        _async_repeat_until_cancelled_logging_title='Extending lock',
+    ))
+
+
 async def create_outgoing_application(metrics, raven_client, session, feed_endpoints, es_endpoint):
     asyncio.get_event_loop().create_task(ingest_feeds(
-        metrics, session, feed_endpoints, es_endpoint,
+        metrics, raven_client, session, feed_endpoints, es_endpoint,
         _async_repeat_until_cancelled_raven_client=raven_client,
         _async_repeat_until_cancelled_exception_interval=EXCEPTION_INTERVAL,
-        _async_repeat_until_cancelled_logging_title='Polling feed',
-        _async_timer=metrics['ingest_feeds_duration_seconds'],
-        _async_timer_labels=[],
+        _async_repeat_until_cancelled_logging_title='Polling feeds',
     ))
 
 
 @async_repeat_until_cancelled
-@async_timer
-async def ingest_feeds(metrics, session, feed_endpoints, es_endpoint, **_):
+async def ingest_feeds(metrics, raven_client, session, feed_endpoints, es_endpoint, **_):
     all_feed_ids = feed_unique_ids(feed_endpoints)
-    new_index_names = get_new_index_names(all_feed_ids)
-    old_index_names = await get_old_index_names(session, es_endpoint)
+    indexes_without_alias, indexes_with_alias = await get_old_index_names(session, es_endpoint)
 
-    await delete_indexes(session, es_endpoint, old_index_names['without-alias'])
-    await create_indexes(session, es_endpoint, new_index_names)
-    await create_mappings(session, es_endpoint, new_index_names)
+    indexes_to_delete = indexes_matching_no_feeds(
+        indexes_without_alias + indexes_with_alias, all_feed_ids)
+    await delete_indexes(session, es_endpoint, indexes_to_delete)
 
-    ingest_results = await asyncio.gather(*[
+    await asyncio.gather(*[
         ingest_feed(
-            metrics, session, feed_endpoint, es_endpoint, new_index_names[i],
+            metrics, session, feed_endpoint, es_endpoint,
+            _async_repeat_until_cancelled_raven_client=raven_client,
+            _async_repeat_until_cancelled_exception_interval=EXCEPTION_INTERVAL,
+            _async_repeat_until_cancelled_logging_title='Polling feed',
             _async_timer=metrics['ingest_feed_duration_seconds'],
             _async_timer_labels=[feed_endpoint.unique_id],
             _async_inprogress=metrics['ingest_inprogress_ingests_total'],
         )
-        for i, feed_endpoint in enumerate(feed_endpoints)
-    ], return_exceptions=True)
-
-    successful_feed_ids = feed_unique_ids([
-        feed_endpoint
-        for i, feed_endpoint in enumerate(feed_endpoints)
-        if not isinstance(ingest_results[i], BaseException)
+        for feed_endpoint in feed_endpoints
     ])
-
-    indexes_to_add_to_alias = indexes_matching_feeds(new_index_names, successful_feed_ids)
-    indexes_to_remove_from_alias = \
-        indexes_matching_feeds(old_index_names['with-alias'], successful_feed_ids) + \
-        indexes_matching_no_feeds(old_index_names['with-alias'], all_feed_ids)
-
-    await refresh_indexes(session, es_endpoint, new_index_names)
-    await add_remove_aliases_atomically(session, es_endpoint,
-                                        indexes_to_add_to_alias, indexes_to_remove_from_alias)
 
 
 def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
+@async_repeat_until_cancelled
 @async_inprogress
 @async_timer
-async def ingest_feed(metrics, session, feed, es_endpoint, index_name, **_):
+async def ingest_feed(metrics, session, feed, es_endpoint, **_):
     app_logger = logging.getLogger('activity-stream')
+
+    indexes_without_alias, _ = await get_old_index_names(session, es_endpoint)
+    indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
+    await delete_indexes(session, es_endpoint, indexes_to_delete)
+
+    index_name = get_new_index_name(feed.unique_id)
+    await create_index(session, es_endpoint, index_name)
+    await create_mapping(session, es_endpoint, index_name)
 
     href = feed.seed
     while href:
@@ -152,6 +201,9 @@ async def ingest_feed(metrics, session, feed, es_endpoint, index_name, **_):
         app_logger.debug('Sleeping for %s seconds', interval)
 
         await asyncio.sleep(interval)
+
+    await refresh_index(session, es_endpoint, index_name)
+    await add_remove_aliases_atomically(session, es_endpoint, index_name, feed.unique_id)
 
 
 @async_timer
@@ -221,22 +273,31 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
 
     @async_repeat_until_cancelled
     async def poll_metrics(**_):
-        searchable, nonsearchable = await es_activities_total(session, es_endpoint)
-        min_activity_age = await es_min_verification_age(session, es_endpoint)
+        searchable = await es_searchable_total(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
-        metrics['elasticsearch_activities_total'].labels('nonsearchable').set(nonsearchable)
-        if min_activity_age is not None:
-            metrics['elasticsearch_activities_age_minimum_seconds'].labels(
-                'verification').set(min_activity_age)
+
+        await set_metric_if_can(
+            metrics['elasticsearch_activities_total'],
+            ['nonsearchable'],
+            es_nonsearchable_total(session, es_endpoint),
+        )
+        await set_metric_if_can(
+            metrics['elasticsearch_activities_age_minimum_seconds'],
+            ['verification'],
+            es_min_verification_age(session, es_endpoint),
+        )
 
         feed_ids = feed_unique_ids(feed_endpoints)
         for feed_id in feed_ids:
-            searchable, nonsearchable = await es_feed_activities_total(session,
-                                                                       es_endpoint, feed_id)
-            metrics['elasticsearch_feed_activities_total'].labels(
-                feed_id, 'searchable').set(searchable)
-            metrics['elasticsearch_feed_activities_total'].labels(
-                feed_id, 'nonsearchable').set(nonsearchable)
+            try:
+                searchable, nonsearchable = await es_feed_activities_total(session,
+                                                                           es_endpoint, feed_id)
+                metrics['elasticsearch_feed_activities_total'].labels(
+                    feed_id, 'searchable').set(searchable)
+                metrics['elasticsearch_feed_activities_total'].labels(
+                    feed_id, 'nonsearchable').set(nonsearchable)
+            except ESMetricsUnavailable:
+                pass
 
         await redis_client.set('metrics', generate_latest(metrics_registry))
         await asyncio.sleep(METRICS_INTERVAL)
@@ -246,6 +307,13 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
         _async_repeat_until_cancelled_exception_interval=METRICS_INTERVAL,
         _async_repeat_until_cancelled_logging_title='Elasticsearch polling',
     ))
+
+
+async def set_metric_if_can(metric, labels, get_value_coroutine):
+    try:
+        metric.labels(*labels).set(await get_value_coroutine)
+    except ESMetricsUnavailable:
+        pass
 
 
 if __name__ == '__main__':

@@ -7,9 +7,10 @@ from unittest.mock import patch
 
 import aiohttp
 from aiohttp import web
+import aioredis
 from freezegun import freeze_time
 
-from core.tests_utils import (
+from .tests_utils import (
     ORIGINAL_SLEEP,
     append_until,
     async_test,
@@ -17,6 +18,7 @@ from core.tests_utils import (
     fast_sleep,
     fetch_all_es_data_until,
     fetch_es_index_names,
+    fetch_es_index_names_with_alias,
     get,
     get_until,
     has_at_least,
@@ -36,6 +38,10 @@ from core.tests_utils import (
 
 class TestBase(unittest.TestCase):
 
+    def add_async_cleanup(self, coroutine):
+        loop = asyncio.get_event_loop()
+        self.addCleanup(loop.run_until_complete, coroutine())
+
     async def setup_manual(self, env, mock_feed, mock_feed_status):
         ''' Test setUp function that can be customised on a per-test basis '''
 
@@ -44,10 +50,6 @@ class TestBase(unittest.TestCase):
         os_environ_patcher = patch.dict(os.environ, env)
         os_environ_patcher.start()
         self.addCleanup(os_environ_patcher.stop)
-
-        def add_async_cleanup(coroutine):
-            loop = asyncio.get_event_loop()
-            self.addCleanup(loop.run_until_complete, coroutine())
 
         self.feed_requested = [asyncio.Future(), asyncio.Future()]
 
@@ -62,10 +64,10 @@ class TestBase(unittest.TestCase):
 
         feed_runner = await run_feed_application(mock_feed, mock_feed_status,
                                                  feed_requested_callback, 8081)
-        add_async_cleanup(feed_runner.cleanup)
+        self.add_async_cleanup(feed_runner.cleanup)
 
         cleanup = await run_app_until_accepts_http()
-        add_async_cleanup(cleanup)
+        self.add_async_cleanup(cleanup)
 
 
 class TestAuthentication(TestBase):
@@ -218,7 +220,7 @@ class TestAuthentication(TestBase):
             is shorter then the allowed Hawk skew. The second request succeeding gives
             evidence that the cache of nonces was cleared.
         '''
-        with patch('core.app_incoming.NONCE_EXPIRE', 1):
+        with patch('core.app.app_incoming.NONCE_EXPIRE', 1):
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                     mock_feed_status=lambda: 200)
 
@@ -342,7 +344,7 @@ class TestApplication(TestBase):
         path = 'tests_fixture_activity_stream_1.json'
 
         def read_specific_file(_):
-            with open('core/' + path, 'rb') as file:
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as file:
                 return file.read().decode('utf-8')
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -353,10 +355,9 @@ class TestApplication(TestBase):
         result, status, headers = await get_until(url, x_forwarded_for,
                                                   has_at_least_ordered_items(2))
         self.assertEqual(status, 200)
-        self.assertEqual(result['orderedItems'][0]['id'],
-                         'dit:exportOpportunities:Enquiry:49863:Create')
-        self.assertEqual(result['orderedItems'][1]['id'],
-                         'dit:exportOpportunities:Enquiry:49862:Create')
+        ids = [item['id'] for item in result['orderedItems']]
+        self.assertIn('dit:exportOpportunities:Enquiry:49863:Create', ids)
+        self.assertIn('dit:exportOpportunities:Enquiry:49862:Create', ids)
         self.assertEqual(headers['Server'], 'activity-stream')
 
         def does_not_have_previous_items(results):
@@ -367,10 +368,9 @@ class TestApplication(TestBase):
             result, status, headers = await get_until(url, x_forwarded_for,
                                                       does_not_have_previous_items)
         self.assertEqual(status, 200)
-        self.assertEqual(result['orderedItems'][0]['id'],
-                         'dit:exportOpportunities:Enquiry:42863:Create')
-        self.assertEqual(result['orderedItems'][1]['id'],
-                         'dit:exportOpportunities:Enquiry:42862:Create')
+        ids = [item['id'] for item in result['orderedItems']]
+        self.assertIn('dit:exportOpportunities:Enquiry:42863:Create', ids)
+        self.assertIn('dit:exportOpportunities:Enquiry:42862:Create', ids)
         self.assertEqual(headers['Server'], 'activity-stream')
 
     @async_test
@@ -414,7 +414,7 @@ class TestApplication(TestBase):
     @async_test
     async def test_pagination_expiry(self):
         with \
-                patch('core.app_incoming.PAGINATION_EXPIRE', 1), \
+                patch('core.app.app_incoming.PAGINATION_EXPIRE', 1), \
                 patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                     mock_feed_status=lambda: 200)
@@ -539,7 +539,9 @@ class TestApplication(TestBase):
         routes = [
             web.post('/_bulk', return_200_and_callback),
         ]
+
         es_runner = await run_es_application(port=9201, override_routes=routes)
+        self.add_async_cleanup(es_runner.cleanup)
         await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                 mock_feed=read_file, mock_feed_status=lambda: 200)
 
@@ -548,8 +550,6 @@ class TestApplication(TestBase):
             json.loads(line)
             for line in es_bulk_content.split(b'\n')[0:-1]
         ]
-
-        await es_runner.cleanup()
 
         self.assertEqual(self.feed_requested[0].result(
         ).headers['Authorization'], (
@@ -604,6 +604,7 @@ class TestApplication(TestBase):
             web.get('/activities/_search', return_200_and_callback),
         ]
         es_runner = await run_es_application(port=9201, override_routes=routes)
+        self.add_async_cleanup(es_runner.cleanup)
 
         with \
                 freeze_time('2012-01-15 12:00:01'):
@@ -617,7 +618,6 @@ class TestApplication(TestBase):
             )
             x_forwarded_for = '1.2.3.4, 127.0.0.0'
             await get(url, auth, x_forwarded_for, b'{}')
-            await es_runner.cleanup()
             [[_, es_headers]] = await get_es_once
 
         self.assertEqual(es_headers['Authorization'],
@@ -648,19 +648,28 @@ class TestApplication(TestBase):
         self.assertEqual(text, '{"elasticsearch": "error"}')
 
     @async_test
-    async def test_es_503_recovered_from(self):
-        modified = 0
-        max_modifications = 2
+    async def test_es_5xx_recovered_from(self):
+        modified_500 = 0
+        modified_503 = 0
+        max_modifications = 10
 
         http_200 = b'HTTP/1.1 200 OK'
-        http_500 = b'HTTP/1.1 503 Service Unavailable'
+        http_500 = b'HTTP/1.1 500 Service Unavailable'
+        http_503 = b'HTTP/1.1 503 Internal Server Error'
 
         def modify(data):
-            nonlocal modified
-            should_modify = modified < max_modifications and b'"status":201' in data
-            data, modified = \
-                (data.replace(http_200, http_500), modified + 1) if should_modify else \
-                (data, modified)
+            nonlocal modified_500
+            nonlocal modified_503
+            should_modify_500 = modified_500 < max_modifications and \
+                (b'"status":201' in data or b'"count"' in data)
+            should_modify_503 = modified_503 < max_modifications and \
+                (b'"status":201' in data or b'"count"' in data)
+            with_500 = data.replace(http_200, http_500)
+            with_503 = data.replace(http_200, http_503)
+            data, modified_500, modified_503 = \
+                (with_500, modified_500 + 1, modified_503) if should_modify_500 else \
+                (with_503, modified_500, modified_503 + 1) if should_modify_503 else \
+                (data, modified_500, modified_503)
             return data
 
         async def handle_client(local_reader, local_writer):
@@ -685,22 +694,29 @@ class TestApplication(TestBase):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
                                     mock_feed=read_file, mock_feed_status=lambda: 200)
-            while modified < max_modifications:
+            while modified_500 < max_modifications or modified_503 < max_modifications:
                 await ORIGINAL_SLEEP(1)
 
             await wait_until_get_working()
 
-        url = 'http://127.0.0.1:8080/v1/'
-        x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        result, status, _ = await get_until(url, x_forwarded_for,
-                                            has_at_least_ordered_items(2))
-        server.close()
-        await server.wait_closed()
-        self.assertEqual(status, 200)
-        self.assertEqual(result['orderedItems'][0]['id'],
-                         'dit:exportOpportunities:Enquiry:49863:Create')
+            url = 'http://127.0.0.1:8080/v1/'
+            x_forwarded_for = '1.2.3.4, 127.0.0.0'
+            result, status, _ = await get_until(url, x_forwarded_for,
+                                                has_at_least_ordered_items(2))
+            server.close()
+            await server.wait_closed()
+            self.assertEqual(status, 200)
+            self.assertEqual(result['orderedItems'][0]['id'],
+                             'dit:exportOpportunities:Enquiry:49863:Create')
 
-        self.assertLessEqual(len(await fetch_es_index_names()), 2)
+            self.assertLessEqual(len(await fetch_es_index_names_with_alias()), 2)
+            await ORIGINAL_SLEEP(2)
+            self.assertLessEqual(len(await fetch_es_index_names()), 2)
+
+        async with aiohttp.ClientSession() as session:
+            metrics_result = await session.get('http://127.0.0.1:8080/metrics')
+            metrics_text = await metrics_result.text()
+            self.assertIn('status="success"', metrics_text)
 
     @async_test
     async def test_es_no_connect_recovered(self):
@@ -947,3 +963,18 @@ class TestApplication(TestBase):
                 result = await session.get(url)
 
         self.assertIn('status="success"', await result.text())
+
+    @async_test
+    async def test_if_lost_lock_then_raise(self):
+        async def mock_close():
+            await ORIGINAL_SLEEP(0)
+
+        with patch('asyncio.sleep', wraps=fast_sleep), patch('raven.Client') as raven_client:
+            raven_client().remote.get_transport().close = mock_close
+            await self.setup_manual(env=mock_env(), mock_feed=read_file,
+                                    mock_feed_status=lambda: 200)
+            redis_client = await aioredis.create_redis('redis://127.0.0.1:6379')
+            await redis_client.execute('DEL', 'lock')
+            await ORIGINAL_SLEEP(2)
+
+        raven_client().captureException.assert_called()

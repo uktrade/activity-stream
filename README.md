@@ -25,25 +25,21 @@ and then to run the tests themselves
 
 A small separate application in [verification_feed](verification_feed) is provided to allow the stream to be tested, even in production, without using real data. It provides a single activity, published date of the moment the feed is queried.
 
-The application is not deployed automatically. To update the verification feed you must `cf push` from inside the [verification_feed](verification_feed) directory.
+## Elasticsearch / Kibana Proxy
+
+A proxy is provided to allow developer access to Elasticsearch / Kibana in [elasticsearch_proxy](elasticsearch_proxy).
 
 ## Running locally
 
-    PORT=8080 \
-    FEEDS__1__SEED=http://some-endpoint/ \
-    FEEDS__1__ACCESS_KEY_ID=feed-some-id \
-    FEEDS__1__SECRET_ACCESS_KEY=feed-some-secret \
-    FEEDS__1__TYPE=elasticsearch_bulk \
-    ELASTICSEARCH__AWS_ACCESS_KEY_ID=some-id \
-    ELASTICSEARCH__AWS_SECRET_ACCESS_KEY=aws-secret \
-    ELASTICSEARCH__HOST=127.0.0.1 \
-    ELASTICSEARCH__PORT=8082 \
-    ELASTICSEARCH__PROTOCOL=http \
-    ELASTICSEARCH__REGION=us-east-2 \
-    INCOMING_ACCESS_KEY_PAIRS__1__KEY_ID=some-id \
-    INCOMING_ACCESS_KEY_PAIRS__1__SECRET_KEY=some-secret \
-    INCOMING_IP_WHITELIST=1.2.3.4 \
-    python -m core.app
+You must have a number of environment variables set. The up-to-date list of these are in the `mock_env` function defined in [tests_utils.py](core/tests_utils.py). Then to run the application that polls feeds
+
+    (cp -r -f shared core && cd core && python -m app.app_outgoing)
+
+or to run the application that proxies incoming requests to Elasticsearch
+
+    (cp -r -f shared core && cd core && python -m app.app_incoming)
+
+This closely resembles how the CI pipeline builds and deploys the applications.
 
 ## Managing Requirements
 

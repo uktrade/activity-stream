@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 from aiohttp import web
 
-from core.tests_utils import (
+from .tests_utils import (
     async_test,
     delete_all_es_data,
     is_http_accepted_eventually,
@@ -45,7 +45,7 @@ class TestProcess(unittest.TestCase):
             **common_env,
             'COVERAGE_PROCESS_START': os.environ['COVERAGE_PROCESS_START'],
             'FEEDS__2__UNIQUE_ID': 'verification',
-            'FEEDS__2__SEED': 'http://localhost:8082/',
+            'FEEDS__2__SEED': 'http://localhost:8082/0',
             'FEEDS__2__ACCESS_KEY_ID': '',
             'FEEDS__2__SECRET_ACCESS_KEY': '',
             'FEEDS__2__TYPE': 'activity_stream',
@@ -55,8 +55,8 @@ class TestProcess(unittest.TestCase):
             **env,
             'PORT': '8082',
         }, stdout=PIPE)
-        server_out = Popen([sys.executable, '-m', 'core.app_outgoing'], env=env, stdout=PIPE)
-        server_inc = Popen([sys.executable, '-m', 'core.app_incoming'], env=env, stdout=PIPE)
+        server_out = Popen([sys.executable, '-m', 'core.app.app_outgoing'], env=env, stdout=PIPE)
+        server_inc = Popen([sys.executable, '-m', 'core.app.app_incoming'], env=env, stdout=PIPE)
 
         async def tear_down():
             server_inc.terminate()

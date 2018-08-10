@@ -105,3 +105,6 @@ ENV/
 
 .secret
 .DS_Store
+
+core/shared
+elasticsearch_proxy/shared

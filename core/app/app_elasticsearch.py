@@ -1,14 +1,14 @@
 import datetime
-import hashlib
-import hmac
 import json
 import logging
 import os
 import time
-import urllib.parse
 
 from aiohttp.web import (
     HTTPNotFound,
+)
+from shared.utils import (
+    aws_auth_headers,
 )
 
 from .app_metrics import (
@@ -19,35 +19,32 @@ from .app_utils import (
     flatten,
 )
 
-
 ALIAS = 'activities'
 
 
-def get_new_index_names(feed_unique_ids):
+def get_new_index_name(feed_unique_id):
     today = datetime.date.today().isoformat()
     now = str(datetime.datetime.now().timestamp()).split('.')[0]
     unique = ''.join(os.urandom(5).hex())
 
-    return [
-        # Storing metadata in index name allows operations to match on
-        # them, both by elasticsearch itself, and by regex in Python
+    # Storing metadata in index name allows operations to match on
+    # them, both by elasticsearch itself, and by regex in Python
+    return '' \
         f'{ALIAS}__' \
         f'feed_id_{feed_unique_id}__' \
         f'date_{today}__' \
         f'timestamp_{now}__' \
         f'batch_id_{unique}__'
-        for feed_unique_id in feed_unique_ids
-    ]
 
 
 def indexes_matching_feeds(index_names, feed_unique_ids):
     return flatten([
-        _indexes_matching_feed(index_names, feed_unique_id)
+        indexes_matching_feed(index_names, feed_unique_id)
         for feed_unique_id in feed_unique_ids
     ])
 
 
-def _indexes_matching_feed(index_names, feed_unique_id):
+def indexes_matching_feed(index_names, feed_unique_id):
     return [
         index_name
         for index_name in index_names
@@ -70,37 +67,31 @@ async def get_old_index_names(session, es_endpoint):
         endpoint=es_endpoint,
         method='GET',
         path=f'/_aliases',
-        query_string='',
-        content_type='application/json',
+        query={},
+        headers={'Content-Type': 'application/json'},
         payload=b'',
     )
     indexes = await results.json()
 
-    return {
-        'without-alias': [
-            index_name
-            for index_name, index_details in indexes.items()
-            if index_name.startswith(f'{ALIAS}_') and not index_details['aliases']
-        ],
-        'with-alias': [
-            index_name
-            for index_name, index_details in indexes.items()
-            if index_name.startswith(f'{ALIAS}_') and index_details['aliases']
-        ],
-    }
+    without_alias = [
+        index_name
+        for index_name, index_details in indexes.items()
+        if index_name.startswith(f'{ALIAS}_') and not index_details['aliases']
+    ]
+    with_alias = [
+        index_name
+        for index_name, index_details in indexes.items()
+        if index_name.startswith(f'{ALIAS}_') and index_details['aliases']
+    ]
+    return without_alias, with_alias
 
 
-async def add_remove_aliases_atomically(session, es_endpoint, indexes_to_add, indexes_to_remove):
-    if not indexes_to_add and not indexes_to_remove:
-        return
-
+async def add_remove_aliases_atomically(session, es_endpoint, index_name, feed_unique_id):
+    remove_pattern = f'{ALIAS}__feed_id_{feed_unique_id}__*'
     actions = json.dumps({
         'actions': [
-            {'remove': {'index': index_name, 'alias': ALIAS}}
-            for index_name in indexes_to_remove
-        ] + [
+            {'remove': {'index': remove_pattern, 'alias': ALIAS}},
             {'add': {'index': index_name, 'alias': ALIAS}}
-            for index_name in indexes_to_add
         ]
     }).encode('utf-8')
 
@@ -109,8 +100,8 @@ async def add_remove_aliases_atomically(session, es_endpoint, indexes_to_add, in
         endpoint=es_endpoint,
         method='POST',
         path=f'/_aliases',
-        query_string='',
-        content_type='application/json',
+        query={},
+        headers={'Content-Type': 'application/json'},
         payload=actions,
     )
 
@@ -122,40 +113,46 @@ async def delete_indexes(session, es_endpoint, index_names):
             endpoint=es_endpoint,
             method='DELETE',
             path=f'/{index_name}',
-            query_string='',
-            content_type='application/json',
+            query={},
+            headers={'Content-Type': 'application/json'},
             payload=b'',
         )
 
 
-async def create_indexes(session, es_endpoint, index_names):
-    index_definition = json.dumps({}).encode('utf-8')
-    for index_name in index_names:
-        await es_request_non_200_exception(
-            session=session,
-            endpoint=es_endpoint,
-            method='PUT',
-            path=f'/{index_name}',
-            query_string='',
-            content_type='application/json',
-            payload=index_definition,
-        )
+async def create_index(session, es_endpoint, index_name):
+    index_definition = json.dumps({
+        'settings': {
+            'index': {
+                'number_of_shards': 4,
+                'number_of_replicas': 1,
+                'refresh_interval': -1,
+            }
+        }
+    }).encode('utf-8')
+    await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='PUT',
+        path=f'/{index_name}',
+        query={},
+        headers={'Content-Type': 'application/json'},
+        payload=index_definition,
+    )
 
 
-async def refresh_indexes(session, es_endpoint, index_names):
-    for index_name in index_names:
-        await es_request_non_200_exception(
-            session=session,
-            endpoint=es_endpoint,
-            method='POST',
-            path=f'/{index_name}/_refresh',
-            query_string='',
-            content_type='application/json',
-            payload=b'',
-        )
+async def refresh_index(session, es_endpoint, index_name):
+    await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='POST',
+        path=f'/{index_name}/_refresh',
+        query={},
+        headers={'Content-Type': 'application/json'},
+        payload=b'',
+    )
 
 
-async def create_mappings(session, es_endpoint, index_names):
+async def create_mapping(session, es_endpoint, index_name):
     mapping_definition = json.dumps({
         'properties': {
             'published_date': {
@@ -169,20 +166,19 @@ async def create_mappings(session, es_endpoint, index_names):
             },
         },
     }).encode('utf-8')
-    for index_name in index_names:
-        await es_request_non_200_exception(
-            session=session,
-            endpoint=es_endpoint,
-            method='PUT',
-            path=f'/{index_name}/_mapping/_doc',
-            query_string='',
-            content_type='application/json',
-            payload=mapping_definition,
-        )
+    await es_request_non_200_exception(
+        session=session,
+        endpoint=es_endpoint,
+        method='PUT',
+        path=f'/{index_name}/_mapping/_doc',
+        query={},
+        headers={'Content-Type': 'application/json'},
+        payload=mapping_definition,
+    )
 
 
 async def es_search_new_scroll(_, __, query):
-    return f'/{ALIAS}/_search', 'scroll=15s', query
+    return f'/{ALIAS}/_search', {'scroll': '15s'}, query
 
 
 async def es_search_existing_scroll(redis_client, match_info, _):
@@ -199,20 +195,20 @@ async def es_search_existing_scroll(redis_client, match_info, _):
         # so KISS, and not introduce more layers unless needed
         raise HTTPNotFound(text='Scroll ID not found.')
 
-    return '/_search/scroll', 'scroll=30s', json.dumps({
+    return '/_search/scroll', {'scroll': '30s'}, json.dumps({
         'scroll_id': private_scroll_id.decode('utf-8'),
     }).encode('utf-8')
 
 
-async def es_search(session, es_endpoint, path, query_string, body,
-                    content_type, to_public_scroll_url):
+async def es_search(session, es_endpoint, path, query, body,
+                    headers, to_public_scroll_url):
     results = await es_request(
         session=session,
         endpoint=es_endpoint,
         method='GET',
         path=path,
-        query_string=query_string,
-        content_type=content_type,
+        query=query,
+        headers=headers,
         payload=body,
     )
 
@@ -264,56 +260,58 @@ async def es_bulk(session, es_endpoint, items, **_):
     app_logger.debug('POSTing bulk import to ES...')
     await es_request_non_200_exception(
         session=session, endpoint=es_endpoint,
-        method='POST', path='/_bulk', query_string='',
-        content_type='application/x-ndjson', payload=es_bulk_contents,
+        method='POST', path='/_bulk', query={},
+        headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,
     )
     app_logger.debug('Pushing to ES: done')
 
 
-async def es_activities_total(session, es_endpoint):
+async def es_searchable_total(session, es_endpoint):
+    # This metric is expected to be available
     searchable_result = await es_request_non_200_exception(
         session=session,
         endpoint=es_endpoint,
         method='GET',
         path=f'/{ALIAS}/_count',
-        query_string='ignore_unavailable=true',
-        content_type='application/json',
+        query={'ignore_unavailable': 'true'},
+        headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    searchable = (await searchable_result.json())['count']
-    nonsearchable_result = await es_request_non_200_exception(
+    return (await searchable_result.json())['count']
+
+
+async def es_nonsearchable_total(session, es_endpoint):
+    nonsearchable_result = await es_maybe_unvailable_metrics(
         session=session,
         endpoint=es_endpoint,
         method='GET',
         path=f'/{ALIAS}_*,-*{ALIAS}/_count',
-        query_string='ignore_unavailable=true',
-        content_type='application/json',
+        query={'ignore_unavailable': 'true'},
+        headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    nonsearchable = (await nonsearchable_result.json())['count']
-
-    return searchable, nonsearchable
+    return (await nonsearchable_result.json())['count']
 
 
 async def es_feed_activities_total(session, es_endpoint, feed_id):
-    nonsearchable_result = await es_request_non_200_exception(
+    nonsearchable_result = await es_maybe_unvailable_metrics(
         session=session,
         endpoint=es_endpoint,
         method='GET',
         path=f'/{ALIAS}__feed_id_{feed_id}__*,-*{ALIAS}/_count',
-        query_string='ignore_unavailable=true',
-        content_type='application/json',
+        query={'ignore_unavailable': 'true'},
+        headers={'Content-Type': 'application/json'},
         payload=b'',
     )
     nonsearchable = (await nonsearchable_result.json())['count']
 
-    total_result = await es_request_non_200_exception(
+    total_result = await es_maybe_unvailable_metrics(
         session=session,
         endpoint=es_endpoint,
         method='GET',
         path=f'/{ALIAS}__feed_id_{feed_id}__*/_count',
-        query_string='ignore_unavailable=true',
-        content_type='application/json',
+        query={'ignore_unavailable': 'true'},
+        headers={'Content-Type': 'application/json'},
         payload=b'',
     )
     searchable = max((await total_result.json())['count'] - nonsearchable, 0)
@@ -346,8 +344,8 @@ async def es_min_verification_age(session, es_endpoint):
         endpoint=es_endpoint,
         method='GET',
         path=f'/{ALIAS}/_search',
-        query_string='ignore_unavailable=true',
-        content_type='application/json',
+        query={'ignore_unavailable': 'true'},
+        headers={'Content-Type': 'application/json'},
         payload=payload,
     )
     result_dict = await result.json()
@@ -358,76 +356,49 @@ async def es_min_verification_age(session, es_endpoint):
         age = now - max_published
     except (KeyError, TypeError):
         # If there aren't any activities yet, don't error
-        age = None
+        raise ESMetricsUnavailable()
     return age
 
 
-async def es_request_non_200_exception(session, endpoint, method, path, query_string,
-                                       content_type, payload):
-    results = await es_request(session, endpoint, method, path, query_string,
-                               content_type, payload)
+async def es_request_non_200_exception(session, endpoint, method, path, query,
+                                       headers, payload):
+    results = await es_request(session, endpoint, method, path, query,
+                               headers, payload)
     if results.status != 200:
         raise Exception(await results.text())
     return results
 
 
-async def es_request(session, endpoint, method, path, query_string, content_type, payload):
-    auth_headers = es_auth_headers(
+async def es_maybe_unvailable_metrics(session, endpoint, method, path, query,
+                                      headers, payload):
+    ''' Some metrics may be unavailable since they query newly created indexes '''
+    results = await es_request(session, endpoint, method, path, query,
+                               headers, payload)
+    if results.status == 503:
+        raise ESMetricsUnavailable()
+    if results.status != 200:
+        raise Exception(await results.text())
+    return results
+
+
+async def es_request(session, endpoint, method, path, query, headers, payload):
+    auth_headers = aws_auth_headers(
+        service='es',
         endpoint=endpoint, method=method,
-        path=path, query_string=query_string,
-        content_type=content_type, payload=payload,
+        path=path, query=query,
+        headers=headers, payload=payload,
     )
 
+    query_string = '&'.join([key + '=' + query[key] for key in query.keys()])
     url = endpoint['base_url'] + path + (('?' + query_string) if query_string != '' else '')
     result = await session.request(
         method, url,
-        data=payload, headers={**{'Content-Type': content_type}, **auth_headers}
+        data=payload, headers={**headers, **auth_headers}
     )
     # Without this, after some number of requests, they end up hanging
     await result.read()
     return result
 
 
-def es_auth_headers(endpoint, method, path, query_string, content_type, payload):
-    service = 'es'
-    signed_headers = 'content-type;host;x-amz-date'
-    algorithm = 'AWS4-HMAC-SHA256'
-
-    now = datetime.datetime.utcnow()
-    amzdate = now.strftime('%Y%m%dT%H%M%SZ')
-    datestamp = now.strftime('%Y%m%d')
-
-    credential_scope = f'{datestamp}/{endpoint["region"]}/{service}/aws4_request'
-
-    def signature():
-        def canonical_request():
-            canonical_uri = urllib.parse.quote(path)
-            canonical_querystring = query_string
-            canonical_headers = \
-                f'content-type:{content_type}\n' + \
-                f'host:{endpoint["host"]}\nx-amz-date:{amzdate}\n'
-            payload_hash = hashlib.sha256(payload).hexdigest()
-
-            return f'{method}\n{canonical_uri}\n{canonical_querystring}\n' + \
-                   f'{canonical_headers}\n{signed_headers}\n{payload_hash}'
-
-        def sign(key, msg):
-            return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
-
-        string_to_sign = \
-            f'{algorithm}\n{amzdate}\n{credential_scope}\n' + \
-            hashlib.sha256(canonical_request().encode('utf-8')).hexdigest()
-
-        date_key = sign(('AWS4' + endpoint['secret_key']).encode('utf-8'), datestamp)
-        region_key = sign(date_key, endpoint['region'])
-        service_key = sign(region_key, service)
-        request_key = sign(service_key, 'aws4_request')
-        return sign(request_key, string_to_sign).hex()
-
-    return {
-        'x-amz-date': amzdate,
-        'Authorization': (
-            f'{algorithm} Credential={endpoint["access_key_id"]}/{credential_scope}, ' +
-            f'SignedHeaders={signed_headers}, Signature=' + signature()
-        ),
-    }
+class ESMetricsUnavailable(Exception):
+    pass

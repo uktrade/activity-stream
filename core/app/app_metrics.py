@@ -16,8 +16,6 @@ from .app_utils import (
 
 
 METRICS_CONF = [
-    (Summary, 'ingest_feeds_duration_seconds',
-     'Time to ingest all feeds in seconds', ['status']),
     (Summary, 'ingest_feed_duration_seconds',
      'Time to ingest all pages of a feed in seconds', ['feed_unique_id', 'status']),
     (Histogram, 'ingest_page_duration_seconds',
@@ -52,7 +50,7 @@ def get_metrics(registry):
 
 def async_inprogress(coroutine):
 
-    async def wrapper(*args, **kwargs):
+    async def _async_inprogress(*args, **kwargs):
         kwargs_to_pass, (metric, ) = extract_keys(
             kwargs,
             ['_async_inprogress'],
@@ -64,12 +62,12 @@ def async_inprogress(coroutine):
         finally:
             metric.dec()
 
-    return wrapper
+    return _async_inprogress
 
 
 def async_timer(coroutine):
 
-    async def wrapper(*args, **kwargs):
+    async def _async_timer(*args, **kwargs):
         kwargs_to_pass, (metric, labels) = extract_keys(
             kwargs,
             ['_async_timer', '_async_timer_labels'],
@@ -90,12 +88,12 @@ def async_timer(coroutine):
             end_counter = time.perf_counter()
             metric.labels(*(labels + [status])).observe(end_counter - start_counter)
 
-    return wrapper
+    return _async_timer
 
 
 def async_counter(coroutine):
 
-    async def wrapper(*args, **kwargs):
+    async def _async_counter(*args, **kwargs):
         kwargs_to_pass, (metric, labels, increment_by) = extract_keys(
             kwargs,
             ['_async_counter', '_async_counter_labels', '_async_counter_increment_by'],
@@ -111,4 +109,4 @@ def async_counter(coroutine):
         finally:
             metric.labels(*labels).inc(increment_by_value)
 
-    return wrapper
+    return _async_counter

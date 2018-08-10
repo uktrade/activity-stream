@@ -26,12 +26,16 @@ async def run_application():
 async def create_incoming_application(port):
     app_logger = logging.getLogger(LOGGER_NAME)
 
-    async def handle(_):
-        return web.json_response(get_page())
+    async def handle(request):
+        page = int(request.match_info['page'])
+        next_page_num = page + 1
+        next_page_href = str(request.url.with_scheme(request.headers.get(
+            'X-Forwarded-Proto', 'http')).with_path(f'/{next_page_num}'))
+        return web.json_response(get_page(page, next_page_href))
 
     app_logger.debug('Creating listening web application...')
     app = web.Application()
-    app.add_routes([web.get('/', handle)])
+    app.add_routes([web.get(r'/{page:\d+}', handle)])
 
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
     runner = web.AppRunner(app, access_log_format=access_log_format)
@@ -52,7 +56,9 @@ def setup_logging():
     app_logger.addHandler(stdout_handler)
 
 
-def get_page():
+def get_page(page, next_page_href):
+    max_pages = 20
+    per_page = 1000
     return {
         '@context': [
             'https://www.w3.org/ns/ettystreams',
@@ -82,10 +88,11 @@ def get_page():
                 'published': datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
                 'type': 'Create'
             }
-            for i in range(0, 1000)
+            for i in range(page * per_page, (page + 1) * per_page)
             for activity_id in [str(i)]
         ],
-        'type': 'Collection'
+        'type': 'Collection',
+        **({'next': next_page_href} if page < max_pages - 1 else {}),
     }
 
 
