@@ -11,6 +11,9 @@ from shared.utils import (
     normalise_environment,
 )
 
+from .app_logger import (
+    get_logger_with_context,
+)
 from .app_server import (
     INCORRECT,
     authenticator,
@@ -33,9 +36,9 @@ PAGINATION_EXPIRE = 10
 
 
 async def run_incoming_application():
-    app_logger = logging.getLogger('activity-stream')
+    logger = get_logger_with_context('incoming-startup')
 
-    app_logger.debug('Examining environment...')
+    logger.debug('Examining environment...')
     env = normalise_environment(os.environ)
 
     es_endpoint, redis_uri, sentry = get_common_config(env)
@@ -47,7 +50,7 @@ async def run_incoming_application():
     } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
     ip_whitelist = env['INCOMING_IP_WHITELIST']
 
-    app_logger.debug('Examining environment: done')
+    logger.debug('Examining environment... (done)')
 
     raven_client = get_raven_client(sentry)
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
