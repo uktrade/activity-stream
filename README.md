@@ -39,7 +39,7 @@ from inside the [elasticsearch_proxy](elasticsearch_proxy) directory.
 
 You must have a number of environment variables set. The up-to-date list of these are in the `mock_env` function defined in [tests_utils.py](core/tests_utils.py). Then to run the main application
 
-    python -m core.app
+    python -m core.app_outgoing
 
 ## Managing Requirements
 
