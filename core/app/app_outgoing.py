@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import os
 
 import aiohttp
@@ -37,6 +36,7 @@ from .app_feeds import (
     ZendeskFeed,
 )
 from .app_logger import (
+    get_logger_with_context,
     async_logger,
 )
 from .app_metrics import (
@@ -56,15 +56,15 @@ METRICS_INTERVAL = 1
 
 
 async def run_outgoing_application():
-    app_logger = logging.getLogger('activity-stream')
+    app_logger = get_logger_with_context('startup')
 
-    app_logger.debug('[startup] Examining environment...')
+    app_logger.debug('Examining environment...')
     env = normalise_environment(os.environ)
 
     es_endpoint, redis_uri, sentry = get_common_config(env)
     feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
-    app_logger.debug('[startup] Examining environment... (done)')
+    app_logger.debug('Examining environment... (done)')
 
     raven_client = get_raven_client(sentry)
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
@@ -112,7 +112,7 @@ async def acquire_and_keep_lock(redis_client, raven_client):
     we've blocked for > ttl and lost the lock. We _want_ to have more evidence
     of this so we can address the problem.
     '''
-    app_logger = logging.getLogger('activity-stream')
+    app_logger = get_logger_with_context('startup')
     ttl = 2
     aquire_interval = 1
     extend_interval = 1
@@ -120,13 +120,13 @@ async def acquire_and_keep_lock(redis_client, raven_client):
 
     async def acquire():
         while True:
-            app_logger.debug('[startup] Acquiring lock...')
+            app_logger.debug('Acquiring lock...')
             response = await redis_client.execute('SET', key, '1', 'EX', ttl, 'NX')
             if response == b'OK':
-                app_logger.debug('[startup] Acquiring lock... (done)')
+                app_logger.debug('Acquiring lock... (done)')
                 break
-            app_logger.debug('[startup] Acquiring lock... (failed)')
-            await sleep(aquire_interval, _async_logger_args=['Startup', aquire_interval])
+            app_logger.debug('Acquiring lock... (failed)')
+            await sleep(aquire_interval, _async_logger_args=['startup', aquire_interval])
 
     @async_repeat_until_cancelled
     async def extend_forever(**_):

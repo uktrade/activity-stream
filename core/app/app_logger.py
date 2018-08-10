@@ -6,6 +6,16 @@ from .app_utils import (
 )
 
 
+class ContextAdapter(logging.LoggerAdapter):
+    def process(self, msg, kwargs):
+        return '[%s] %s' % (self.extra['context'], msg), kwargs
+
+
+def get_logger_with_context(context):
+    logger = logging.getLogger('activity-stream')
+    return ContextAdapter(logger, {'context': context})
+
+
 def async_logger(message):
     return async_logger_base(message, lambda _: 'done')
 
