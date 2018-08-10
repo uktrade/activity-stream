@@ -31,9 +31,7 @@ The application is not deployed automatically. To update the verification feed y
 
 A proxy is provided to allow developer access to Elasticsearch / Kibana in [elasticsearch_proxy](elasticsearch_proxy). It is not deployed automatically, and to update it you must
 
-    cp -r -f ../shared . && cf push
-
-from inside the [elasticsearch_proxy](elasticsearch_proxy) directory.
+    (cp -r -f shared elasticsearch_proxy && cd elasticsearch_proxy && cf push)
 
 ## Running locally
 
