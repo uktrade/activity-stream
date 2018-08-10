@@ -25,13 +25,12 @@ def async_logger_with_result(message):
 
 
 def async_logger_base(message, get_success_status):
-    logger = logging.getLogger('activity-stream')
 
     def _async_logger(coroutine):
         async def __async_logger(*args, **kwargs):
-            kwargs_to_pass, (logger_args,) = extract_keys(
+            kwargs_to_pass, (logger, logger_args,) = extract_keys(
                 kwargs,
-                ['_async_logger_args'],
+                ['_async_logger', '_async_logger_args'],
             )
 
             try:
