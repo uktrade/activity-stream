@@ -181,14 +181,24 @@ def feed_unique_ids(feed_endpoints):
 @async_timer
 async def ingest_feed(metrics, session, feed, es_endpoint, **_):
     app_logger = logging.getLogger('activity-stream')
+    app_logger.debug('%s: Full ingest...', feed.unique_id)
 
     indexes_without_alias, _ = await get_old_index_names(session, es_endpoint)
     indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
+
+    app_logger.debug('%s: Deleting indexes (%s)...', feed.unique_id, indexes_to_delete)
     await delete_indexes(session, es_endpoint, indexes_to_delete)
+    app_logger.debug('%s: Deleting indexes (%s): done', feed.unique_id, indexes_to_delete)
 
     index_name = get_new_index_name(feed.unique_id)
+
+    app_logger.debug('%s: Creating index (%s)...', feed.unique_id, index_name)
     await create_index(session, es_endpoint, index_name)
+    app_logger.debug('%s: Creating index (%s): done', feed.unique_id, index_name)
+
+    app_logger.debug('%s: Creating mapping for index (%s)...', feed.unique_id, index_name)
     await create_mapping(session, es_endpoint, index_name)
+    app_logger.debug('%s: Creating mapping for index (%s): done', feed.unique_id, index_name)
 
     href = feed.seed
     while href:
@@ -198,30 +208,40 @@ async def ingest_feed(metrics, session, feed, es_endpoint, **_):
             _async_timer_labels=[feed.unique_id, 'total'],
         )
         app_logger.debug(message)
-        app_logger.debug('Sleeping for %s seconds', interval)
+        app_logger.debug('%s: Sleeping for %s seconds', feed.unique_id, interval)
 
         await asyncio.sleep(interval)
 
+    app_logger.debug('%s: Refreshing index (%s)...', feed.unique_id, index_name)
     await refresh_index(session, es_endpoint, index_name)
+    app_logger.debug('%s: Creating mapping for index (%s)...', feed.unique_id, index_name)
+
+    app_logger.debug('%s: Changing alias to (%s)...', feed.unique_id, index_name)
     await add_remove_aliases_atomically(session, es_endpoint, index_name, feed.unique_id)
+    app_logger.debug('%s: Changing aliases to (%s): done', feed.unique_id, index_name)
+
+    app_logger.debug('%s: Full ingest: done', feed.unique_id)
 
 
 @async_timer
 async def ingest_feed_page(metrics, session, feed, es_endpoint, index_name, href, **_):
     app_logger = logging.getLogger('activity-stream')
 
-    app_logger.debug('Polling')
+    app_logger.debug('%s: Polling (%s)...', feed.unique_id, href)
     feed_contents = await get_feed_contents(
-        session, href, feed.auth_headers(href),
+        session, feed, href, feed.auth_headers(href),
         _async_timer=metrics['ingest_page_duration_seconds'],
         _async_timer_labels=[feed.unique_id, 'pull'],
     )
+    app_logger.debug('%s: Polling (%s): done', feed.unique_id, href)
 
-    app_logger.debug('Parsing JSON...')
+    app_logger.debug('%s: Parsing JSON...', feed.unique_id)
     feed_parsed = json.loads(feed_contents)
-    app_logger.debug('Parsed')
+    app_logger.debug('%s: Parsed', feed.unique_id)
 
     es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_name)
+    app_logger.debug('%s: Ingesting (%s) items into Elasticsearch...',
+                     feed.unique_id, len(es_bulk_items))
     await es_bulk(
         session, es_endpoint, es_bulk_items,
         _async_timer=metrics['ingest_page_duration_seconds'],
@@ -230,10 +250,12 @@ async def ingest_feed_page(metrics, session, feed, es_endpoint, index_name, href
         _async_counter_labels=[feed.unique_id],
         _async_counter_increment_by=len(es_bulk_items),
     )
+    app_logger.debug('%s: Ingesting (%s) items into Elasticsearch: done',
+                     feed.unique_id, len(es_bulk_items))
 
-    app_logger.debug('Finding next URL...')
+    app_logger.debug('%s: Finding next URL...', feed.unique_id)
     next_href = feed.next_href(feed_parsed)
-    app_logger.debug('Finding next URL: done (%s)', next_href)
+    app_logger.debug('%s: Finding next URL: done (%s)', feed.unique_id, next_href)
 
     interval, message = \
         (feed.polling_page_interval, 'Will poll next page in feed') if next_href else \
@@ -243,19 +265,19 @@ async def ingest_feed_page(metrics, session, feed, es_endpoint, index_name, href
 
 
 @async_timer
-async def get_feed_contents(session, href, headers, **_):
+async def get_feed_contents(session, feed, href, headers, **_):
     app_logger = logging.getLogger('activity-stream')
 
-    app_logger.debug('Fetching feed...')
+    app_logger.debug('%s: Fetching feed...', feed.unique_id)
     result = await session.get(href, headers=headers)
-    app_logger.debug('Fetching feed: done')
+    app_logger.debug('%s: Fetching feed: done', feed.unique_id)
 
     if result.status != 200:
         raise Exception(await result.text())
 
-    app_logger.debug('Fetching feed contents...')
+    app_logger.debug('%s: Fetching feed contents...', feed.unique_id)
     contents = await result.read()
-    app_logger.debug('Fetched feed contents: done')
+    app_logger.debug('%s: Fetched feed contents: done', feed.unique_id)
 
     return contents
 
@@ -270,9 +292,11 @@ def parse_feed_config(feed_config):
 
 async def create_metrics_application(metrics, metrics_registry, redis_client,
                                      raven_client, session, feed_endpoints, es_endpoint):
+    app_logger = logging.getLogger('activity-stream')
 
     @async_repeat_until_cancelled
     async def poll_metrics(**_):
+        app_logger.debug('Polling metrics...')
         searchable = await es_searchable_total(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
 
@@ -299,7 +323,11 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
             except ESMetricsUnavailable:
                 pass
 
+        app_logger.debug('Polling metrics: done')
+        app_logger.debug('Saving metrics to Redis...')
         await redis_client.set('metrics', generate_latest(metrics_registry))
+        app_logger.debug('Saving metrics to Redis: done')
+
         await asyncio.sleep(METRICS_INTERVAL)
 
     asyncio.get_event_loop().create_task(poll_metrics(
