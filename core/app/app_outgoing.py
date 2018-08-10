@@ -58,13 +58,13 @@ METRICS_INTERVAL = 1
 async def run_outgoing_application():
     app_logger = logging.getLogger('activity-stream')
 
-    app_logger.debug('Startup: Examining environment...')
+    app_logger.debug('[startup] Examining environment...')
     env = normalise_environment(os.environ)
 
     es_endpoint, redis_uri, sentry = get_common_config(env)
     feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
-    app_logger.debug('Startup: Examining environment... (done)')
+    app_logger.debug('[startup] Examining environment... (done)')
 
     raven_client = get_raven_client(sentry)
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
@@ -120,12 +120,12 @@ async def acquire_and_keep_lock(redis_client, raven_client):
 
     async def acquire():
         while True:
-            app_logger.debug('Startup: Acquiring lock...')
+            app_logger.debug('[startup] Acquiring lock...')
             response = await redis_client.execute('SET', key, '1', 'EX', ttl, 'NX')
             if response == b'OK':
-                app_logger.debug('Startup: Acquiring lock... (done)')
+                app_logger.debug('[startup] Acquiring lock... (done)')
                 break
-            app_logger.debug('Startup: Acquiring lock... (failed)')
+            app_logger.debug('[startup] Acquiring lock... (failed)')
             await sleep(aquire_interval, _async_logger_args=['Startup', aquire_interval])
 
     @async_repeat_until_cancelled
@@ -157,14 +157,14 @@ async def ingest_feeds(metrics, raven_client, session, feed_endpoints, es_endpoi
     all_feed_ids = feed_unique_ids(feed_endpoints)
     indexes_without_alias, indexes_with_alias = await get_old_index_names(
         session, es_endpoint,
-        _async_logger_args=['Startup']
+        _async_logger_args=['startup']
     )
 
     indexes_to_delete = indexes_matching_no_feeds(
         indexes_without_alias + indexes_with_alias, all_feed_ids)
     await delete_indexes(
         session, es_endpoint, indexes_to_delete,
-        _async_logger_args=['Startup', indexes_to_delete]
+        _async_logger_args=['startup', indexes_to_delete]
     )
 
     await asyncio.gather(*[
@@ -187,7 +187,7 @@ def feed_unique_ids(feed_endpoints):
 
 
 @async_repeat_until_cancelled
-@async_logger('%s: Full ingest')
+@async_logger('[%s] Full ingest')
 @async_inprogress
 @async_timer
 async def ingest_feed(metrics, session, feed, es_endpoint, **_):
@@ -235,12 +235,12 @@ async def ingest_feed(metrics, session, feed, es_endpoint, **_):
     )
 
 
-@async_logger('%s: Sleeping for %s seconds')
+@async_logger('[%s] Sleeping for %s seconds')
 async def sleep(interval, **_):
     await asyncio.sleep(interval)
 
 
-@async_logger('%s: Polling/pushing page')
+@async_logger('[%s] Polling/pushing page')
 @async_timer
 async def ingest_feed_page(metrics, session, feed, es_endpoint, index_name, href, **_):
     feed_contents = await get_feed_contents(
@@ -272,7 +272,7 @@ async def ingest_feed_page(metrics, session, feed, es_endpoint, index_name, href
     return next_href, interval
 
 
-@async_logger('%s: Polling feed (%s)')
+@async_logger('[%s] Polling feed (%s)')
 @async_timer
 async def get_feed_contents(session, href, headers, **_):
     result = await session.get(href, headers=headers)
@@ -296,7 +296,7 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
                                      raven_client, session, feed_endpoints, es_endpoint):
 
     @async_repeat_until_cancelled
-    @async_logger('Metrics: Polling')
+    @async_logger('[metrics] Polling')
     async def poll_metrics(**_):
         searchable = await es_searchable_total(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
@@ -331,7 +331,7 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
 
         await sleep(METRICS_INTERVAL, _async_logger_args=['Metrics', METRICS_INTERVAL])
 
-    @async_logger('Metrics: Saving to Redis')
+    @async_logger('[metrics] Saving to Redis')
     async def save_metrics_to_redis(metrics, **_):
         await redis_client.set('metrics', metrics)
 
