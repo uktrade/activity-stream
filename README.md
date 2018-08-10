@@ -25,13 +25,9 @@ and then to run the tests themselves
 
 A small separate application in [verification_feed](verification_feed) is provided to allow the stream to be tested, even in production, without using real data. It provides a single activity, published date of the moment the feed is queried.
 
-The application is not deployed automatically. To update the verification feed you must `cf push` from inside the [verification_feed](verification_feed) directory.
-
 ## Elasticsearch / Kibana Proxy
 
-A proxy is provided to allow developer access to Elasticsearch / Kibana in [elasticsearch_proxy](elasticsearch_proxy). It is not deployed automatically, and to update it you must
-
-    (cp -r -f shared elasticsearch_proxy && cd elasticsearch_proxy && cf push)
+A proxy is provided to allow developer access to Elasticsearch / Kibana in [elasticsearch_proxy](elasticsearch_proxy).
 
 ## Running locally
 
