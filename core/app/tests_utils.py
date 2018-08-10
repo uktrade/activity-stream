@@ -1,12 +1,13 @@
 import asyncio
 import json
+import os
 
 import aiohttp
 from aiohttp import web
 import mohawk
 
-from core.app_incoming import run_incoming_application
-from core.app_outgoing import run_outgoing_application
+from .app_incoming import run_incoming_application
+from .app_outgoing import run_outgoing_application
 
 
 ORIGINAL_SLEEP = asyncio.sleep
@@ -76,7 +77,7 @@ async def wait_until_get_working():
 
 
 def read_file(path):
-    with open('core/' + path, 'rb') as file:
+    with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as file:
         return file.read().decode('utf-8')
 
 

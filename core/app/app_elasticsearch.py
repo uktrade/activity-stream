@@ -19,7 +19,6 @@ from .app_utils import (
     flatten,
 )
 
-
 ALIAS = 'activities'
 
 

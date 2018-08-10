@@ -10,7 +10,7 @@ from aiohttp import web
 import aioredis
 from freezegun import freeze_time
 
-from core.tests_utils import (
+from .tests_utils import (
     ORIGINAL_SLEEP,
     append_until,
     async_test,
@@ -220,7 +220,7 @@ class TestAuthentication(TestBase):
             is shorter then the allowed Hawk skew. The second request succeeding gives
             evidence that the cache of nonces was cleared.
         '''
-        with patch('core.app_incoming.NONCE_EXPIRE', 1):
+        with patch('core.app.app_incoming.NONCE_EXPIRE', 1):
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                     mock_feed_status=lambda: 200)
 
@@ -344,7 +344,7 @@ class TestApplication(TestBase):
         path = 'tests_fixture_activity_stream_1.json'
 
         def read_specific_file(_):
-            with open('core/' + path, 'rb') as file:
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as file:
                 return file.read().decode('utf-8')
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -414,7 +414,7 @@ class TestApplication(TestBase):
     @async_test
     async def test_pagination_expiry(self):
         with \
-                patch('core.app_incoming.PAGINATION_EXPIRE', 1), \
+                patch('core.app.app_incoming.PAGINATION_EXPIRE', 1), \
                 patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                     mock_feed_status=lambda: 200)
