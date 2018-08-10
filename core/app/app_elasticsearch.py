@@ -11,6 +11,10 @@ from shared.utils import (
     aws_auth_headers,
 )
 
+from .app_logger import (
+    async_logger,
+    async_logger_with_result,
+)
 from .app_metrics import (
     async_counter,
     async_timer,
@@ -61,7 +65,8 @@ def indexes_matching_no_feeds(index_names, feed_unique_ids):
     ]
 
 
-async def get_old_index_names(session, es_endpoint):
+@async_logger_with_result('%s: Finding existing index names')
+async def get_old_index_names(session, es_endpoint, **_):
     results = await es_request_non_200_exception(
         session=session,
         endpoint=es_endpoint,
@@ -86,7 +91,8 @@ async def get_old_index_names(session, es_endpoint):
     return without_alias, with_alias
 
 
-async def add_remove_aliases_atomically(session, es_endpoint, index_name, feed_unique_id):
+@async_logger('%s: Atomically flipping {ALIAS} alias to (%s)')
+async def add_remove_aliases_atomically(session, es_endpoint, index_name, feed_unique_id, **_):
     remove_pattern = f'{ALIAS}__feed_id_{feed_unique_id}__*'
     actions = json.dumps({
         'actions': [
@@ -106,7 +112,8 @@ async def add_remove_aliases_atomically(session, es_endpoint, index_name, feed_u
     )
 
 
-async def delete_indexes(session, es_endpoint, index_names):
+@async_logger('%s: Deleting indexes (%s)')
+async def delete_indexes(session, es_endpoint, index_names, **_):
     for index_name in index_names:
         await es_request_non_200_exception(
             session=session,
@@ -119,7 +126,8 @@ async def delete_indexes(session, es_endpoint, index_names):
         )
 
 
-async def create_index(session, es_endpoint, index_name):
+@async_logger('%s: Creating index (%s)')
+async def create_index(session, es_endpoint, index_name, **_):
     index_definition = json.dumps({
         'settings': {
             'index': {
@@ -140,7 +148,8 @@ async def create_index(session, es_endpoint, index_name):
     )
 
 
-async def refresh_index(session, es_endpoint, index_name):
+@async_logger('%s: Refreshing index (%s)')
+async def refresh_index(session, es_endpoint, index_name, **_):
     await es_request_non_200_exception(
         session=session,
         endpoint=es_endpoint,
@@ -152,7 +161,8 @@ async def refresh_index(session, es_endpoint, index_name):
     )
 
 
-async def create_mapping(session, es_endpoint, index_name):
+@async_logger('%s: Creating mapping for index (%s)')
+async def create_mapping(session, es_endpoint, index_name, **_):
     mapping_definition = json.dumps({
         'properties': {
             'published_date': {
@@ -240,6 +250,7 @@ async def activities(elasticsearch_reponse, to_public_scroll_url):
     }, **next_dict}
 
 
+@async_logger('%s: Pushing (%s) items into Elasticsearch')
 @async_counter
 @async_timer
 async def es_bulk(session, es_endpoint, items, **_):

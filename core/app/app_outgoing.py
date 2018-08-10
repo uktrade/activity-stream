@@ -36,6 +36,9 @@ from .app_feeds import (
     ActivityStreamFeed,
     ZendeskFeed,
 )
+from .app_logger import (
+    async_logger,
+)
 from .app_metrics import (
     async_inprogress,
     async_timer,
@@ -55,13 +58,13 @@ METRICS_INTERVAL = 1
 async def run_outgoing_application():
     app_logger = logging.getLogger('activity-stream')
 
-    app_logger.debug('Examining environment...')
+    app_logger.debug('Startup: Examining environment...')
     env = normalise_environment(os.environ)
 
     es_endpoint, redis_uri, sentry = get_common_config(env)
     feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
-    app_logger.debug('Examining environment: done')
+    app_logger.debug('Startup: Examining environment... (done)')
 
     raven_client = get_raven_client(sentry)
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
@@ -117,13 +120,13 @@ async def acquire_and_keep_lock(redis_client, raven_client):
 
     async def acquire():
         while True:
-            app_logger.debug('Acquiring lock...')
+            app_logger.debug('Startup: Acquiring lock...')
             response = await redis_client.execute('SET', key, '1', 'EX', ttl, 'NX')
             if response == b'OK':
-                app_logger.debug('Acquiring lock: success')
+                app_logger.debug('Startup: Acquiring lock... (done)')
                 break
-            app_logger.debug('Acquiring lock: failure. Sleeping.')
-            await asyncio.sleep(aquire_interval)
+            app_logger.debug('Startup: Acquiring lock... (failed)')
+            await sleep(aquire_interval, _async_logger_args=['Startup', aquire_interval])
 
     @async_repeat_until_cancelled
     async def extend_forever(**_):
@@ -152,11 +155,17 @@ async def create_outgoing_application(metrics, raven_client, session, feed_endpo
 @async_repeat_until_cancelled
 async def ingest_feeds(metrics, raven_client, session, feed_endpoints, es_endpoint, **_):
     all_feed_ids = feed_unique_ids(feed_endpoints)
-    indexes_without_alias, indexes_with_alias = await get_old_index_names(session, es_endpoint)
+    indexes_without_alias, indexes_with_alias = await get_old_index_names(
+        session, es_endpoint,
+        _async_logger_args=['Startup']
+    )
 
     indexes_to_delete = indexes_matching_no_feeds(
         indexes_without_alias + indexes_with_alias, all_feed_ids)
-    await delete_indexes(session, es_endpoint, indexes_to_delete)
+    await delete_indexes(
+        session, es_endpoint, indexes_to_delete,
+        _async_logger_args=['Startup', indexes_to_delete]
+    )
 
     await asyncio.gather(*[
         ingest_feed(
@@ -167,6 +176,7 @@ async def ingest_feeds(metrics, raven_client, session, feed_endpoints, es_endpoi
             _async_timer=metrics['ingest_feed_duration_seconds'],
             _async_timer_labels=[feed_endpoint.unique_id],
             _async_inprogress=metrics['ingest_inprogress_ingests_total'],
+            _async_logger_args=[feed_endpoint.unique_id],
         )
         for feed_endpoint in feed_endpoints
     ])
@@ -177,71 +187,72 @@ def feed_unique_ids(feed_endpoints):
 
 
 @async_repeat_until_cancelled
+@async_logger('%s: Full ingest')
 @async_inprogress
 @async_timer
 async def ingest_feed(metrics, session, feed, es_endpoint, **_):
-    app_logger = logging.getLogger('activity-stream')
-    app_logger.debug('%s: Full ingest...', feed.unique_id)
-
-    indexes_without_alias, _ = await get_old_index_names(session, es_endpoint)
+    indexes_without_alias, _ = await get_old_index_names(
+        session, es_endpoint,
+        _async_logger_args=[feed.unique_id],
+    )
     indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
 
-    app_logger.debug('%s: Deleting indexes (%s)...', feed.unique_id, indexes_to_delete)
-    await delete_indexes(session, es_endpoint, indexes_to_delete)
-    app_logger.debug('%s: Deleting indexes (%s): done', feed.unique_id, indexes_to_delete)
+    await delete_indexes(
+        session, es_endpoint, indexes_to_delete,
+        _async_logger_args=[feed.unique_id, indexes_to_delete],
+    )
 
     index_name = get_new_index_name(feed.unique_id)
 
-    app_logger.debug('%s: Creating index (%s)...', feed.unique_id, index_name)
-    await create_index(session, es_endpoint, index_name)
-    app_logger.debug('%s: Creating index (%s): done', feed.unique_id, index_name)
+    await create_index(
+        session, es_endpoint, index_name,
+        _async_logger_args=[feed.unique_id, index_name],
+    )
 
-    app_logger.debug('%s: Creating mapping for index (%s)...', feed.unique_id, index_name)
-    await create_mapping(session, es_endpoint, index_name)
-    app_logger.debug('%s: Creating mapping for index (%s): done', feed.unique_id, index_name)
+    await create_mapping(
+        session, es_endpoint, index_name,
+        _async_logger_args=[feed.unique_id, index_name],
+    )
 
     href = feed.seed
     while href:
-        href, interval, message = await ingest_feed_page(
+        href, interval = await ingest_feed_page(
             metrics, session, feed, es_endpoint, index_name, href,
             _async_timer=metrics['ingest_page_duration_seconds'],
             _async_timer_labels=[feed.unique_id, 'total'],
+            _async_logger_args=[feed.unique_id],
         )
-        app_logger.debug(message)
-        app_logger.debug('%s: Sleeping for %s seconds', feed.unique_id, interval)
+        await sleep(interval, _async_logger_args=[feed.unique_id, interval])
 
-        await asyncio.sleep(interval)
+    await refresh_index(
+        session, es_endpoint, index_name,
+        _async_logger_args=[feed.unique_id, index_name]
+    )
 
-    app_logger.debug('%s: Refreshing index (%s)...', feed.unique_id, index_name)
-    await refresh_index(session, es_endpoint, index_name)
-    app_logger.debug('%s: Creating mapping for index (%s)...', feed.unique_id, index_name)
-
-    app_logger.debug('%s: Changing alias to (%s)...', feed.unique_id, index_name)
-    await add_remove_aliases_atomically(session, es_endpoint, index_name, feed.unique_id)
-    app_logger.debug('%s: Changing aliases to (%s): done', feed.unique_id, index_name)
-
-    app_logger.debug('%s: Full ingest: done', feed.unique_id)
+    await add_remove_aliases_atomically(
+        session, es_endpoint, index_name, feed.unique_id,
+        _async_logger_args=[feed.unique_id, index_name]
+    )
 
 
+@async_logger('%s: Sleeping for %s seconds')
+async def sleep(interval, **_):
+    await asyncio.sleep(interval)
+
+
+@async_logger('%s: Polling/pushing page')
 @async_timer
 async def ingest_feed_page(metrics, session, feed, es_endpoint, index_name, href, **_):
-    app_logger = logging.getLogger('activity-stream')
-
-    app_logger.debug('%s: Polling (%s)...', feed.unique_id, href)
     feed_contents = await get_feed_contents(
-        session, feed, href, feed.auth_headers(href),
+        session, href, feed.auth_headers(href),
         _async_timer=metrics['ingest_page_duration_seconds'],
         _async_timer_labels=[feed.unique_id, 'pull'],
+        _async_logger_args=[feed.unique_id, href],
     )
-    app_logger.debug('%s: Polling (%s): done', feed.unique_id, href)
 
-    app_logger.debug('%s: Parsing JSON...', feed.unique_id)
     feed_parsed = json.loads(feed_contents)
-    app_logger.debug('%s: Parsed', feed.unique_id)
-
     es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_name)
-    app_logger.debug('%s: Ingesting (%s) items into Elasticsearch...',
-                     feed.unique_id, len(es_bulk_items))
+
     await es_bulk(
         session, es_endpoint, es_bulk_items,
         _async_timer=metrics['ingest_page_duration_seconds'],
@@ -249,35 +260,26 @@ async def ingest_feed_page(metrics, session, feed, es_endpoint, index_name, href
         _async_counter=metrics['ingest_activities_nonunique_total'],
         _async_counter_labels=[feed.unique_id],
         _async_counter_increment_by=len(es_bulk_items),
+        _async_logger_args=[feed.unique_id, len(es_bulk_items)]
     )
-    app_logger.debug('%s: Ingesting (%s) items into Elasticsearch: done',
-                     feed.unique_id, len(es_bulk_items))
 
-    app_logger.debug('%s: Finding next URL...', feed.unique_id)
     next_href = feed.next_href(feed_parsed)
-    app_logger.debug('%s: Finding next URL: done (%s)', feed.unique_id, next_href)
 
-    interval, message = \
-        (feed.polling_page_interval, 'Will poll next page in feed') if next_href else \
-        (feed.polling_seed_interval, 'Will poll seed page')
+    interval = \
+        feed.polling_page_interval if next_href else \
+        feed.polling_seed_interval
 
-    return next_href, interval, message
+    return next_href, interval
 
 
+@async_logger('%s: Polling feed (%s)')
 @async_timer
-async def get_feed_contents(session, feed, href, headers, **_):
-    app_logger = logging.getLogger('activity-stream')
-
-    app_logger.debug('%s: Fetching feed...', feed.unique_id)
+async def get_feed_contents(session, href, headers, **_):
     result = await session.get(href, headers=headers)
-    app_logger.debug('%s: Fetching feed: done', feed.unique_id)
-
     if result.status != 200:
         raise Exception(await result.text())
 
-    app_logger.debug('%s: Fetching feed contents...', feed.unique_id)
     contents = await result.read()
-    app_logger.debug('%s: Fetched feed contents: done', feed.unique_id)
 
     return contents
 
@@ -292,11 +294,10 @@ def parse_feed_config(feed_config):
 
 async def create_metrics_application(metrics, metrics_registry, redis_client,
                                      raven_client, session, feed_endpoints, es_endpoint):
-    app_logger = logging.getLogger('activity-stream')
 
     @async_repeat_until_cancelled
+    @async_logger('Metrics: Polling')
     async def poll_metrics(**_):
-        app_logger.debug('Polling metrics...')
         searchable = await es_searchable_total(session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
 
@@ -323,17 +324,22 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
             except ESMetricsUnavailable:
                 pass
 
-        app_logger.debug('Polling metrics: done')
-        app_logger.debug('Saving metrics to Redis...')
-        await redis_client.set('metrics', generate_latest(metrics_registry))
-        app_logger.debug('Saving metrics to Redis: done')
+        await save_metrics_to_redis(
+            generate_latest(metrics_registry),
+            _async_logger_args=[],
+        )
 
-        await asyncio.sleep(METRICS_INTERVAL)
+        await sleep(METRICS_INTERVAL, _async_logger_args=['Metrics', METRICS_INTERVAL])
+
+    @async_logger('Metrics: Saving to Redis')
+    async def save_metrics_to_redis(metrics, **_):
+        await redis_client.set('metrics', metrics)
 
     asyncio.get_event_loop().create_task(poll_metrics(
         _async_repeat_until_cancelled_raven_client=raven_client,
         _async_repeat_until_cancelled_exception_interval=METRICS_INTERVAL,
         _async_repeat_until_cancelled_logging_title='Elasticsearch polling',
+        _async_logger_args=[],
     ))
 
 
