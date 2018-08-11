@@ -276,9 +276,9 @@ def parse_feed_config(feed_config):
     return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
 
-async def create_metrics_application(logger, metrics, metrics_registry, redis_client,
+async def create_metrics_application(parent_logger, metrics, metrics_registry, redis_client,
                                      raven_client, session, feed_endpoints, es_endpoint):
-    logger = get_child_logger(logger, 'metrics')
+    logger = get_child_logger(parent_logger, 'metrics')
 
     @async_repeat_until_cancelled
     @async_logger('Polling')
