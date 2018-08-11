@@ -11,7 +11,6 @@ from shared.utils import (
 )
 
 from .app_logger import (
-    AccessLogger,
     async_logger,
     get_logger_with_context,
     logged,
@@ -105,7 +104,13 @@ async def create_incoming_application(
         web.get('/metrics', handle_get_metrics(redis_client)),
     ])
 
-    runner = web.AppRunner(app, access_log_class=AccessLogger)
+    class NullAccessLogger(aiohttp.abc.AbstractAccessLogger):
+        # pylint: disable=too-few-public-methods
+
+        def log(self, request, response, time):
+            pass
+
+    runner = web.AppRunner(app, access_log_class=NullAccessLogger)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()

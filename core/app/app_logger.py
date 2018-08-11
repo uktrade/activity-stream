@@ -2,10 +2,6 @@ import asyncio
 import contextlib
 import logging
 
-from aiohttp.abc import (
-    AbstractAccessLogger,
-)
-
 from .app_utils import (
     extract_keys,
 )
@@ -24,26 +20,6 @@ def get_logger_with_context(context):
 def get_child_logger(logger, child_context):
     existing_context = logger.extra['context']
     return ContextAdapter(logger.logger, {'context': existing_context + [child_context]})
-
-
-class AccessLogger(AbstractAccessLogger):
-    # pylint: disable=too-few-public-methods
-
-    def log(self, request, response, time):
-        self.logger.debug('%s "%s %s HTTP/%s.%s" "%s" "%s" %s %s', *(
-            (
-                request.remote,
-                request.method,
-                request.path_qs,
-            ) +
-            request.version +
-            (
-                request.headers.get('User-Agent', '-'),
-                request.headers.get('X-Forwarded-For', '-'),
-                response.status,
-                response.body_length,
-            ),
-        ))
 
 
 def async_logger(message):
