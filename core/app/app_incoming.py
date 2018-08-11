@@ -15,6 +15,7 @@ from shared.utils import (
     normalise_environment,
 )
 from shared.web import (
+    server_logger,
     authenticate_by_ip,
 )
 
@@ -27,7 +28,6 @@ from .app_server import (
     handle_get_new,
     handle_get_metrics,
     handle_post,
-    server_logger,
     raven_reporter,
 )
 from .app_utils import (

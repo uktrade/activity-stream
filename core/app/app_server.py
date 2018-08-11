@@ -4,10 +4,6 @@ from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
 
-from shared.logger import (
-    get_child_logger,
-    logged,
-)
 from shared.utils import (
     random_url_safe,
 )
@@ -26,38 +22,6 @@ MISSING_CONTENT_TYPE = 'Content-Type header was not set. ' + \
 MISSING_X_FORWARDED_PROTO = 'The X-Forwarded-Proto header was not set.'
 NOT_AUTHORIZED = 'You are not authorized to perform this action.'
 UNKNOWN_ERROR = 'An unknown error occurred.'
-
-
-def server_logger(logger):
-
-    @web.middleware
-    async def _server_logger(request, handler):
-        child_logger = get_child_logger(logger, random_url_safe(8))
-        request['logger'] = child_logger
-        child_logger.debug('Receiving request %s "%s %s HTTP/%s.%s" "%s" "%s"', *(
-            (
-                request.remote,
-                request.method,
-                request.path_qs,
-            ) +
-            request.version +
-            (
-                request.headers.get('User-Agent', '-'),
-                request.headers.get('X-Forwarded-For', '-'),
-            )
-        ))
-
-        with logged(child_logger, 'Processing request', []):
-            response = await handler(request)
-
-        child_logger.debug(
-            'Sending Response %s %s',
-            response.status, response.body_length,
-        )
-
-        return response
-
-    return _server_logger
 
 
 def authenticator(incoming_key_pairs, redis_client, nonce_expire):
