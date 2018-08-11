@@ -33,7 +33,7 @@ def server_logger(logger):
 
         child_logger.debug(
             'Sending Response %s %s',
-            response.status, response.body_length,
+            response.status, response.content_length,
         )
 
         return response
