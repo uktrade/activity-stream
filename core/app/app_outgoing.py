@@ -126,11 +126,7 @@ async def acquire_and_keep_lock(parent_logger, redis_client, raven_client):
                 logger.debug('Acquiring... (done)')
                 break
             logger.debug('Acquiring... (failed)')
-            await sleep(
-                aquire_interval,
-                _async_logger=logger,
-                _async_logger_args=[aquire_interval],
-            )
+            await sleep(logger, aquire_interval)
 
     @async_repeat_until_cancelled
     async def extend_forever(**_):
@@ -215,11 +211,7 @@ async def ingest_feed(logger, metrics, session, feed, es_endpoint, **_):
             _async_logger=logger,
             _async_logger_args=[],
         )
-        await sleep(
-            interval,
-            _async_logger=logger,
-            _async_logger_args=[interval],
-        )
+        await sleep(logger, interval)
 
     await refresh_index(logger, session, es_endpoint, index_name)
 
@@ -228,9 +220,9 @@ async def ingest_feed(logger, metrics, session, feed, es_endpoint, **_):
     )
 
 
-@async_logger('Sleeping for %s seconds')
-async def sleep(interval, **_):
-    await asyncio.sleep(interval)
+async def sleep(logger, interval):
+    with logged(logger, 'Sleeping for %s seconds', [interval]):
+        await asyncio.sleep(interval)
 
 
 @async_logger('Polling/pushing page')
@@ -327,11 +319,7 @@ async def create_metrics_application(logger, metrics, metrics_registry, redis_cl
             _async_logger_args=[],
         )
 
-        await sleep(
-            METRICS_INTERVAL,
-            _async_logger=logger,
-            _async_logger_args=[METRICS_INTERVAL]
-        )
+        await sleep(logger, METRICS_INTERVAL)
 
     @async_logger('Saving to Redis')
     async def save_metrics_to_redis(metrics, **_):
