@@ -23,14 +23,6 @@ def get_child_logger(logger, child_context):
 
 
 def async_logger(message):
-    return async_logger_base(message, lambda _: 'done')
-
-
-def async_logger_with_result(message):
-    return async_logger_base(message, lambda result: result)
-
-
-def async_logger_base(message, get_success_status):
 
     def _async_logger(coroutine):
         async def __async_logger(*args, **kwargs):
@@ -42,7 +34,7 @@ def async_logger_base(message, get_success_status):
             try:
                 logger.debug(message + '...', *logger_args)
                 result = await coroutine(*args, **kwargs_to_pass)
-                status = get_success_status(result)
+                status = 'done'
                 logger_func = logger.debug
                 return result
             except asyncio.CancelledError:

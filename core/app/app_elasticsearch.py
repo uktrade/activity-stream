@@ -8,7 +8,6 @@ from aiohttp.web import (
 )
 
 from shared.logger import (
-    async_logger_with_result,
     logged,
 )
 from shared.utils import (
@@ -65,31 +64,33 @@ def indexes_matching_no_feeds(index_names, feed_unique_ids):
     ]
 
 
-@async_logger_with_result('Finding existing index names')
-async def get_old_index_names(logger, session, es_endpoint, **_):
-    results = await es_request_non_200_exception(
-        logger=logger,
-        session=session,
-        endpoint=es_endpoint,
-        method='GET',
-        path=f'/_aliases',
-        query={},
-        headers={'Content-Type': 'application/json'},
-        payload=b'',
-    )
-    indexes = await results.json()
+async def get_old_index_names(logger, session, es_endpoint):
+    with logged(logger, 'Finding existing index names', []):
+        results = await es_request_non_200_exception(
+            logger=logger,
+            session=session,
+            endpoint=es_endpoint,
+            method='GET',
+            path=f'/_aliases',
+            query={},
+            headers={'Content-Type': 'application/json'},
+            payload=b'',
+        )
+        indexes = await results.json()
 
-    without_alias = [
-        index_name
-        for index_name, index_details in indexes.items()
-        if index_name.startswith(f'{ALIAS}_') and not index_details['aliases']
-    ]
-    with_alias = [
-        index_name
-        for index_name, index_details in indexes.items()
-        if index_name.startswith(f'{ALIAS}_') and index_details['aliases']
-    ]
-    return without_alias, with_alias
+        without_alias = [
+            index_name
+            for index_name, index_details in indexes.items()
+            if index_name.startswith(f'{ALIAS}_') and not index_details['aliases']
+        ]
+        with_alias = [
+            index_name
+            for index_name, index_details in indexes.items()
+            if index_name.startswith(f'{ALIAS}_') and index_details['aliases']
+        ]
+        names = without_alias, with_alias
+        logger.debug('Finding existing index names... (%s)', names)
+        return names
 
 
 async def add_remove_aliases_atomically(logger, session, es_endpoint, index_name,

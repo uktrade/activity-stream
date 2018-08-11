@@ -162,8 +162,6 @@ async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, e
     all_feed_ids = feed_unique_ids(feed_endpoints)
     indexes_without_alias, indexes_with_alias = await get_old_index_names(
         logger, session, es_endpoint,
-        _async_logger=logger,
-        _async_logger_args=[]
     )
 
     indexes_to_delete = indexes_matching_no_feeds(
@@ -200,8 +198,6 @@ def feed_unique_ids(feed_endpoints):
 async def ingest_feed(logger, metrics, session, feed, es_endpoint, **_):
     indexes_without_alias, _ = await get_old_index_names(
         logger, session, es_endpoint,
-        _async_logger=logger,
-        _async_logger_args=[],
     )
     indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
     await delete_indexes(logger, session, es_endpoint, indexes_to_delete)
