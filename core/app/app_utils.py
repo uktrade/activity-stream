@@ -9,6 +9,10 @@ import sys
 import raven
 from raven_aiohttp import QueuedAioHttpTransport
 
+from shared.utils import (
+    extract_keys,
+)
+
 
 def flatten(list_to_flatten):
     return [
@@ -52,19 +56,6 @@ def sub_dict_lower(super_dict, keys):
         key.lower(): super_dict[key]
         for key in keys
     }
-
-
-def extract_keys(dictionary, keys):
-    extracted = [
-        dictionary[key]
-        for key in keys
-    ]
-    without_keys = {
-        key: value
-        for key, value in dictionary.items()
-        if key not in keys
-    }
-    return without_keys, extracted
 
 
 async def cancel_non_current_tasks():

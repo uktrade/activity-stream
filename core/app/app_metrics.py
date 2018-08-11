@@ -10,7 +10,7 @@ from prometheus_client import (
     ProcessCollector,
 )
 
-from .app_utils import (
+from shared.utils import (
     extract_keys,
 )
 
