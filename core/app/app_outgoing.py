@@ -176,18 +176,18 @@ async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, e
 
     await asyncio.gather(*[
         ingest_feed(
-            logger, metrics, session, feed_endpoint, es_endpoint,
+            feed_logger, metrics, session, feed_endpoint, es_endpoint,
             _async_repeat_until_cancelled_raven_client=raven_client,
             _async_repeat_until_cancelled_exception_interval=EXCEPTION_INTERVAL,
             _async_repeat_until_cancelled_logger=logger,
             _async_timer=metrics['ingest_feed_duration_seconds'],
             _async_timer_labels=[feed_endpoint.unique_id],
             _async_inprogress=metrics['ingest_inprogress_ingests_total'],
-            _async_logger=logger,
+            _async_logger=feed_logger,
             _async_logger_args=[],
         )
         for feed_endpoint in feed_endpoints
-        for logger in [get_logger_with_context(feed_endpoint.unique_id)]
+        for feed_logger in [get_child_logger(logger, feed_endpoint.unique_id)]
     ])
 
 
