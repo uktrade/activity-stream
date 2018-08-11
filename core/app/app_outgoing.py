@@ -11,6 +11,7 @@ from prometheus_client import (
 
 from shared.logger import (
     get_logger_with_context,
+    get_child_logger,
     async_logger,
     logged,
 )
@@ -72,7 +73,7 @@ async def run_outgoing_application():
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
 
-    await acquire_and_keep_lock(redis_client, raven_client)
+    await acquire_and_keep_lock(logger, redis_client, raven_client)
 
     await create_outgoing_application(
         logger, metrics, raven_client, session, feed_endpoints, es_endpoint,
@@ -93,7 +94,7 @@ async def run_outgoing_application():
     return cleanup
 
 
-async def acquire_and_keep_lock(redis_client, raven_client):
+async def acquire_and_keep_lock(parent_logger, redis_client, raven_client):
     ''' Prevents Elasticsearch errors during deployments
 
     The exceptions would be caused by a new deployment deleting indexes while
@@ -111,7 +112,7 @@ async def acquire_and_keep_lock(redis_client, raven_client):
     we've blocked for > ttl and lost the lock. We _want_ to have more evidence
     of this so we can address the problem.
     '''
-    logger = get_logger_with_context('lock')
+    logger = get_child_logger(parent_logger, 'lock')
     ttl = 2
     aquire_interval = 1
     extend_interval = 1
