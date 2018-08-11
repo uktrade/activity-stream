@@ -281,33 +281,33 @@ async def create_metrics_application(parent_logger, metrics, metrics_registry, r
     logger = get_child_logger(parent_logger, 'metrics')
 
     @async_repeat_until_cancelled
-    @async_logger('Polling')
     async def poll_metrics(**_):
-        searchable = await es_searchable_total(logger, session, es_endpoint)
-        metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
+        with logged(logger, 'Polling', []):
+            searchable = await es_searchable_total(logger, session, es_endpoint)
+            metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
 
-        await set_metric_if_can(
-            metrics['elasticsearch_activities_total'],
-            ['nonsearchable'],
-            es_nonsearchable_total(logger, session, es_endpoint),
-        )
-        await set_metric_if_can(
-            metrics['elasticsearch_activities_age_minimum_seconds'],
-            ['verification'],
-            es_min_verification_age(logger, session, es_endpoint),
-        )
+            await set_metric_if_can(
+                metrics['elasticsearch_activities_total'],
+                ['nonsearchable'],
+                es_nonsearchable_total(logger, session, es_endpoint),
+            )
+            await set_metric_if_can(
+                metrics['elasticsearch_activities_age_minimum_seconds'],
+                ['verification'],
+                es_min_verification_age(logger, session, es_endpoint),
+            )
 
-        feed_ids = feed_unique_ids(feed_endpoints)
-        for feed_id in feed_ids:
-            try:
-                searchable, nonsearchable = await es_feed_activities_total(logger, session,
-                                                                           es_endpoint, feed_id)
-                metrics['elasticsearch_feed_activities_total'].labels(
-                    feed_id, 'searchable').set(searchable)
-                metrics['elasticsearch_feed_activities_total'].labels(
-                    feed_id, 'nonsearchable').set(nonsearchable)
-            except ESMetricsUnavailable:
-                pass
+            feed_ids = feed_unique_ids(feed_endpoints)
+            for feed_id in feed_ids:
+                try:
+                    searchable, nonsearchable = await es_feed_activities_total(
+                        logger, session, es_endpoint, feed_id)
+                    metrics['elasticsearch_feed_activities_total'].labels(
+                        feed_id, 'searchable').set(searchable)
+                    metrics['elasticsearch_feed_activities_total'].labels(
+                        feed_id, 'nonsearchable').set(nonsearchable)
+                except ESMetricsUnavailable:
+                    pass
 
         await save_metrics_to_redis(logger, generate_latest(metrics_registry))
         await sleep(logger, METRICS_INTERVAL)
@@ -320,8 +320,6 @@ async def create_metrics_application(parent_logger, metrics, metrics_registry, r
         _async_repeat_until_cancelled_raven_client=raven_client,
         _async_repeat_until_cancelled_exception_interval=METRICS_INTERVAL,
         _async_repeat_until_cancelled_logger=logger,
-        _async_logger=logger,
-        _async_logger_args=[],
     ))
 
 
