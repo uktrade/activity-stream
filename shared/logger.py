@@ -68,6 +68,10 @@ def logged(logger, message, logger_args):
         status = 'done'
         logger_func = logger.debug
         yield
+    except asyncio.CancelledError:
+        status = 'cancelled'
+        logger_func = logger.debug
+        raise
     except BaseException:
         status = 'failed'
         logger_func = logger.warning
