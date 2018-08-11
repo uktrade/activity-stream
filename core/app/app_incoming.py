@@ -6,7 +6,6 @@ from aiohttp import web
 import aioredis
 
 from shared.logger import (
-    async_logger,
     get_root_logger,
     logged,
 )
@@ -58,12 +57,11 @@ async def run_incoming_application():
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
     redis_client = await aioredis.create_redis(redis_uri)
 
-    runner = await create_incoming_application(
-        logger, port, ip_whitelist, incoming_key_pairs,
-        redis_client, raven_client, session, es_endpoint,
-        _async_logger=logger,
-        _async_logger_args=[],
-    )
+    with logged(logger, 'Creating listening web application', []):
+        runner = await create_incoming_application(
+            logger, port, ip_whitelist, incoming_key_pairs,
+            redis_client, raven_client, session, es_endpoint,
+        )
 
     async def cleanup():
         await cancel_non_current_tasks()
@@ -77,10 +75,9 @@ async def run_incoming_application():
     return cleanup
 
 
-@async_logger('Creating listening web application')
 async def create_incoming_application(
         logger, port, ip_whitelist, incoming_key_pairs,
-        redis_client, raven_client, session, es_endpoint, **_):
+        redis_client, raven_client, session, es_endpoint):
 
     app = web.Application(middlewares=[
         server_logger(logger),

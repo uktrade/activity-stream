@@ -2,10 +2,6 @@ import asyncio
 import contextlib
 import logging
 
-from .utils import (
-    extract_keys,
-)
-
 
 class ContextAdapter(logging.LoggerAdapter):
     def process(self, msg, kwargs):
@@ -20,37 +16,6 @@ def get_root_logger(context):
 def get_child_logger(logger, child_context):
     existing_context = logger.extra['context']
     return ContextAdapter(logger.logger, {'context': existing_context + [child_context]})
-
-
-def async_logger(message):
-
-    def _async_logger(coroutine):
-        async def __async_logger(*args, **kwargs):
-            kwargs_to_pass, (logger, logger_args,) = extract_keys(
-                kwargs,
-                ['_async_logger', '_async_logger_args'],
-            )
-
-            try:
-                logger.debug(message + '...', *logger_args)
-                result = await coroutine(*args, **kwargs_to_pass)
-                status = 'done'
-                logger_func = logger.debug
-                return result
-            except asyncio.CancelledError:
-                status = 'cancelled'
-                logger_func = logger.debug
-                raise
-            except BaseException:
-                status = 'failed'
-                logger_func = logger.warning
-                raise
-            finally:
-                logger_func(message + '... (%s)', *(logger_args + [status]))
-
-        return __async_logger
-
-    return _async_logger
 
 
 @contextlib.contextmanager
