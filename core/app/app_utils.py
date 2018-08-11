@@ -32,12 +32,10 @@ def async_repeat_until_cancelled(coroutine):
             except asyncio.CancelledError:
                 break
             except BaseException:
-                logger.exception('Raised exception in async_repeat_until_cancelled')
+                logger.exception(
+                    'Raised exception in async_repeat_until_cancelled. '
+                    'Waiting %s seconds until looping.', exception_interval)
                 raven_client.captureException()
-                logger.warning(
-                    'Waiting %s seconds until looping in async_repeat_until_cancelled',
-                    exception_interval,
-                )
 
                 try:
                     await asyncio.sleep(exception_interval)
