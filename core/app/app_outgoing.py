@@ -309,17 +309,12 @@ async def create_metrics_application(logger, metrics, metrics_registry, redis_cl
             except ESMetricsUnavailable:
                 pass
 
-        await save_metrics_to_redis(
-            generate_latest(metrics_registry),
-            _async_logger=logger,
-            _async_logger_args=[],
-        )
-
+        await save_metrics_to_redis(logger, generate_latest(metrics_registry))
         await sleep(logger, METRICS_INTERVAL)
 
-    @async_logger('Saving to Redis')
-    async def save_metrics_to_redis(metrics, **_):
-        await redis_client.set('metrics', metrics)
+    async def save_metrics_to_redis(logger, metrics):
+        with logged(logger, 'Saving to Redis', []):
+            await redis_client.set('metrics', metrics)
 
     asyncio.get_event_loop().create_task(poll_metrics(
         _async_repeat_until_cancelled_raven_client=raven_client,
