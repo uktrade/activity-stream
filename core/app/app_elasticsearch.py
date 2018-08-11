@@ -8,7 +8,6 @@ from aiohttp.web import (
 )
 
 from shared.logger import (
-    async_logger,
     async_logger_with_result,
     logged,
 )
@@ -93,106 +92,106 @@ async def get_old_index_names(logger, session, es_endpoint, **_):
     return without_alias, with_alias
 
 
-@async_logger('Atomically flipping {ALIAS} alias to (%s)')
 async def add_remove_aliases_atomically(logger, session, es_endpoint, index_name,
-                                        feed_unique_id, **_):
-    remove_pattern = f'{ALIAS}__feed_id_{feed_unique_id}__*'
-    actions = json.dumps({
-        'actions': [
-            {'remove': {'index': remove_pattern, 'alias': ALIAS}},
-            {'add': {'index': index_name, 'alias': ALIAS}}
-        ]
-    }).encode('utf-8')
+                                        feed_unique_id):
+    with logged(logger, 'Atomically flipping {ALIAS} alias to (%s)', [feed_unique_id]):
+        remove_pattern = f'{ALIAS}__feed_id_{feed_unique_id}__*'
+        actions = json.dumps({
+            'actions': [
+                {'remove': {'index': remove_pattern, 'alias': ALIAS}},
+                {'add': {'index': index_name, 'alias': ALIAS}}
+            ]
+        }).encode('utf-8')
 
-    await es_request_non_200_exception(
-        logger=logger,
-        session=session,
-        endpoint=es_endpoint,
-        method='POST',
-        path=f'/_aliases',
-        query={},
-        headers={'Content-Type': 'application/json'},
-        payload=actions,
-    )
-
-
-@async_logger('Deleting indexes (%s)')
-async def delete_indexes(logger, session, es_endpoint, index_names, **_):
-    for index_name in index_names:
         await es_request_non_200_exception(
             logger=logger,
             session=session,
             endpoint=es_endpoint,
-            method='DELETE',
+            method='POST',
+            path=f'/_aliases',
+            query={},
+            headers={'Content-Type': 'application/json'},
+            payload=actions,
+        )
+
+
+async def delete_indexes(logger, session, es_endpoint, index_names):
+    with logged(logger, 'Deleting indexes (%s)', []):
+        for index_name in index_names:
+            await es_request_non_200_exception(
+                logger=logger,
+                session=session,
+                endpoint=es_endpoint,
+                method='DELETE',
+                path=f'/{index_name}',
+                query={},
+                headers={'Content-Type': 'application/json'},
+                payload=b'',
+            )
+
+
+async def create_index(logger, session, es_endpoint, index_name):
+    with logged(logger, 'Creating index (%s)', [index_name]):
+        index_definition = json.dumps({
+            'settings': {
+                'index': {
+                    'number_of_shards': 4,
+                    'number_of_replicas': 1,
+                    'refresh_interval': -1,
+                }
+            }
+        }).encode('utf-8')
+        await es_request_non_200_exception(
+            logger=logger,
+            session=session,
+            endpoint=es_endpoint,
+            method='PUT',
             path=f'/{index_name}',
+            query={},
+            headers={'Content-Type': 'application/json'},
+            payload=index_definition,
+        )
+
+
+async def refresh_index(logger, session, es_endpoint, index_name):
+    with logged(logger, 'Refreshing index (%s)', [index_name]):
+        await es_request_non_200_exception(
+            logger=logger,
+            session=session,
+            endpoint=es_endpoint,
+            method='POST',
+            path=f'/{index_name}/_refresh',
             query={},
             headers={'Content-Type': 'application/json'},
             payload=b'',
         )
 
 
-@async_logger('Creating index (%s)')
-async def create_index(logger, session, es_endpoint, index_name, **_):
-    index_definition = json.dumps({
-        'settings': {
-            'index': {
-                'number_of_shards': 4,
-                'number_of_replicas': 1,
-                'refresh_interval': -1,
-            }
-        }
-    }).encode('utf-8')
-    await es_request_non_200_exception(
-        logger=logger,
-        session=session,
-        endpoint=es_endpoint,
-        method='PUT',
-        path=f'/{index_name}',
-        query={},
-        headers={'Content-Type': 'application/json'},
-        payload=index_definition,
-    )
-
-
-@async_logger('Refreshing index (%s)')
-async def refresh_index(logger, session, es_endpoint, index_name, **_):
-    await es_request_non_200_exception(
-        logger=logger,
-        session=session,
-        endpoint=es_endpoint,
-        method='POST',
-        path=f'/{index_name}/_refresh',
-        query={},
-        headers={'Content-Type': 'application/json'},
-        payload=b'',
-    )
-
-
-@async_logger('Creating mapping for index (%s)')
-async def create_mapping(logger, session, es_endpoint, index_name, **_):
-    mapping_definition = json.dumps({
-        'properties': {
-            'published_date': {
-                'type': 'date',
+async def create_mapping(logger, session, es_endpoint, index_name):
+    with logged(logger, 'Creating mapping for index (%s)', [index_name]):
+        mapping_definition = json.dumps({
+            'properties': {
+                'published_date': {
+                    'type': 'date',
+                },
+                'type': {
+                    'type': 'keyword',
+                },
+                'object.type': {
+                    'type': 'keyword',
+                },
             },
-            'type': {
-                'type': 'keyword',
-            },
-            'object.type': {
-                'type': 'keyword',
-            },
-        },
-    }).encode('utf-8')
-    await es_request_non_200_exception(
-        logger=logger,
-        session=session,
-        endpoint=es_endpoint,
-        method='PUT',
-        path=f'/{index_name}/_mapping/_doc',
-        query={},
-        headers={'Content-Type': 'application/json'},
-        payload=mapping_definition,
-    )
+        }).encode('utf-8')
+        await es_request_non_200_exception(
+            logger=logger,
+            session=session,
+            endpoint=es_endpoint,
+            method='PUT',
+            path=f'/{index_name}/_mapping/_doc',
+            query={},
+            headers={'Content-Type': 'application/json'},
+            payload=mapping_definition,
+        )
 
 
 async def es_search_new_scroll(_, __, query):
@@ -259,26 +258,26 @@ async def activities(elasticsearch_reponse, to_public_scroll_url):
     }, **next_dict}
 
 
-@async_logger('Pushing (%s) items into Elasticsearch')
 @async_counter
 @async_timer
 async def es_bulk(logger, session, es_endpoint, items, **_):
-    if not items:
-        return
+    with logged(logger, 'Pushing (%s) items into Elasticsearch', [len(items)]):
+        if not items:
+            return
 
-    with logged(logger, 'Converting to Elasticsearch bulk ingest commands', []):
-        es_bulk_contents = ('\n'.join(flatten([
-            [json.dumps(item['action_and_metadata'], sort_keys=True),
-             json.dumps(item['source'], sort_keys=True)]
-            for item in items
-        ])) + '\n').encode('utf-8')
+        with logged(logger, 'Converting to Elasticsearch bulk ingest commands', []):
+            es_bulk_contents = ('\n'.join(flatten([
+                [json.dumps(item['action_and_metadata'], sort_keys=True),
+                 json.dumps(item['source'], sort_keys=True)]
+                for item in items
+            ])) + '\n').encode('utf-8')
 
-    with logged(logger, 'POSTing bulk ingest to Elasticsearch', []):
-        await es_request_non_200_exception(
-            logger=logger, session=session, endpoint=es_endpoint,
-            method='POST', path='/_bulk', query={},
-            headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,
-        )
+        with logged(logger, 'POSTing bulk ingest to Elasticsearch', []):
+            await es_request_non_200_exception(
+                logger=logger, session=session, endpoint=es_endpoint,
+                method='POST', path='/_bulk', query={},
+                headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,
+            )
 
 
 async def es_searchable_total(logger, session, es_endpoint):

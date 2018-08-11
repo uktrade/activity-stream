@@ -170,8 +170,6 @@ async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, e
         indexes_without_alias + indexes_with_alias, all_feed_ids)
     await delete_indexes(
         logger, session, es_endpoint, indexes_to_delete,
-        _async_logger=logger,
-        _async_logger_args=[indexes_to_delete]
     )
 
     await asyncio.gather(*[
@@ -206,26 +204,11 @@ async def ingest_feed(logger, metrics, session, feed, es_endpoint, **_):
         _async_logger_args=[],
     )
     indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
-
-    await delete_indexes(
-        logger, session, es_endpoint, indexes_to_delete,
-        _async_logger=logger,
-        _async_logger_args=[indexes_to_delete],
-    )
+    await delete_indexes(logger, session, es_endpoint, indexes_to_delete)
 
     index_name = get_new_index_name(feed.unique_id)
-
-    await create_index(
-        logger, session, es_endpoint, index_name,
-        _async_logger=logger,
-        _async_logger_args=[index_name],
-    )
-
-    await create_mapping(
-        logger, session, es_endpoint, index_name,
-        _async_logger=logger,
-        _async_logger_args=[index_name],
-    )
+    await create_index(logger, session, es_endpoint, index_name)
+    await create_mapping(logger, session, es_endpoint, index_name)
 
     href = feed.seed
     while href:
@@ -242,16 +225,10 @@ async def ingest_feed(logger, metrics, session, feed, es_endpoint, **_):
             _async_logger_args=[interval],
         )
 
-    await refresh_index(
-        logger, session, es_endpoint, index_name,
-        _async_logger=logger,
-        _async_logger_args=[index_name]
-    )
+    await refresh_index(logger, session, es_endpoint, index_name)
 
     await add_remove_aliases_atomically(
         logger, session, es_endpoint, index_name, feed.unique_id,
-        _async_logger=logger,
-        _async_logger_args=[index_name]
     )
 
 
@@ -284,8 +261,6 @@ async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_na
         _async_counter=metrics['ingest_activities_nonunique_total'],
         _async_counter_labels=[feed.unique_id],
         _async_counter_increment_by=len(es_bulk_items),
-        _async_logger=logger,
-        _async_logger_args=[len(es_bulk_items)]
     )
 
     next_href = feed.next_href(feed_parsed)
