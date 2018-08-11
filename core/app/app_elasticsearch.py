@@ -117,7 +117,7 @@ async def add_remove_aliases_atomically(logger, session, es_endpoint, index_name
 
 
 async def delete_indexes(logger, session, es_endpoint, index_names):
-    with logged(logger, 'Deleting indexes (%s)', []):
+    with logged(logger, 'Deleting indexes (%s)', [index_names]):
         for index_name in index_names:
             await es_request_non_200_exception(
                 logger=logger,

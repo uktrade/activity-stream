@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import json
 import os
 
@@ -127,33 +128,31 @@ async def acquire_and_keep_lock(parent_logger, redis_client, raven_client):
             logger.debug('Acquiring... (failed)')
             await sleep(logger, aquire_interval)
 
-    @async_repeat_until_cancelled
-    async def extend_forever(**_):
+    async def extend_forever():
         await sleep(logger, extend_interval)
         response = await redis_client.execute('EXPIRE', key, ttl)
         if response != 1:
             raise Exception('Lock has been lost')
 
     await acquire()
-    asyncio.get_event_loop().create_task(extend_forever(
-        _async_repeat_until_cancelled_raven_client=raven_client,
-        _async_repeat_until_cancelled_exception_interval=extend_interval,
-        _async_repeat_until_cancelled_logger=logger,
+    asyncio.get_event_loop().create_task(async_repeat_until_cancelled(
+        logger, raven_client, extend_interval,
+        extend_forever,
     ))
 
 
 async def create_outgoing_application(logger, metrics, raven_client, session,
                                       feed_endpoints, es_endpoint):
-    asyncio.get_event_loop().create_task(ingest_feeds(
-        logger, metrics, raven_client, session, feed_endpoints, es_endpoint,
-        _async_repeat_until_cancelled_raven_client=raven_client,
-        _async_repeat_until_cancelled_exception_interval=EXCEPTION_INTERVAL,
-        _async_repeat_until_cancelled_logger=logger,
-    ))
+    ingester = functools.partial(
+        ingest_feeds, logger, metrics, raven_client,
+        session, feed_endpoints, es_endpoint,
+    )
+    asyncio.get_event_loop().create_task(
+        async_repeat_until_cancelled(logger, raven_client, EXCEPTION_INTERVAL, ingester)
+    )
 
 
-@async_repeat_until_cancelled
-async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, es_endpoint, **_):
+async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, es_endpoint):
     all_feed_ids = feed_unique_ids(feed_endpoints)
     indexes_without_alias, indexes_with_alias = await get_old_index_names(
         logger, session, es_endpoint,
@@ -165,18 +164,20 @@ async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, e
         logger, session, es_endpoint, indexes_to_delete,
     )
 
-    await asyncio.gather(*[
-        ingest_feed(
-            feed_logger, metrics, session, feed_endpoint, es_endpoint,
-            _async_repeat_until_cancelled_raven_client=raven_client,
-            _async_repeat_until_cancelled_exception_interval=EXCEPTION_INTERVAL,
-            _async_repeat_until_cancelled_logger=logger,
+    def feed_ingester(feed_endpoint):
+        return functools.partial(
+            ingest_feed,
+            get_child_logger(logger, feed_endpoint.unique_id),
+            metrics, session, feed_endpoint, es_endpoint,
             _async_timer=metrics['ingest_feed_duration_seconds'],
             _async_timer_labels=[feed_endpoint.unique_id],
             _async_inprogress=metrics['ingest_inprogress_ingests_total'],
         )
+    await asyncio.gather(*[
+        async_repeat_until_cancelled(
+            logger, raven_client, EXCEPTION_INTERVAL, feed_ingester(feed_endpoint),
+        )
         for feed_endpoint in feed_endpoints
-        for feed_logger in [get_child_logger(logger, feed_endpoint.unique_id)]
     ])
 
 
@@ -184,7 +185,6 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-@async_repeat_until_cancelled
 @async_inprogress
 @async_timer
 async def ingest_feed(logger, metrics, session, feed, es_endpoint, **_):
@@ -277,8 +277,7 @@ async def create_metrics_application(parent_logger, metrics, metrics_registry, r
                                      raven_client, session, feed_endpoints, es_endpoint):
     logger = get_child_logger(parent_logger, 'metrics')
 
-    @async_repeat_until_cancelled
-    async def poll_metrics(**_):
+    async def poll_metrics():
         with logged(logger, 'Polling', []):
             searchable = await es_searchable_total(logger, session, es_endpoint)
             metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
@@ -313,11 +312,9 @@ async def create_metrics_application(parent_logger, metrics, metrics_registry, r
         with logged(logger, 'Saving to Redis', []):
             await redis_client.set('metrics', metrics)
 
-    asyncio.get_event_loop().create_task(poll_metrics(
-        _async_repeat_until_cancelled_raven_client=raven_client,
-        _async_repeat_until_cancelled_exception_interval=METRICS_INTERVAL,
-        _async_repeat_until_cancelled_logger=logger,
-    ))
+    asyncio.get_event_loop().create_task(
+        async_repeat_until_cancelled(logger, raven_client, METRICS_INTERVAL, poll_metrics)
+    )
 
 
 async def set_metric_if_can(metric, labels, get_value_coroutine):

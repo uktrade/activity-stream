@@ -7,10 +7,6 @@ import sys
 import raven
 from raven_aiohttp import QueuedAioHttpTransport
 
-from shared.utils import (
-    extract_keys,
-)
-
 
 def flatten(list_to_flatten):
     return [
@@ -20,33 +16,22 @@ def flatten(list_to_flatten):
     ]
 
 
-def async_repeat_until_cancelled(coroutine):
+async def async_repeat_until_cancelled(logger, raven_client, exception_interval, coroutine):
+    while True:
+        try:
+            await coroutine()
+        except asyncio.CancelledError:
+            break
+        except BaseException:
+            logger.exception(
+                'Raised exception in async_repeat_until_cancelled. '
+                'Waiting %s seconds until looping.', exception_interval)
+            raven_client.captureException()
 
-    async def _async_repeat_until_cancelled(*args, **kwargs):
-        kwargs_to_pass, (raven_client, exception_interval, logger) = \
-            extract_keys(kwargs, [
-                '_async_repeat_until_cancelled_raven_client',
-                '_async_repeat_until_cancelled_exception_interval',
-                '_async_repeat_until_cancelled_logger',
-            ])
-
-        while True:
             try:
-                await coroutine(*args, **kwargs_to_pass)
+                await asyncio.sleep(exception_interval)
             except asyncio.CancelledError:
                 break
-            except BaseException:
-                logger.exception(
-                    'Raised exception in async_repeat_until_cancelled. '
-                    'Waiting %s seconds until looping.', exception_interval)
-                raven_client.captureException()
-
-                try:
-                    await asyncio.sleep(exception_interval)
-                except asyncio.CancelledError:
-                    break
-
-    return _async_repeat_until_cancelled
 
 
 def sub_dict_lower(super_dict, keys):
