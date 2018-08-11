@@ -11,9 +11,11 @@ from shared.logger import (
     logged,
 )
 from shared.utils import (
-    authenticate_by_ip,
     get_common_config,
     normalise_environment,
+)
+from shared.web import (
+    authenticate_by_ip,
 )
 
 from .app_server import (

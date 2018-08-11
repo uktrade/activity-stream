@@ -15,10 +15,12 @@ from aiohttp_session.redis_storage import RedisStorage
 import aioredis
 
 from shared.utils import (
-    authenticate_by_ip,
     aws_auth_headers,
     get_common_config,
     normalise_environment,
+)
+from shared.web import (
+    authenticate_by_ip,
 )
 
 ACCESS_LOG_FORMAT = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
