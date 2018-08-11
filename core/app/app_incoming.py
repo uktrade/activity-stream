@@ -13,6 +13,7 @@ from shared.utils import (
 from .app_logger import (
     async_logger,
     get_logger_with_context,
+    logged,
 )
 from .app_server import (
     INCORRECT,
@@ -38,19 +39,16 @@ PAGINATION_EXPIRE = 10
 async def run_incoming_application():
     logger = get_logger_with_context('incoming')
 
-    logger.debug('Examining environment...')
-    env = normalise_environment(os.environ)
-
-    es_endpoint, redis_uri, sentry = get_common_config(env)
-    port = env['PORT']
-    incoming_key_pairs = [{
-        'key_id': key_pair['KEY_ID'],
-        'secret_key': key_pair['SECRET_KEY'],
-        'permissions': key_pair['PERMISSIONS'],
-    } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
-    ip_whitelist = env['INCOMING_IP_WHITELIST']
-
-    logger.debug('Examining environment... (done)')
+    with logged(logger, 'Examining environment', []):
+        env = normalise_environment(os.environ)
+        es_endpoint, redis_uri, sentry = get_common_config(env)
+        port = env['PORT']
+        incoming_key_pairs = [{
+            'key_id': key_pair['KEY_ID'],
+            'secret_key': key_pair['SECRET_KEY'],
+            'permissions': key_pair['PERMISSIONS'],
+        } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
+        ip_whitelist = env['INCOMING_IP_WHITELIST']
 
     raven_client = get_raven_client(sentry)
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
