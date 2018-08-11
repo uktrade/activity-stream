@@ -9,6 +9,10 @@ from .app_elasticsearch import (
     es_search_existing_scroll,
     es_search_new_scroll,
 )
+from .app_logger import (
+    get_child_logger,
+    logged,
+)
 from .app_utils import (
     random_url_safe,
 )
@@ -23,11 +27,23 @@ NOT_AUTHORIZED = 'You are not authorized to perform this action.'
 UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
-def authenticator(logger, incoming_key_pairs, redis_client, nonce_expire):
+def server_logger(logger):
+
+    @web.middleware
+    async def _server_logger(request, handler):
+        child_logger = get_child_logger(logger, random_url_safe(8))
+        request['logger'] = child_logger
+        with logged(child_logger, 'Processing request', []):
+            return await handler(request)
+
+    return _server_logger
+
+
+def authenticator(incoming_key_pairs, redis_client, nonce_expire):
     @web.middleware
     async def authenticate(request, handler):
         if 'X-Forwarded-Proto' not in request.headers:
-            logger.warning(
+            request['logger'].warning(
                 'Failed authentication: no X-Forwarded-Proto header passed'
             )
             raise web.HTTPUnauthorized(text=MISSING_X_FORWARDED_PROTO)
@@ -42,7 +58,7 @@ def authenticator(logger, incoming_key_pairs, redis_client, nonce_expire):
             receiver = await _authenticate_or_raise(incoming_key_pairs, redis_client,
                                                     nonce_expire, request)
         except HawkFail as exception:
-            logger.warning('Failed authentication %s', exception)
+            request['logger'].warning('Failed authentication %s', exception)
             raise web.HTTPUnauthorized(text=INCORRECT)
 
         request['permissions'] = receiver.resource.credentials['permissions']
@@ -125,7 +141,7 @@ def raven_reporter(raven_client):
     return _raven_reporter
 
 
-def convert_errors_to_json(logger):
+def convert_errors_to_json():
     @web.middleware
     async def _convert_errors_to_json(request, handler):
         try:
@@ -133,7 +149,7 @@ def convert_errors_to_json(logger):
         except web.HTTPException as exception:
             response = json_response({'details': exception.text}, status=exception.status_code)
         except BaseException as exception:
-            logger.exception('About to return 500')
+            request['logger'].exception('About to return 500')
             response = json_response({'details': UNKNOWN_ERROR}, status=500)
         return response
 

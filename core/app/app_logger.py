@@ -13,12 +13,17 @@ from .app_utils import (
 
 class ContextAdapter(logging.LoggerAdapter):
     def process(self, msg, kwargs):
-        return '[%s] %s' % (self.extra['context'], msg), kwargs
+        return '[%s] %s' % (','.join(self.extra['context']), msg), kwargs
 
 
 def get_logger_with_context(context):
     logger = logging.getLogger('activity-stream')
-    return ContextAdapter(logger, {'context': context})
+    return ContextAdapter(logger, {'context': [context]})
+
+
+def get_child_logger(logger, child_context):
+    existing_context = logger.extra['context']
+    return ContextAdapter(logger.logger, {'context': existing_context + [child_context]})
 
 
 class AccessLogger(AbstractAccessLogger):
