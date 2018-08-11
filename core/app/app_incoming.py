@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import os
 
 import aiohttp
@@ -57,7 +56,7 @@ async def run_incoming_application():
     redis_client = await aioredis.create_redis(redis_uri)
 
     runner = await create_incoming_application(
-        port, ip_whitelist, incoming_key_pairs,
+        logger, port, ip_whitelist, incoming_key_pairs,
         redis_client, raven_client, session, es_endpoint,
     )
 
@@ -74,11 +73,9 @@ async def run_incoming_application():
 
 
 async def create_incoming_application(
-        port, ip_whitelist, incoming_key_pairs,
+        logger, port, ip_whitelist, incoming_key_pairs,
         redis_client, raven_client, session, es_endpoint):
-    app_logger = logging.getLogger('activity-stream')
-
-    app_logger.debug('Creating listening web application...')
+    logger.debug('Creating listening web application...')
 
     app = web.Application(middlewares=[
         convert_errors_to_json(),
@@ -86,7 +83,7 @@ async def create_incoming_application(
     ])
 
     private_app = web.Application(middlewares=[
-        authenticate_by_ip(app_logger, INCORRECT, ip_whitelist),
+        authenticate_by_ip(logger, INCORRECT, ip_whitelist),
         authenticator(incoming_key_pairs, redis_client, NONCE_EXPIRE),
         authorizer(),
     ])
@@ -109,7 +106,7 @@ async def create_incoming_application(
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    app_logger.debug('Creating listening web application: done')
+    logger.debug('Creating listening web application... (done)')
 
     return runner
 
