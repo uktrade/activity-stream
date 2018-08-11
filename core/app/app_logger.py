@@ -25,7 +25,7 @@ class AccessLogger(AbstractAccessLogger):
     # pylint: disable=too-few-public-methods
 
     def log(self, request, response, time):
-        self.logger.debug('%s "%s %s HTTP/%s.%s" %s %s "%s" %s', *(
+        self.logger.debug('%s "%s %s HTTP/%s.%s" "%s" "%s" %s %s', *(
             (
                 request.remote,
                 request.method,
@@ -33,10 +33,10 @@ class AccessLogger(AbstractAccessLogger):
             ) +
             request.version +
             (
-                response.status,
-                response.body_length,
                 request.headers.get('User-Agent', '-'),
                 request.headers.get('X-Forwarded-For', '-'),
+                response.status,
+                response.body_length,
             ),
         ))
 
