@@ -13,6 +13,7 @@ from shared.utils import (
 from .app_logger import (
     async_logger,
     async_logger_with_result,
+    logged,
 )
 from .app_metrics import (
     async_counter,
@@ -256,21 +257,19 @@ async def es_bulk(logger, session, es_endpoint, items, **_):
     if not items:
         return
 
-    logger.debug('Converting feed to ES bulk ingest commands...')
-    es_bulk_contents = ('\n'.join(flatten([
-        [json.dumps(item['action_and_metadata'], sort_keys=True),
-         json.dumps(item['source'], sort_keys=True)]
-        for item in items
-    ])) + '\n').encode('utf-8')
-    logger.debug('Converting to ES bulk ingest commands: done')
+    with logged(logger, 'Converting to Elasticsearch bulk ingest commands', []):
+        es_bulk_contents = ('\n'.join(flatten([
+            [json.dumps(item['action_and_metadata'], sort_keys=True),
+             json.dumps(item['source'], sort_keys=True)]
+            for item in items
+        ])) + '\n').encode('utf-8')
 
-    logger.debug('POSTing bulk import to ES...')
-    await es_request_non_200_exception(
-        session=session, endpoint=es_endpoint,
-        method='POST', path='/_bulk', query={},
-        headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,
-    )
-    logger.debug('Pushing to ES: done')
+    with logged(logger, 'POSTing bulk ingest to Elasticsearch', []):
+        await es_request_non_200_exception(
+            session=session, endpoint=es_endpoint,
+            method='POST', path='/_bulk', query={},
+            headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,
+        )
 
 
 async def es_searchable_total(session, es_endpoint):
