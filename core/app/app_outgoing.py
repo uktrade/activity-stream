@@ -56,7 +56,7 @@ METRICS_INTERVAL = 1
 
 
 async def run_outgoing_application():
-    logger = get_logger_with_context('outgoing-startup')
+    logger = get_logger_with_context('outgoing')
 
     logger.debug('Examining environment...')
     env = normalise_environment(os.environ)
