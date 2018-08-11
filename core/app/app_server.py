@@ -1,5 +1,4 @@
 import hmac
-import logging
 import uuid
 
 from aiohttp import web
@@ -22,13 +21,11 @@ NOT_AUTHORIZED = 'You are not authorized to perform this action.'
 UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
-def authenticator(incoming_key_pairs, redis_client, nonce_expire):
-    app_logger = logging.getLogger('activity-stream')
-
+def authenticator(logger, incoming_key_pairs, redis_client, nonce_expire):
     @web.middleware
     async def authenticate(request, handler):
         if 'X-Forwarded-Proto' not in request.headers:
-            app_logger.warning(
+            logger.warning(
                 'Failed authentication: no X-Forwarded-Proto header passed'
             )
             raise web.HTTPUnauthorized(text=MISSING_X_FORWARDED_PROTO)
@@ -43,7 +40,7 @@ def authenticator(incoming_key_pairs, redis_client, nonce_expire):
             receiver = await _authenticate_or_raise(incoming_key_pairs, redis_client,
                                                     nonce_expire, request)
         except HawkFail as exception:
-            app_logger.warning('Failed authentication %s', exception)
+            logger.warning('Failed authentication %s', exception)
             raise web.HTTPUnauthorized(text=INCORRECT)
 
         request['permissions'] = receiver.resource.credentials['permissions']
@@ -126,9 +123,7 @@ def raven_reporter(raven_client):
     return _raven_reporter
 
 
-def convert_errors_to_json():
-    app_logger = logging.getLogger('activity-stream')
-
+def convert_errors_to_json(logger):
     @web.middleware
     async def _convert_errors_to_json(request, handler):
         try:
@@ -136,7 +131,7 @@ def convert_errors_to_json():
         except web.HTTPException as exception:
             response = json_response({'details': exception.text}, status=exception.status_code)
         except BaseException as exception:
-            app_logger.exception('About to return 500')
+            logger.exception('About to return 500')
             response = json_response({'details': UNKNOWN_ERROR}, status=500)
         return response
 

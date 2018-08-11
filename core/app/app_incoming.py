@@ -79,13 +79,13 @@ async def create_incoming_application(
         redis_client, raven_client, session, es_endpoint, **_):
 
     app = web.Application(middlewares=[
-        convert_errors_to_json(),
+        convert_errors_to_json(logger),
         raven_reporter(raven_client),
     ])
 
     private_app = web.Application(middlewares=[
         authenticate_by_ip(logger, INCORRECT, ip_whitelist),
-        authenticator(incoming_key_pairs, redis_client, NONCE_EXPIRE),
+        authenticator(logger, incoming_key_pairs, redis_client, NONCE_EXPIRE),
         authorizer(),
     ])
     private_app.add_routes([
