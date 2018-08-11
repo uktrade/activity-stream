@@ -15,7 +15,7 @@ def server_logger(logger):
     async def _server_logger(request, handler):
         child_logger = get_child_logger(logger, random_url_safe(8))
         request['logger'] = child_logger
-        child_logger.debug('Receiving request %s "%s %s HTTP/%s.%s" "%s" "%s"', *(
+        child_logger.debug('Receiving request (%s) (%s %s HTTP/%s.%s) (%s) (%s)', *(
             (
                 request.remote,
                 request.method,
@@ -32,7 +32,7 @@ def server_logger(logger):
             response = await handler(request)
 
         child_logger.debug(
-            'Sending Response %s %s',
+            'Sending Response (%s) (%s)',
             response.status, response.content_length,
         )
 
