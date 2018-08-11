@@ -206,8 +206,6 @@ async def ingest_feed(logger, metrics, session, feed, es_endpoint, **_):
                 logger, metrics, session, feed, es_endpoint, index_name, href,
                 _async_timer=metrics['ingest_page_duration_seconds'],
                 _async_timer_labels=[feed.unique_id, 'total'],
-                _async_logger=logger,
-                _async_logger_args=[],
             )
             await sleep(logger, interval)
 
@@ -223,39 +221,39 @@ async def sleep(logger, interval):
         await asyncio.sleep(interval)
 
 
-@async_logger('Polling/pushing page')
 @async_timer
 async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_name, href, **_):
-    feed_contents = await get_feed_contents(
-        session, href, feed.auth_headers(href),
-        _async_timer=metrics['ingest_page_duration_seconds'],
-        _async_timer_labels=[feed.unique_id, 'pull'],
-        _async_logger=logger,
-        _async_logger_args=[href],
-    )
+    with logged(logger, 'Polling/pushing page', []):
+        feed_contents = await get_feed_contents(
+            session, href, feed.auth_headers(href),
+            _async_timer=metrics['ingest_page_duration_seconds'],
+            _async_timer_labels=[feed.unique_id, 'pull'],
+            _async_logger=logger,
+            _async_logger_args=[href],
+        )
 
-    with logged(logger, 'Parsing JSON', []):
-        feed_parsed = json.loads(feed_contents)
+        with logged(logger, 'Parsing JSON', []):
+            feed_parsed = json.loads(feed_contents)
 
-    with logged(logger, 'Converting to bulk Elasticsearch items', []):
-        es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_name)
+        with logged(logger, 'Converting to bulk Elasticsearch items', []):
+            es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_name)
 
-    await es_bulk(
-        logger, session, es_endpoint, es_bulk_items,
-        _async_timer=metrics['ingest_page_duration_seconds'],
-        _async_timer_labels=[feed.unique_id, 'push'],
-        _async_counter=metrics['ingest_activities_nonunique_total'],
-        _async_counter_labels=[feed.unique_id],
-        _async_counter_increment_by=len(es_bulk_items),
-    )
+        await es_bulk(
+            logger, session, es_endpoint, es_bulk_items,
+            _async_timer=metrics['ingest_page_duration_seconds'],
+            _async_timer_labels=[feed.unique_id, 'push'],
+            _async_counter=metrics['ingest_activities_nonunique_total'],
+            _async_counter_labels=[feed.unique_id],
+            _async_counter_increment_by=len(es_bulk_items),
+        )
 
-    next_href = feed.next_href(feed_parsed)
+        next_href = feed.next_href(feed_parsed)
 
-    interval = \
-        feed.polling_page_interval if next_href else \
-        feed.polling_seed_interval
+        interval = \
+            feed.polling_page_interval if next_href else \
+            feed.polling_seed_interval
 
-    return next_href, interval
+        return next_href, interval
 
 
 @async_logger('Polling feed (%s)')
