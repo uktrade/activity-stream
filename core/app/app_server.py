@@ -4,6 +4,9 @@ from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
 
+from shared.logger import (
+    get_child_logger,
+)
 from shared.utils import (
     random_url_safe,
 )
@@ -46,6 +49,10 @@ def authenticator(incoming_key_pairs, redis_client, nonce_expire):
             request['logger'].warning('Failed authentication %s', exception)
             raise web.HTTPUnauthorized(text=INCORRECT)
 
+        request['logger'] = get_child_logger(
+            request['logger'],
+            receiver.resource.credentials['id'],
+        )
         request['permissions'] = receiver.resource.credentials['permissions']
         return await handler(request)
 
