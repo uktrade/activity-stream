@@ -14,10 +14,6 @@ from shared.utils import (
     aws_auth_headers,
 )
 
-from .app_metrics import (
-    async_counter,
-    async_timer,
-)
 from .app_utils import (
     flatten,
 )
@@ -259,9 +255,7 @@ async def activities(elasticsearch_reponse, to_public_scroll_url):
     }, **next_dict}
 
 
-@async_counter
-@async_timer
-async def es_bulk(logger, session, es_endpoint, items, **_):
+async def es_bulk(logger, session, es_endpoint, items):
     with logged(logger, 'Pushing (%s) items into Elasticsearch', [len(items)]):
         if not items:
             return

@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import time
 
 from prometheus_client import (
@@ -8,10 +9,6 @@ from prometheus_client import (
     Summary,
     PlatformCollector,
     ProcessCollector,
-)
-
-from shared.utils import (
-    extract_keys,
 )
 
 
@@ -48,65 +45,39 @@ def get_metrics(registry):
     }
 
 
-def async_inprogress(coroutine):
-
-    async def _async_inprogress(*args, **kwargs):
-        kwargs_to_pass, (metric, ) = extract_keys(
-            kwargs,
-            ['_async_inprogress'],
-        )
-
-        try:
-            metric.inc()
-            return await coroutine(*args, **kwargs_to_pass)
-        finally:
-            metric.dec()
-
-    return _async_inprogress
+@contextlib.contextmanager
+def metric_inprogress(metric):
+    try:
+        metric.inc()
+        yield
+    finally:
+        metric.dec()
 
 
-def async_timer(coroutine):
-
-    async def _async_timer(*args, **kwargs):
-        kwargs_to_pass, (metric, labels) = extract_keys(
-            kwargs,
-            ['_async_timer', '_async_timer_labels'],
-        )
-
-        start_counter = time.perf_counter()
-        try:
-            response = await coroutine(*args, **kwargs_to_pass)
-            status = 'success'
-            return response
-        except asyncio.CancelledError:
-            status = 'cancelled'
-            raise
-        except BaseException:
-            status = 'failure'
-            raise
-        finally:
-            end_counter = time.perf_counter()
-            metric.labels(*(labels + [status])).observe(end_counter - start_counter)
-
-    return _async_timer
+@contextlib.contextmanager
+def metric_timer(metric, labels):
+    start_counter = time.perf_counter()
+    try:
+        yield
+        status = 'success'
+    except asyncio.CancelledError:
+        status = 'cancelled'
+        raise
+    except BaseException:
+        status = 'failure'
+        raise
+    finally:
+        end_counter = time.perf_counter()
+        metric.labels(*(labels + [status])).observe(end_counter - start_counter)
 
 
-def async_counter(coroutine):
-
-    async def _async_counter(*args, **kwargs):
-        kwargs_to_pass, (metric, labels, increment_by) = extract_keys(
-            kwargs,
-            ['_async_counter', '_async_counter_labels', '_async_counter_increment_by'],
-        )
-
-        try:
-            response = await coroutine(*args, **kwargs_to_pass)
-            increment_by_value = increment_by
-            return response
-        except BaseException:
-            increment_by_value = 0
-            raise
-        finally:
-            metric.labels(*labels).inc(increment_by_value)
-
-    return _async_counter
+@contextlib.contextmanager
+def metric_counter(metric, labels, increment_by):
+    try:
+        yield
+        increment_by_value = increment_by
+    except BaseException:
+        increment_by_value = 0
+        raise
+    finally:
+        metric.labels(*labels).inc(increment_by_value)

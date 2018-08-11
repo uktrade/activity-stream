@@ -42,8 +42,9 @@ from .app_feeds import (
     ZendeskFeed,
 )
 from .app_metrics import (
-    async_inprogress,
-    async_timer,
+    metric_counter,
+    metric_inprogress,
+    metric_timer,
     get_metrics,
 )
 from .app_utils import (
@@ -167,12 +168,7 @@ async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, e
         feed_logger = get_child_logger(logger, feed_endpoint.unique_id)
 
         async def _feed_ingester():
-            await ingest_feed(
-                feed_logger, metrics, session, feed_endpoint, es_endpoint,
-                _async_timer=metrics['ingest_feed_duration_seconds'],
-                _async_timer_labels=[feed_endpoint.unique_id],
-                _async_inprogress=metrics['ingest_inprogress_ingests_total']
-            )
+            await ingest_feed(feed_logger, metrics, session, feed_endpoint, es_endpoint)
         return _feed_ingester
 
     await asyncio.gather(*[
@@ -187,10 +183,12 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-@async_inprogress
-@async_timer
-async def ingest_feed(logger, metrics, session, feed, es_endpoint, **_):
-    with logged(logger, 'Full ingest', []):
+async def ingest_feed(logger, metrics, session, feed, es_endpoint):
+    with \
+            logged(logger, 'Full ingest', []), \
+            metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id]), \
+            metric_inprogress(metrics['ingest_inprogress_ingests_total']):
+
         indexes_without_alias, _ = await get_old_index_names(
             logger, session, es_endpoint,
         )
@@ -204,9 +202,7 @@ async def ingest_feed(logger, metrics, session, feed, es_endpoint, **_):
         href = feed.seed
         while href:
             href, interval = await ingest_feed_page(
-                logger, metrics, session, feed, es_endpoint, index_name, href,
-                _async_timer=metrics['ingest_page_duration_seconds'],
-                _async_timer_labels=[feed.unique_id, 'total'],
+                logger, metrics, session, feed, es_endpoint, index_name, href
             )
             await sleep(logger, interval)
 
@@ -222,15 +218,15 @@ async def sleep(logger, interval):
         await asyncio.sleep(interval)
 
 
-@async_timer
 async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_name, href, **_):
-    with logged(logger, 'Polling/pushing page', []):
-        with logged(logger, 'Polling page (%s)', [href]):
-            feed_contents = await get_feed_contents(
-                session, href, feed.auth_headers(href),
-                _async_timer=metrics['ingest_page_duration_seconds'],
-                _async_timer_labels=[feed.unique_id, 'pull'],
-            )
+    with \
+            logged(logger, 'Polling/pushing page', []), \
+            metric_timer(metrics['ingest_page_duration_seconds'], [feed.unique_id, 'total']):
+
+        with \
+                logged(logger, 'Polling page (%s)', [href]), \
+                metric_timer(metrics['ingest_page_duration_seconds'], [feed.unique_id, 'pull']):
+            feed_contents = await get_feed_contents(session, href, feed.auth_headers(href))
 
         with logged(logger, 'Parsing JSON', []):
             feed_parsed = json.loads(feed_contents)
@@ -238,14 +234,11 @@ async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_na
         with logged(logger, 'Converting to bulk Elasticsearch items', []):
             es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_name)
 
-        await es_bulk(
-            logger, session, es_endpoint, es_bulk_items,
-            _async_timer=metrics['ingest_page_duration_seconds'],
-            _async_timer_labels=[feed.unique_id, 'push'],
-            _async_counter=metrics['ingest_activities_nonunique_total'],
-            _async_counter_labels=[feed.unique_id],
-            _async_counter_increment_by=len(es_bulk_items),
-        )
+        with \
+                metric_timer(metrics['ingest_page_duration_seconds'], [feed.unique_id, 'push']), \
+                metric_counter(metrics['ingest_activities_nonunique_total'], [feed.unique_id],
+                               len(es_bulk_items)):
+            await es_bulk(logger, session, es_endpoint, es_bulk_items)
 
         next_href = feed.next_href(feed_parsed)
 
@@ -256,15 +249,12 @@ async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_na
         return next_href, interval
 
 
-@async_timer
-async def get_feed_contents(session, href, headers, **_):
+async def get_feed_contents(session, href, headers):
     result = await session.get(href, headers=headers)
     if result.status != 200:
         raise Exception(await result.text())
 
-    contents = await result.read()
-
-    return contents
+    return await result.read()
 
 
 def parse_feed_config(feed_config):
