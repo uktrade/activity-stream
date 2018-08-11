@@ -59,9 +59,15 @@ async def run_application():
             'es', es_endpoint, request.method, request.path,
             dict(request.query), source_headers, request_body,
         )
-        response = await client_session.request(request.method, str(url), data=request_body,
-                                                headers={**source_headers, **auth_headers})
-        response_body = await response.read()
+
+        with logged(
+            request['logger'], 'Elasticsearch request by (%s) to (%s) (%s)',
+            [es_endpoint['access_key_id'], request.method, str(url)],
+        ):
+            response = await client_session.request(request.method, str(url), data=request_body,
+                                                    headers={**source_headers, **auth_headers})
+            response_body = await response.read()
+
         return web.Response(status=response.status, body=response_body, headers=response.headers)
 
     redis_pool = await aioredis.create_pool(redis_uri)
