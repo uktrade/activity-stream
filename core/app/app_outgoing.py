@@ -175,8 +175,6 @@ async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, e
             _async_timer=metrics['ingest_feed_duration_seconds'],
             _async_timer_labels=[feed_endpoint.unique_id],
             _async_inprogress=metrics['ingest_inprogress_ingests_total'],
-            _async_logger=feed_logger,
-            _async_logger_args=[],
         )
         for feed_endpoint in feed_endpoints
         for feed_logger in [get_child_logger(logger, feed_endpoint.unique_id)]
@@ -188,36 +186,36 @@ def feed_unique_ids(feed_endpoints):
 
 
 @async_repeat_until_cancelled
-@async_logger('Full ingest')
 @async_inprogress
 @async_timer
 async def ingest_feed(logger, metrics, session, feed, es_endpoint, **_):
-    indexes_without_alias, _ = await get_old_index_names(
-        logger, session, es_endpoint,
-    )
-    indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
-    await delete_indexes(logger, session, es_endpoint, indexes_to_delete)
-
-    index_name = get_new_index_name(feed.unique_id)
-    await create_index(logger, session, es_endpoint, index_name)
-    await create_mapping(logger, session, es_endpoint, index_name)
-
-    href = feed.seed
-    while href:
-        href, interval = await ingest_feed_page(
-            logger, metrics, session, feed, es_endpoint, index_name, href,
-            _async_timer=metrics['ingest_page_duration_seconds'],
-            _async_timer_labels=[feed.unique_id, 'total'],
-            _async_logger=logger,
-            _async_logger_args=[],
+    with logged(logger, 'Full ingest', []):
+        indexes_without_alias, _ = await get_old_index_names(
+            logger, session, es_endpoint,
         )
-        await sleep(logger, interval)
+        indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
+        await delete_indexes(logger, session, es_endpoint, indexes_to_delete)
 
-    await refresh_index(logger, session, es_endpoint, index_name)
+        index_name = get_new_index_name(feed.unique_id)
+        await create_index(logger, session, es_endpoint, index_name)
+        await create_mapping(logger, session, es_endpoint, index_name)
 
-    await add_remove_aliases_atomically(
-        logger, session, es_endpoint, index_name, feed.unique_id,
-    )
+        href = feed.seed
+        while href:
+            href, interval = await ingest_feed_page(
+                logger, metrics, session, feed, es_endpoint, index_name, href,
+                _async_timer=metrics['ingest_page_duration_seconds'],
+                _async_timer_labels=[feed.unique_id, 'total'],
+                _async_logger=logger,
+                _async_logger_args=[],
+            )
+            await sleep(logger, interval)
+
+        await refresh_index(logger, session, es_endpoint, index_name)
+
+        await add_remove_aliases_atomically(
+            logger, session, es_endpoint, index_name, feed.unique_id,
+        )
 
 
 async def sleep(logger, interval):
