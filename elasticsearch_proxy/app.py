@@ -14,6 +14,10 @@ from aiohttp_session import (
 from aiohttp_session.redis_storage import RedisStorage
 import aioredis
 
+from shared.logger import (
+    get_logger_with_context,
+    logged,
+)
 from shared.utils import (
     aws_auth_headers,
     get_common_config,
@@ -23,23 +27,20 @@ from shared.web import (
     authenticate_by_ip,
 )
 
-ACCESS_LOG_FORMAT = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 INCORRECT = 'Incorrect authentication credentials.'
-LOGGER_NAME = 'activity-stream-elasticsearch-proxy'
 
 
 async def run_application():
-    app_logger = logging.getLogger(LOGGER_NAME)
+    logger = get_logger_with_context('elasticsearch-proxy')
 
-    app_logger.debug('Examining environment...')
-    env = normalise_environment(os.environ)
-    port = env['PORT']
-    ip_whitelist = env['INCOMING_IP_WHITELIST']
-    staff_sso_client_base = env['STAFF_SSO_BASE']
-    staff_sso_client_id = env['STAFF_SSO_CLIENT_ID']
-    staff_sso_client_secret = env['STAFF_SSO_CLIENT_SECRET']
-    es_endpoint, redis_uri, _ = get_common_config(env)
-    app_logger.debug('Examining environment: done')
+    with logged(logger, 'Examining environment', []):
+        env = normalise_environment(os.environ)
+        port = env['PORT']
+        ip_whitelist = env['INCOMING_IP_WHITELIST']
+        staff_sso_client_base = env['STAFF_SSO_BASE']
+        staff_sso_client_id = env['STAFF_SSO_CLIENT_ID']
+        staff_sso_client_secret = env['STAFF_SSO_CLIENT_SECRET']
+        es_endpoint, redis_uri, _ = get_common_config(env)
 
     client_session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
 
@@ -65,27 +66,32 @@ async def run_application():
     redis_pool = await aioredis.create_pool(redis_uri)
     redis_storage = RedisStorage(redis_pool, max_age=60*60*24)
 
-    app_logger.debug('Creating listening web application...')
-    app = web.Application(middlewares=[
-        authenticate_by_ip(app_logger, INCORRECT, ip_whitelist),
-        session_middleware(redis_storage),
-        authenticate_by_staff_sso(client_session, staff_sso_client_base,
-                                  staff_sso_client_id, staff_sso_client_secret),
-    ])
+    with logged(logger, 'Creating listening web application', []):
+        app = web.Application(middlewares=[
+            authenticate_by_ip(logger, INCORRECT, ip_whitelist),
+            session_middleware(redis_storage),
+            authenticate_by_staff_sso(client_session, staff_sso_client_base,
+                                      staff_sso_client_id, staff_sso_client_secret),
+        ])
 
-    app.add_routes([
-        web.delete(r'/{path:.*}', handle),
-        web.get(r'/{path:.*}', handle),
-        web.post(r'/{path:.*}', handle),
-        web.put(r'/{path:.*}', handle),
-        web.head(r'/{path:.*}', handle),
-    ])
+        app.add_routes([
+            web.delete(r'/{path:.*}', handle),
+            web.get(r'/{path:.*}', handle),
+            web.post(r'/{path:.*}', handle),
+            web.put(r'/{path:.*}', handle),
+            web.head(r'/{path:.*}', handle),
+        ])
 
-    runner = web.AppRunner(app, access_log_format=ACCESS_LOG_FORMAT)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', port)
-    await site.start()
-    app_logger.debug('Creating listening web application: done')
+        class NullAccessLogger(aiohttp.abc.AbstractAccessLogger):
+            # pylint: disable=too-few-public-methods
+
+            def log(self, request, response, time):
+                pass
+
+        runner = web.AppRunner(app, access_log_class=NullAccessLogger)
+        await runner.setup()
+        site = web.TCPSite(runner, '0.0.0.0', port)
+        await site.start()
 
 
 def authenticate_by_staff_sso(client_session, base, client_id, client_secret):
@@ -165,11 +171,7 @@ def authenticate_by_staff_sso(client_session, base, client_id, client_secret):
 
 def main():
     stdout_handler = logging.StreamHandler(sys.stdout)
-    aiohttp_log = logging.getLogger('aiohttp.access')
-    aiohttp_log.setLevel(logging.DEBUG)
-    aiohttp_log.addHandler(stdout_handler)
-
-    app_logger = logging.getLogger(LOGGER_NAME)
+    app_logger = logging.getLogger('activity-stream')
     app_logger.setLevel(logging.DEBUG)
     app_logger.addHandler(stdout_handler)
 
