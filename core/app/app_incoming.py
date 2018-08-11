@@ -11,6 +11,7 @@ from shared.utils import (
 )
 
 from .app_logger import (
+    AccessLogger,
     async_logger,
     get_logger_with_context,
     logged,
@@ -101,9 +102,8 @@ async def create_incoming_application(
     app.add_routes([
         web.get('/metrics', handle_get_metrics(redis_client)),
     ])
-    access_log_format = '%a "%r" %s %b "%{User-Agent}i" %{X-Forwarded-For}i'
 
-    runner = web.AppRunner(app, access_log_format=access_log_format)
+    runner = web.AppRunner(app, access_log_class=AccessLogger)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
