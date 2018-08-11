@@ -1,5 +1,4 @@
 import asyncio
-import functools
 import json
 import os
 
@@ -144,8 +143,9 @@ async def acquire_and_keep_lock(parent_logger, redis_client, raven_client):
 async def create_outgoing_application(logger, metrics, raven_client, session,
                                       feed_endpoints, es_endpoint):
     async def ingester():
-        await ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, es_endpoint)
-
+        await ingest_feeds(
+            logger, metrics, raven_client, session, feed_endpoints, es_endpoint,
+        )
     asyncio.get_event_loop().create_task(
         async_repeat_until_cancelled(logger, raven_client, EXCEPTION_INTERVAL, ingester)
     )
@@ -164,14 +164,17 @@ async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, e
     )
 
     def feed_ingester(feed_endpoint):
-        return functools.partial(
-            ingest_feed,
-            get_child_logger(logger, feed_endpoint.unique_id),
-            metrics, session, feed_endpoint, es_endpoint,
-            _async_timer=metrics['ingest_feed_duration_seconds'],
-            _async_timer_labels=[feed_endpoint.unique_id],
-            _async_inprogress=metrics['ingest_inprogress_ingests_total'],
-        )
+        feed_logger = get_child_logger(logger, feed_endpoint.unique_id)
+
+        async def _feed_ingester():
+            await ingest_feed(
+                feed_logger, metrics, session, feed_endpoint, es_endpoint,
+                _async_timer=metrics['ingest_feed_duration_seconds'],
+                _async_timer_labels=[feed_endpoint.unique_id],
+                _async_inprogress=metrics['ingest_inprogress_ingests_total']
+            )
+        return _feed_ingester
+
     await asyncio.gather(*[
         async_repeat_until_cancelled(
             logger, raven_client, EXCEPTION_INTERVAL, feed_ingester(feed_endpoint),
