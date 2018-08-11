@@ -75,10 +75,6 @@ def get_raven_client(sentry):
 
 def main(run_application_coroutine):
     stdout_handler = logging.StreamHandler(sys.stdout)
-    aiohttp_log = logging.getLogger('aiohttp.access')
-    aiohttp_log.setLevel(logging.DEBUG)
-    aiohttp_log.addHandler(stdout_handler)
-
     app_logger = logging.getLogger('activity-stream')
     app_logger.setLevel(logging.DEBUG)
     app_logger.addHandler(stdout_handler)
