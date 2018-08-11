@@ -143,10 +143,9 @@ async def acquire_and_keep_lock(parent_logger, redis_client, raven_client):
 
 async def create_outgoing_application(logger, metrics, raven_client, session,
                                       feed_endpoints, es_endpoint):
-    ingester = functools.partial(
-        ingest_feeds, logger, metrics, raven_client,
-        session, feed_endpoints, es_endpoint,
-    )
+    async def ingester():
+        await ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, es_endpoint)
+
     asyncio.get_event_loop().create_task(
         async_repeat_until_cancelled(logger, raven_client, EXCEPTION_INTERVAL, ingester)
     )
