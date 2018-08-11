@@ -977,4 +977,4 @@ class TestApplication(TestBase):
             await redis_client.execute('DEL', 'lock')
             await ORIGINAL_SLEEP(2)
 
-        raven_client().captureException.assert_called()
+        raven_client().captureMessage.assert_called()

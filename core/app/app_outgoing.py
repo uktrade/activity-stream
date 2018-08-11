@@ -107,10 +107,6 @@ async def acquire_and_keep_lock(parent_logger, redis_client, raven_client):
     multiple clients to have the lock for a period of time. It would only cause
     Elasticsearch errors to appear in sentry, but otherwise there would be no
     harm
-
-    We don't try to re-aquire the lock if we've lost it. This would happen if
-    we've blocked for > ttl and lost the lock. We _want_ to have more evidence
-    of this so we can address the problem.
     '''
     logger = get_child_logger(parent_logger, 'lock')
     ttl = 2
@@ -132,7 +128,8 @@ async def acquire_and_keep_lock(parent_logger, redis_client, raven_client):
         await sleep(logger, extend_interval)
         response = await redis_client.execute('EXPIRE', key, ttl)
         if response != 1:
-            raise Exception('Lock has been lost')
+            raven_client.captureMessage('Lock has been lost')
+            await acquire()
 
     await acquire()
     asyncio.get_event_loop().create_task(async_repeat_until_cancelled(
