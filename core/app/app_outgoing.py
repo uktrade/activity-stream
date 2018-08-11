@@ -8,6 +8,12 @@ from prometheus_client import (
     CollectorRegistry,
     generate_latest,
 )
+
+from shared.logger import (
+    get_logger_with_context,
+    async_logger,
+    logged,
+)
 from shared.utils import (
     get_common_config,
     normalise_environment,
@@ -34,11 +40,6 @@ from .app_elasticsearch import (
 from .app_feeds import (
     ActivityStreamFeed,
     ZendeskFeed,
-)
-from .app_logger import (
-    get_logger_with_context,
-    async_logger,
-    logged,
 )
 from .app_metrics import (
     async_inprogress,

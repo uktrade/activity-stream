@@ -6,15 +6,16 @@ import time
 from aiohttp.web import (
     HTTPNotFound,
 )
-from shared.utils import (
-    aws_auth_headers,
-)
 
-from .app_logger import (
+from shared.logger import (
     async_logger,
     async_logger_with_result,
     logged,
 )
+from shared.utils import (
+    aws_auth_headers,
+)
+
 from .app_metrics import (
     async_counter,
     async_timer,

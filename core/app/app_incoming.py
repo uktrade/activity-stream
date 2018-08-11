@@ -4,17 +4,18 @@ import os
 import aiohttp
 from aiohttp import web
 import aioredis
+
+from shared.logger import (
+    async_logger,
+    get_logger_with_context,
+    logged,
+)
 from shared.utils import (
     authenticate_by_ip,
     get_common_config,
     normalise_environment,
 )
 
-from .app_logger import (
-    async_logger,
-    get_logger_with_context,
-    logged,
-)
 from .app_server import (
     INCORRECT,
     authenticator,

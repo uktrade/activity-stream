@@ -2,7 +2,7 @@ import asyncio
 import contextlib
 import logging
 
-from shared.utils import (
+from .utils import (
     extract_keys,
 )
 
