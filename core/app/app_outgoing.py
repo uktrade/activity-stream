@@ -12,7 +12,6 @@ from prometheus_client import (
 from shared.logger import (
     get_root_logger,
     get_child_logger,
-    async_logger,
     logged,
 )
 from shared.utils import (
@@ -224,13 +223,12 @@ async def sleep(logger, interval):
 @async_timer
 async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_name, href, **_):
     with logged(logger, 'Polling/pushing page', []):
-        feed_contents = await get_feed_contents(
-            session, href, feed.auth_headers(href),
-            _async_timer=metrics['ingest_page_duration_seconds'],
-            _async_timer_labels=[feed.unique_id, 'pull'],
-            _async_logger=logger,
-            _async_logger_args=[href],
-        )
+        with logged(logger, 'Polling page (%s)', [href]):
+            feed_contents = await get_feed_contents(
+                session, href, feed.auth_headers(href),
+                _async_timer=metrics['ingest_page_duration_seconds'],
+                _async_timer_labels=[feed.unique_id, 'pull'],
+            )
 
         with logged(logger, 'Parsing JSON', []):
             feed_parsed = json.loads(feed_contents)
@@ -256,7 +254,6 @@ async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_na
         return next_href, interval
 
 
-@async_logger('Polling feed (%s)')
 @async_timer
 async def get_feed_contents(session, href, headers, **_):
     result = await session.get(href, headers=headers)
