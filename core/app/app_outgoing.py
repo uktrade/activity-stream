@@ -143,7 +143,7 @@ async def acquire_and_keep_lock(redis_client, raven_client):
     asyncio.get_event_loop().create_task(extend_forever(
         _async_repeat_until_cancelled_raven_client=raven_client,
         _async_repeat_until_cancelled_exception_interval=extend_interval,
-        _async_repeat_until_cancelled_logging_title='Extending lock',
+        _async_repeat_until_cancelled_logger=logger,
     ))
 
 
@@ -153,7 +153,7 @@ async def create_outgoing_application(logger, metrics, raven_client, session,
         logger, metrics, raven_client, session, feed_endpoints, es_endpoint,
         _async_repeat_until_cancelled_raven_client=raven_client,
         _async_repeat_until_cancelled_exception_interval=EXCEPTION_INTERVAL,
-        _async_repeat_until_cancelled_logging_title='Polling feeds',
+        _async_repeat_until_cancelled_logger=logger,
     ))
 
 
@@ -179,7 +179,7 @@ async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, e
             logger, metrics, session, feed_endpoint, es_endpoint,
             _async_repeat_until_cancelled_raven_client=raven_client,
             _async_repeat_until_cancelled_exception_interval=EXCEPTION_INTERVAL,
-            _async_repeat_until_cancelled_logging_title='Polling feed',
+            _async_repeat_until_cancelled_logger=logger,
             _async_timer=metrics['ingest_feed_duration_seconds'],
             _async_timer_labels=[feed_endpoint.unique_id],
             _async_inprogress=metrics['ingest_inprogress_ingests_total'],
@@ -366,7 +366,7 @@ async def create_metrics_application(metrics, metrics_registry, redis_client,
     asyncio.get_event_loop().create_task(poll_metrics(
         _async_repeat_until_cancelled_raven_client=raven_client,
         _async_repeat_until_cancelled_exception_interval=METRICS_INTERVAL,
-        _async_repeat_until_cancelled_logging_title='Elasticsearch polling',
+        _async_repeat_until_cancelled_logger=logger,
         _async_logger=logger,
         _async_logger_args=[],
     ))

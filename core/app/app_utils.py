@@ -19,13 +19,11 @@ def flatten(list_to_flatten):
 def async_repeat_until_cancelled(coroutine):
 
     async def _async_repeat_until_cancelled(*args, **kwargs):
-        app_logger = logging.getLogger('activity-stream')
-
-        kwargs_to_pass, (raven_client, exception_interval, logging_title) = \
+        kwargs_to_pass, (raven_client, exception_interval, logger) = \
             extract_keys(kwargs, [
                 '_async_repeat_until_cancelled_raven_client',
                 '_async_repeat_until_cancelled_exception_interval',
-                '_async_repeat_until_cancelled_logging_title',
+                '_async_repeat_until_cancelled_logger',
             ])
 
         while True:
@@ -33,10 +31,13 @@ def async_repeat_until_cancelled(coroutine):
                 await coroutine(*args, **kwargs_to_pass)
             except asyncio.CancelledError:
                 break
-            except BaseException as exception:
-                app_logger.exception('%s raised exception: %s', logging_title, exception)
+            except BaseException:
+                logger.exception('Raised exception in async_repeat_until_cancelled')
                 raven_client.captureException()
-                app_logger.warning('Waiting %s seconds until restarting', exception_interval)
+                logger.warning(
+                    'Waiting %s seconds until looping in async_repeat_until_cancelled',
+                    exception_interval,
+                )
 
                 try:
                     await asyncio.sleep(exception_interval)
