@@ -527,8 +527,9 @@ class TestApplication(TestBase):
 
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
+    @patch('secrets.choice', return_value='qwerty12')
     @async_test
-    async def test_single_page(self, _):
+    async def test_single_page(self, _, __):
         posted_to_es_once, append_es = append_until(lambda results: len(results) == 1)
 
         async def return_200_and_callback(request):
@@ -566,7 +567,7 @@ class TestApplication(TestBase):
             'AWS4-HMAC-SHA256 '
             'Credential=some-id/20120114/us-east-2/es/aws4_request, '
             'SignedHeaders=content-type;host;x-amz-date, '
-            'Signature=959e16e7d72ce7d29860d393381d7e752a88404c43baabfdfcb65c151fbfd625')
+            'Signature=c488596a08fdde84ff85d75520c935d522eff0f4970f5cd2e07e92483e8f9dee')
         self.assertEqual(es_bulk_content.decode('utf-8')[-1], '\n')
         self.assertEqual(es_bulk_headers['Content-Type'], 'application/x-ndjson')
 

@@ -1,6 +1,5 @@
 import datetime
 import json
-import os
 import time
 
 from aiohttp.web import (
@@ -12,6 +11,7 @@ from shared.logger import (
 )
 from shared.utils import (
     aws_auth_headers,
+    random_url_safe,
 )
 
 from .app_utils import (
@@ -24,7 +24,7 @@ ALIAS = 'activities'
 def get_new_index_name(feed_unique_id):
     today = datetime.date.today().isoformat()
     now = str(datetime.datetime.now().timestamp()).split('.')[0]
-    unique = ''.join(os.urandom(5).hex())
+    unique = random_url_safe(8)
 
     # Storing metadata in index name allows operations to match on
     # them, both by elasticsearch itself, and by regex in Python

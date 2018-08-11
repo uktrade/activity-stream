@@ -9,7 +9,7 @@ import urllib
 
 
 def random_url_safe(count):
-    return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(count))
+    return ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(count))
 
 
 def get_common_config(env):
