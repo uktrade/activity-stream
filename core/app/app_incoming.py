@@ -35,7 +35,7 @@ PAGINATION_EXPIRE = 10
 
 
 async def run_incoming_application():
-    logger = get_logger_with_context('incoming-startup')
+    logger = get_logger_with_context('incoming')
 
     logger.debug('Examining environment...')
     env = normalise_environment(os.environ)
