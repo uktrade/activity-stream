@@ -11,6 +11,7 @@ from shared.utils import (
 )
 
 from .app_logger import (
+    async_logger,
     get_logger_with_context,
 )
 from .app_server import (
@@ -58,6 +59,8 @@ async def run_incoming_application():
     runner = await create_incoming_application(
         logger, port, ip_whitelist, incoming_key_pairs,
         redis_client, raven_client, session, es_endpoint,
+        _async_logger=logger,
+        _async_logger_args=[],
     )
 
     async def cleanup():
@@ -72,10 +75,10 @@ async def run_incoming_application():
     return cleanup
 
 
+@async_logger('Creating listening web application')
 async def create_incoming_application(
         logger, port, ip_whitelist, incoming_key_pairs,
-        redis_client, raven_client, session, es_endpoint):
-    logger.debug('Creating listening web application...')
+        redis_client, raven_client, session, es_endpoint, **_):
 
     app = web.Application(middlewares=[
         convert_errors_to_json(),
@@ -106,7 +109,6 @@ async def create_incoming_application(
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    logger.debug('Creating listening web application... (done)')
 
     return runner
 
