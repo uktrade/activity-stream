@@ -254,7 +254,6 @@ async def activities(elasticsearch_reponse, to_public_scroll_url):
 @async_timer
 async def es_bulk(logger, session, es_endpoint, items, **_):
     if not items:
-        logger.debug('No ES items. Skipping')
         return
 
     logger.debug('Converting feed to ES bulk ingest commands...')
