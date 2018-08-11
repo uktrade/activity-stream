@@ -24,6 +24,7 @@ from shared.utils import (
     normalise_environment,
 )
 from shared.web import (
+    server_logger,
     authenticate_by_ip,
 )
 
@@ -68,7 +69,8 @@ async def run_application():
 
     with logged(logger, 'Creating listening web application', []):
         app = web.Application(middlewares=[
-            authenticate_by_ip(logger, INCORRECT, ip_whitelist),
+            server_logger(logger),
+            authenticate_by_ip(INCORRECT, ip_whitelist),
             session_middleware(redis_storage),
             authenticate_by_staff_sso(client_session, staff_sso_client_base,
                                       staff_sso_client_id, staff_sso_client_secret),

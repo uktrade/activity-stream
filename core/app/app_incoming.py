@@ -89,7 +89,7 @@ async def create_incoming_application(
     ])
 
     private_app = web.Application(middlewares=[
-        authenticate_by_ip(logger, INCORRECT, ip_whitelist),
+        authenticate_by_ip(INCORRECT, ip_whitelist),
         authenticator(incoming_key_pairs, redis_client, NONCE_EXPIRE),
         authorizer(),
     ])
