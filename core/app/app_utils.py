@@ -1,7 +1,9 @@
 import asyncio
 import functools
 import logging
+import secrets
 import signal
+import string
 import sys
 
 import raven
@@ -80,6 +82,10 @@ def get_raven_client(sentry):
         sentry['dsn'],
         environment=sentry['environment'],
         transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
+
+
+def random_url_safe(count):
+    return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(count))
 
 
 def main(run_application_coroutine):

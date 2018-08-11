@@ -1,5 +1,4 @@
 import hmac
-import uuid
 
 from aiohttp import web
 import mohawk
@@ -9,6 +8,9 @@ from .app_elasticsearch import (
     es_search,
     es_search_existing_scroll,
     es_search_new_scroll,
+)
+from .app_utils import (
+    random_url_safe,
 )
 
 
@@ -159,7 +161,7 @@ def _handle_get(session, redis_client, pagination_expire, es_endpoint, get_path_
                                                  incoming_body)
 
         async def to_public_scroll_url(private_scroll_id):
-            public_scroll_id = uuid.uuid4().hex
+            public_scroll_id = random_url_safe(8)
             await redis_client.set(f'private-scroll-id-{public_scroll_id}', private_scroll_id,
                                    expire=pagination_expire)
             return str(request.url.join(
