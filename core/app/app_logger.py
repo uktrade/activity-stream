@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 
 from .app_utils import (
@@ -53,3 +54,18 @@ def async_logger_base(message, get_success_status):
         return __async_logger
 
     return _async_logger
+
+
+@contextlib.contextmanager
+def logged(logger, message, logger_args):
+    try:
+        logger.debug(message + '...', *logger_args)
+        status = 'done'
+        logger_func = logger.debug
+        yield
+    except BaseException:
+        status = 'failed'
+        logger_func = logger.warning
+        raise
+    finally:
+        logger_func(message + '... (%s)', *(logger_args + [status]))

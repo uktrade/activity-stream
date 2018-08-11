@@ -38,6 +38,7 @@ from .app_feeds import (
 from .app_logger import (
     get_logger_with_context,
     async_logger,
+    logged,
 )
 from .app_metrics import (
     async_inprogress,
@@ -58,13 +59,10 @@ METRICS_INTERVAL = 1
 async def run_outgoing_application():
     logger = get_logger_with_context('outgoing')
 
-    logger.debug('Examining environment...')
-    env = normalise_environment(os.environ)
-
-    es_endpoint, redis_uri, sentry = get_common_config(env)
-    feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
-
-    logger.debug('Examining environment... (done)')
+    with logged(logger, 'Examining environment', []):
+        env = normalise_environment(os.environ)
+        es_endpoint, redis_uri, sentry = get_common_config(env)
+        feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
     raven_client = get_raven_client(sentry)
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
@@ -271,8 +269,11 @@ async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_na
         _async_logger_args=[href],
     )
 
-    feed_parsed = json.loads(feed_contents)
-    es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_name)
+    with logged(logger, 'Parsing JSON', []):
+        feed_parsed = json.loads(feed_contents)
+
+    with logged(logger, 'Converting to bulk Elasticsearch items', []):
+        es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_name)
 
     await es_bulk(
         session, es_endpoint, es_bulk_items,
