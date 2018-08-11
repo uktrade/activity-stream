@@ -1,6 +1,5 @@
 import datetime
 import json
-import logging
 import os
 import time
 
@@ -253,28 +252,26 @@ async def activities(elasticsearch_reponse, to_public_scroll_url):
 @async_logger('Pushing (%s) items into Elasticsearch')
 @async_counter
 @async_timer
-async def es_bulk(session, es_endpoint, items, **_):
-    app_logger = logging.getLogger('activity-stream')
-
+async def es_bulk(logger, session, es_endpoint, items, **_):
     if not items:
-        app_logger.debug('No ES items. Skipping')
+        logger.debug('No ES items. Skipping')
         return
 
-    app_logger.debug('Converting feed to ES bulk ingest commands...')
+    logger.debug('Converting feed to ES bulk ingest commands...')
     es_bulk_contents = ('\n'.join(flatten([
         [json.dumps(item['action_and_metadata'], sort_keys=True),
          json.dumps(item['source'], sort_keys=True)]
         for item in items
     ])) + '\n').encode('utf-8')
-    app_logger.debug('Converting to ES bulk ingest commands: done')
+    logger.debug('Converting to ES bulk ingest commands: done')
 
-    app_logger.debug('POSTing bulk import to ES...')
+    logger.debug('POSTing bulk import to ES...')
     await es_request_non_200_exception(
         session=session, endpoint=es_endpoint,
         method='POST', path='/_bulk', query={},
         headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,
     )
-    app_logger.debug('Pushing to ES: done')
+    logger.debug('Pushing to ES: done')
 
 
 async def es_searchable_total(session, es_endpoint):

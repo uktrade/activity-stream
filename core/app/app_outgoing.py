@@ -276,7 +276,7 @@ async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_na
         es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_name)
 
     await es_bulk(
-        session, es_endpoint, es_bulk_items,
+        logger, session, es_endpoint, es_bulk_items,
         _async_timer=metrics['ingest_page_duration_seconds'],
         _async_timer_labels=[feed.unique_id, 'push'],
         _async_counter=metrics['ingest_activities_nonunique_total'],
