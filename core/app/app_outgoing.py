@@ -161,7 +161,7 @@ async def create_outgoing_application(logger, metrics, raven_client, session,
 async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, es_endpoint, **_):
     all_feed_ids = feed_unique_ids(feed_endpoints)
     indexes_without_alias, indexes_with_alias = await get_old_index_names(
-        session, es_endpoint,
+        logger, session, es_endpoint,
         _async_logger=logger,
         _async_logger_args=[]
     )
@@ -169,7 +169,7 @@ async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, e
     indexes_to_delete = indexes_matching_no_feeds(
         indexes_without_alias + indexes_with_alias, all_feed_ids)
     await delete_indexes(
-        session, es_endpoint, indexes_to_delete,
+        logger, session, es_endpoint, indexes_to_delete,
         _async_logger=logger,
         _async_logger_args=[indexes_to_delete]
     )
@@ -201,14 +201,14 @@ def feed_unique_ids(feed_endpoints):
 @async_timer
 async def ingest_feed(logger, metrics, session, feed, es_endpoint, **_):
     indexes_without_alias, _ = await get_old_index_names(
-        session, es_endpoint,
+        logger, session, es_endpoint,
         _async_logger=logger,
         _async_logger_args=[],
     )
     indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
 
     await delete_indexes(
-        session, es_endpoint, indexes_to_delete,
+        logger, session, es_endpoint, indexes_to_delete,
         _async_logger=logger,
         _async_logger_args=[indexes_to_delete],
     )
@@ -216,13 +216,13 @@ async def ingest_feed(logger, metrics, session, feed, es_endpoint, **_):
     index_name = get_new_index_name(feed.unique_id)
 
     await create_index(
-        session, es_endpoint, index_name,
+        logger, session, es_endpoint, index_name,
         _async_logger=logger,
         _async_logger_args=[index_name],
     )
 
     await create_mapping(
-        session, es_endpoint, index_name,
+        logger, session, es_endpoint, index_name,
         _async_logger=logger,
         _async_logger_args=[index_name],
     )
@@ -243,13 +243,13 @@ async def ingest_feed(logger, metrics, session, feed, es_endpoint, **_):
         )
 
     await refresh_index(
-        session, es_endpoint, index_name,
+        logger, session, es_endpoint, index_name,
         _async_logger=logger,
         _async_logger_args=[index_name]
     )
 
     await add_remove_aliases_atomically(
-        session, es_endpoint, index_name, feed.unique_id,
+        logger, session, es_endpoint, index_name, feed.unique_id,
         _async_logger=logger,
         _async_logger_args=[index_name]
     )
@@ -324,24 +324,24 @@ async def create_metrics_application(logger, metrics, metrics_registry, redis_cl
     @async_repeat_until_cancelled
     @async_logger('Polling')
     async def poll_metrics(**_):
-        searchable = await es_searchable_total(session, es_endpoint)
+        searchable = await es_searchable_total(logger, session, es_endpoint)
         metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
 
         await set_metric_if_can(
             metrics['elasticsearch_activities_total'],
             ['nonsearchable'],
-            es_nonsearchable_total(session, es_endpoint),
+            es_nonsearchable_total(logger, session, es_endpoint),
         )
         await set_metric_if_can(
             metrics['elasticsearch_activities_age_minimum_seconds'],
             ['verification'],
-            es_min_verification_age(session, es_endpoint),
+            es_min_verification_age(logger, session, es_endpoint),
         )
 
         feed_ids = feed_unique_ids(feed_endpoints)
         for feed_id in feed_ids:
             try:
-                searchable, nonsearchable = await es_feed_activities_total(session,
+                searchable, nonsearchable = await es_feed_activities_total(logger, session,
                                                                            es_endpoint, feed_id)
                 metrics['elasticsearch_feed_activities_total'].labels(
                     feed_id, 'searchable').set(searchable)

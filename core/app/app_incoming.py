@@ -95,10 +95,13 @@ async def create_incoming_application(
     ])
     private_app.add_routes([
         web.post('/', handle_post),
-        web.get('/', handle_get_new(session, redis_client, PAGINATION_EXPIRE, es_endpoint)),
+        web.get(
+            '/',
+            handle_get_new(logger, session, redis_client, PAGINATION_EXPIRE, es_endpoint)
+        ),
         web.get(
             '/{public_scroll_id}',
-            handle_get_existing(session, redis_client, PAGINATION_EXPIRE, es_endpoint),
+            handle_get_existing(logger, session, redis_client, PAGINATION_EXPIRE, es_endpoint),
             name='scroll',
         ),
     ])

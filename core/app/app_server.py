@@ -145,17 +145,17 @@ async def handle_post(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
-def handle_get_new(session, redis_client, pagination_expire, es_endpoint):
-    return _handle_get(session, redis_client, pagination_expire, es_endpoint,
+def handle_get_new(logger, session, redis_client, pagination_expire, es_endpoint):
+    return _handle_get(logger, session, redis_client, pagination_expire, es_endpoint,
                        es_search_new_scroll)
 
 
-def handle_get_existing(session, redis_client, pagination_expire, es_endpoint):
-    return _handle_get(session, redis_client, pagination_expire, es_endpoint,
+def handle_get_existing(logger, session, redis_client, pagination_expire, es_endpoint):
+    return _handle_get(logger, session, redis_client, pagination_expire, es_endpoint,
                        es_search_existing_scroll)
 
 
-def _handle_get(session, redis_client, pagination_expire, es_endpoint, get_path_query):
+def _handle_get(logger, session, redis_client, pagination_expire, es_endpoint, get_path_query):
     async def handle(request):
         incoming_body = await request.read()
         path, query, body = await get_path_query(redis_client, request.match_info,
@@ -168,7 +168,7 @@ def _handle_get(session, redis_client, pagination_expire, es_endpoint, get_path_
             return str(request.url.join(
                 request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)))
 
-        results, status = await es_search(session, es_endpoint, path, query, body,
+        results, status = await es_search(logger, session, es_endpoint, path, query, body,
                                           {'Content-Type': request.headers['Content-Type']},
                                           to_public_scroll_url)
 
