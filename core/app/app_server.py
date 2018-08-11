@@ -4,6 +4,10 @@ from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
 
+from shared.utils import (
+    random_url_safe,
+)
+
 from .app_elasticsearch import (
     es_search,
     es_search_existing_scroll,
@@ -12,9 +16,6 @@ from .app_elasticsearch import (
 from .app_logger import (
     get_child_logger,
     logged,
-)
-from .app_utils import (
-    random_url_safe,
 )
 
 

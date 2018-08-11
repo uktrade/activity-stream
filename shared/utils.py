@@ -3,6 +3,8 @@ import hashlib
 import hmac
 import itertools
 import json
+import secrets
+import string
 import urllib
 
 from aiohttp import web
@@ -19,6 +21,10 @@ def extract_keys(dictionary, keys):
         if key not in keys
     }
     return without_keys, extracted
+
+
+def random_url_safe(count):
+    return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(count))
 
 
 def get_common_config(env):
@@ -123,9 +129,9 @@ def normalise_environment(key_values):
         }}
 
     def all_keys_are_ints():
-        def is_int(string):
+        def is_int(string_to_test):
             try:
-                int(string)
+                int(string_to_test)
                 return True
             except ValueError:
                 return False
