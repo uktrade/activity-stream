@@ -15,7 +15,7 @@ from aiohttp_session.redis_storage import RedisStorage
 import aioredis
 
 from shared.logger import (
-    get_logger_with_context,
+    get_root_logger,
     logged,
 )
 from shared.utils import (
@@ -32,7 +32,7 @@ INCORRECT = 'Incorrect authentication credentials.'
 
 
 async def run_application():
-    logger = get_logger_with_context('elasticsearch-proxy')
+    logger = get_root_logger('elasticsearch-proxy')
 
     with logged(logger, 'Examining environment', []):
         env = normalise_environment(os.environ)

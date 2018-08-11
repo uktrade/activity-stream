@@ -12,7 +12,7 @@ class ContextAdapter(logging.LoggerAdapter):
         return '[%s] %s' % (','.join(self.extra['context']), msg), kwargs
 
 
-def get_logger_with_context(context):
+def get_root_logger(context):
     logger = logging.getLogger('activity-stream')
     return ContextAdapter(logger, {'context': [context]})
 

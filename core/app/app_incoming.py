@@ -7,7 +7,7 @@ import aioredis
 
 from shared.logger import (
     async_logger,
-    get_logger_with_context,
+    get_root_logger,
     logged,
 )
 from shared.utils import (
@@ -41,7 +41,7 @@ PAGINATION_EXPIRE = 10
 
 
 async def run_incoming_application():
-    logger = get_logger_with_context('incoming')
+    logger = get_root_logger('incoming')
 
     with logged(logger, 'Examining environment', []):
         env = normalise_environment(os.environ)

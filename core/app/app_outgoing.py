@@ -10,7 +10,7 @@ from prometheus_client import (
 )
 
 from shared.logger import (
-    get_logger_with_context,
+    get_root_logger,
     get_child_logger,
     async_logger,
     logged,
@@ -59,7 +59,7 @@ METRICS_INTERVAL = 1
 
 
 async def run_outgoing_application():
-    logger = get_logger_with_context('outgoing')
+    logger = get_root_logger('outgoing')
 
     with logged(logger, 'Examining environment', []):
         env = normalise_environment(os.environ)
