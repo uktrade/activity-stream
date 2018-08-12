@@ -241,12 +241,7 @@ async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_na
             await es_bulk(logger, session, es_endpoint, es_bulk_items)
 
         next_href = feed.next_href(feed_parsed)
-
-        interval = \
-            feed.polling_page_interval if next_href else \
-            feed.polling_seed_interval
-
-        return next_href, interval
+        return next_href, feed.polling_page_interval
 
 
 async def get_feed_contents(session, href, headers):
