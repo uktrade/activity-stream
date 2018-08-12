@@ -165,7 +165,7 @@ async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, e
         feed_logger = get_child_logger(logger, feed_endpoint.unique_id)
 
         async def _feed_ingester():
-            await ingest_feed(feed_logger, metrics, session, feed_endpoint, es_endpoint)
+            await ingest_feed_full(feed_logger, metrics, session, feed_endpoint, es_endpoint)
         return _feed_ingester
 
     await asyncio.gather(*[
@@ -180,7 +180,7 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-async def ingest_feed(logger, metrics, session, feed, es_endpoint):
+async def ingest_feed_full(logger, metrics, session, feed, es_endpoint):
     with \
             logged(logger, 'Full ingest', []), \
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'full']), \
