@@ -13,7 +13,7 @@ Activity Stream is a collector of various interactions between people and DIT.
 
 ## Architecture and algorithm
 
-A simple paginated HTTP endpoint is exposed in each source service, exposing data in W3C Activity 2.0 format. For each source:
+A simple paginated HTTP endpoint is exposed in each source service, exposing data in W3C Activity 2.0 format. Concurrently for each source:
 
 - (Delete any unused Elasticsearch indexes for the source)
 - A new Elasticsearch index is created with a unique name, and its mappings are set.
