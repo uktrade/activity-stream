@@ -183,7 +183,7 @@ def feed_unique_ids(feed_endpoints):
 async def ingest_feed(logger, metrics, session, feed, es_endpoint):
     with \
             logged(logger, 'Full ingest', []), \
-            metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id]), \
+            metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'full']), \
             metric_inprogress(metrics['ingest_inprogress_ingests_total']):
 
         indexes_without_alias, _ = await get_old_index_names(
@@ -218,11 +218,13 @@ async def sleep(logger, interval):
 async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_name, href):
     with \
             logged(logger, 'Polling/pushing page', []), \
-            metric_timer(metrics['ingest_page_duration_seconds'], [feed.unique_id, 'total']):
+            metric_timer(metrics['ingest_page_duration_seconds'],
+                         [feed.unique_id, 'full', 'total']):
 
         with \
                 logged(logger, 'Polling page (%s)', [href]), \
-                metric_timer(metrics['ingest_page_duration_seconds'], [feed.unique_id, 'pull']):
+                metric_timer(metrics['ingest_page_duration_seconds'],
+                             [feed.unique_id, 'full', 'pull']):
             feed_contents = await get_feed_contents(session, href, feed.auth_headers(href))
 
         with logged(logger, 'Parsing JSON', []):
@@ -232,9 +234,10 @@ async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_na
             es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_name)
 
         with \
-                metric_timer(metrics['ingest_page_duration_seconds'], [feed.unique_id, 'push']), \
-                metric_counter(metrics['ingest_activities_nonunique_total'], [feed.unique_id],
-                               len(es_bulk_items)):
+                metric_timer(metrics['ingest_page_duration_seconds'],
+                             [feed.unique_id, 'full', 'push']), \
+                metric_counter(metrics['ingest_activities_nonunique_total'],
+                               [feed.unique_id], len(es_bulk_items)):
             await es_bulk(logger, session, es_endpoint, es_bulk_items)
 
         next_href = feed.next_href(feed_parsed)

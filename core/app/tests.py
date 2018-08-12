@@ -938,8 +938,13 @@ class TestApplication(TestBase):
         self.assertIn('status="success"', text)
         self.assertIn('ingest_activities_nonunique_total{feed_unique_id="first_feed"}',
                       text)
-        self.assertIn('ingest_page_duration_seconds_bucket'
-                      '{feed_unique_id="first_feed",le="0.005",stage="push"', text)
+
+        # The order of labels is apparently not deterministic
+        self.assertIn('ingest_page_duration_seconds_bucket{', text)
+        self.assertIn('ingest_type="full"', text)
+        self.assertIn('le="0.005"', text)
+        self.assertIn('stage="push"', text)
+
         self.assertIn('elasticsearch_activities_total{searchable="searchable"} 2.0', text)
         self.assertIn('elasticsearch_feed_activities_total'
                       '{feed_unique_id="first_feed",searchable="searchable"} 2.0', text)
