@@ -161,16 +161,18 @@ async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, e
         logger, session, es_endpoint, indexes_to_delete,
     )
 
-    def feed_ingester(feed_endpoint):
+    def feed_ingester(feed_endpoint, ingest_type):
         feed_logger = get_child_logger(logger, feed_endpoint.unique_id)
+        ingest_type_logger = get_child_logger(feed_logger, ingest_type)
 
         async def _feed_ingester():
-            await ingest_feed_full(feed_logger, metrics, session, feed_endpoint, es_endpoint)
+            await ingest_feed_full(ingest_type_logger, metrics, session, feed_endpoint,
+                                   es_endpoint)
         return _feed_ingester
 
     await asyncio.gather(*[
         async_repeat_until_cancelled(
-            logger, raven_client, EXCEPTION_INTERVAL, feed_ingester(feed_endpoint),
+            logger, raven_client, EXCEPTION_INTERVAL, feed_ingester(feed_endpoint, 'full'),
         )
         for feed_endpoint in feed_endpoints
     ])
