@@ -48,6 +48,8 @@ and then to run the tests themselves
 
     ./tests.sh
 
+Higher-level feature tests, that assume very little over the internals of the application, are strongly preferred over lower-level tests that test individual functions, often called unit tests. This involves real Elasticsearch and Redis, and firing up various HTTP servers inside the test environment: since this is how the application interacts with the world in production. Mocking/patching is done for speed or determinism reasons: e.g. patching `asyncio.sleep` or `os.urandom`.
+
 ## Outgoing and incoming applications
 
 The core of the Activity Stream is made of two applications.
@@ -86,7 +88,7 @@ A small separate application in [verification_feed](verification_feed) is provid
 
 ## Running locally
 
-The tests are fairly high level, and most development should be able to be done without starting the application separately. However, if you do wish to run the application locally, you must have a number of environment variables set: the up-to-date list of these are in the `mock_env` function defined in [tests_utils.py](core/tests_utils.py). Then to run the application that polls feeds
+Since the tests are fairly high level, most development should be able to be done without starting the application separately. However, if you do wish to run the application locally, you must have a number of environment variables set: the up-to-date list of these are in the `mock_env` function defined in [tests_utils.py](core/tests_utils.py). Then to run the application that polls feeds
 
     (cp -r -f shared core && cd core && python -m app.app_outgoing)
 
