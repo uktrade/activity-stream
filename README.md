@@ -48,13 +48,13 @@ and then to run the tests themselves
 
     ./tests.sh
 
-## Verification Feed
-
-A small separate application in [verification_feed](verification_feed) is provided to allow the stream to be tested, even in production, without using real data. It provides a number of activities, published date of the moment the feed is queried.
-
 ## Elasticsearch / Kibana Proxy
 
 A proxy is provided to allow developer access to Elasticsearch / Kibana in [elasticsearch_proxy](elasticsearch_proxy).
+
+## Verification Feed
+
+A small separate application in [verification_feed](verification_feed) is provided to allow the stream to be tested, even in production, without using real data. It provides a number of activities, published date of the moment the feed is queried.
 
 ## Running locally
 
