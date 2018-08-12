@@ -202,7 +202,7 @@ async def ingest_feed_full(logger, metrics, session, feed, es_endpoint):
         href = feed.seed
         while href:
             href = await ingest_feed_page(
-                logger, metrics, session, 'full', feed, es_endpoint, index_name, href
+                logger, metrics, session, 'full', feed, es_endpoint, [index_name], href
             )
             await sleep(logger, feed.polling_page_interval)
 
@@ -219,7 +219,7 @@ async def sleep(logger, interval):
 
 
 async def ingest_feed_page(logger, metrics, session, ingest_type, feed,
-                           es_endpoint, index_name, href):
+                           es_endpoint, index_names, href):
     with \
             logged(logger, 'Polling/pushing page', []), \
             metric_timer(metrics['ingest_page_duration_seconds'],
@@ -235,7 +235,7 @@ async def ingest_feed_page(logger, metrics, session, ingest_type, feed,
             feed_parsed = json.loads(feed_contents)
 
         with logged(logger, 'Converting to bulk Elasticsearch items', []):
-            es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_name)
+            es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_names)
 
         with \
                 metric_timer(metrics['ingest_page_duration_seconds'],

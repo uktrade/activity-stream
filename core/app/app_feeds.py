@@ -36,17 +36,21 @@ class ActivityStreamFeed:
         }
 
     @classmethod
-    def convert_to_bulk_es(cls, feed, index_name):
-        return [{
-            'action_and_metadata': {
-                'index': {
-                    '_id': item['id'],
-                    '_index': index_name,
-                    '_type': '_doc',
-                }
-            },
-            'source': item
-        } for item in feed['orderedItems']]
+    def convert_to_bulk_es(cls, feed, index_names):
+        return [
+            {
+                'action_and_metadata': {
+                    'index': {
+                        '_id': item['id'],
+                        '_index': index_name,
+                        '_type': '_doc',
+                    }
+                },
+                'source': item
+            }
+            for item in feed['orderedItems']
+            for index_name in index_names
+        ]
 
 
 class ZendeskFeed:
@@ -80,7 +84,7 @@ class ZendeskFeed:
         }
 
     @classmethod
-    def convert_to_bulk_es(cls, page, index_name):
+    def convert_to_bulk_es(cls, page, index_names):
         def company_numbers(description):
             match = re.search(cls.company_number_regex, description)
             return [match[1]] if match else []
@@ -102,6 +106,7 @@ class ZendeskFeed:
             for ticket in page['tickets']
             for company_number in company_numbers(ticket['description'])
             for activity_id in ['dit:zendesk:Ticket:' + str(ticket['id']) + ':Create']
+            for index_name in index_names
         ]
 
 
