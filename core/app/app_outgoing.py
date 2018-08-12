@@ -35,6 +35,7 @@ from .app_elasticsearch import (
     add_remove_aliases_atomically,
     delete_indexes,
     refresh_index,
+    set_refresh_interval,
 )
 
 from .app_feeds import (
@@ -57,6 +58,11 @@ from .app_utils import (
 EXCEPTION_INTERVAL = 60
 METRICS_INTERVAL = 1
 
+# So the latest URL for feeds don't hang around in Redis for
+# ever if the feed is turned off
+FEED_UPDATE_URL_EXPIRE = 60 * 60 * 24 * 31
+NOT_EXISTS = b'__NOT_EXISTS__'
+
 
 async def run_outgoing_application():
     logger = get_root_logger('outgoing')
@@ -76,8 +82,10 @@ async def run_outgoing_application():
     await acquire_and_keep_lock(logger, redis_client, raven_client)
 
     await create_outgoing_application(
-        logger, metrics, raven_client, session, feed_endpoints, es_endpoint,
+        logger, metrics, raven_client, redis_client, session, feed_endpoints, es_endpoint,
     )
+
+    redis_client = await aioredis.create_redis(redis_uri)
     await create_metrics_application(
         logger, metrics, metrics_registry, redis_client, raven_client,
         session, feed_endpoints, es_endpoint,
@@ -138,18 +146,19 @@ async def acquire_and_keep_lock(parent_logger, redis_client, raven_client):
     ))
 
 
-async def create_outgoing_application(logger, metrics, raven_client, session,
+async def create_outgoing_application(logger, metrics, raven_client, redis_client, session,
                                       feed_endpoints, es_endpoint):
     async def ingester():
         await ingest_feeds(
-            logger, metrics, raven_client, session, feed_endpoints, es_endpoint,
+            logger, metrics, raven_client, redis_client, session, feed_endpoints, es_endpoint,
         )
     asyncio.get_event_loop().create_task(
         async_repeat_until_cancelled(logger, raven_client, EXCEPTION_INTERVAL, ingester)
     )
 
 
-async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, es_endpoint):
+async def ingest_feeds(logger, metrics, raven_client, redis_client, session,
+                       feed_endpoints, es_endpoint):
     all_feed_ids = feed_unique_ids(feed_endpoints)
     indexes_without_alias, indexes_with_alias = await get_old_index_names(
         logger, session, es_endpoint,
@@ -166,7 +175,7 @@ async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, e
         ingest_type_logger = get_child_logger(feed_logger, ingest_type)
 
         async def _feed_ingester():
-            await ingest_func(ingest_type_logger, metrics, session, feed_endpoint,
+            await ingest_func(ingest_type_logger, metrics, redis_client, session, feed_endpoint,
                               es_endpoint)
         return _feed_ingester
 
@@ -175,7 +184,10 @@ async def ingest_feeds(logger, metrics, raven_client, session, feed_endpoints, e
             logger, raven_client, EXCEPTION_INTERVAL, ingester,
         )
         for feed_endpoint in feed_endpoints
-        for ingester in [feed_ingester(feed_endpoint, ingest_feed_full, 'full')]
+        for ingester in [
+            feed_ingester(feed_endpoint, ingest_feed_full, 'full'),
+            feed_ingester(feed_endpoint, ingest_feed_updates, 'updates'),
+        ]
     ])
 
 
@@ -183,12 +195,13 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-async def ingest_feed_full(logger, metrics, session, feed, es_endpoint):
+async def ingest_feed_full(logger, metrics, redis_client, session, feed, es_endpoint):
     with \
             logged(logger, 'Full ingest', []), \
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'full']), \
             metric_inprogress(metrics['ingest_inprogress_ingests_total']):
 
+        await set_feed_updates_seed_url_init(redis_client, feed)
         indexes_without_alias, _ = await get_old_index_names(
             logger, session, es_endpoint,
         )
@@ -201,16 +214,93 @@ async def ingest_feed_full(logger, metrics, session, feed, es_endpoint):
 
         href = feed.seed
         while href:
+            updates_href = href
             href = await ingest_feed_page(
                 logger, metrics, session, 'full', feed, es_endpoint, [index_name], href
             )
             await sleep(logger, feed.polling_page_interval)
 
         await refresh_index(logger, session, es_endpoint, index_name)
+        await set_refresh_interval(logger, session, es_endpoint, index_name, '1s')
 
         await add_remove_aliases_atomically(
             logger, session, es_endpoint, index_name, feed.unique_id,
         )
+
+        await set_feed_updates_seed_url(logger, redis_client, feed, updates_href)
+
+
+async def ingest_feed_updates(logger, metrics, redis_client, session, feed, es_endpoint):
+    with \
+            logged(logger, 'Updates ingest', []), \
+            metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'updates']):
+
+        href = await get_feed_updates_url(logger, redis_client, feed)
+        indexes_without_alias, indexes_with_alias = await get_old_index_names(
+            logger, session, es_endpoint,
+        )
+        indexes_to_ingest_into = indexes_matching_feeds(
+            indexes_without_alias + indexes_with_alias, [feed.unique_id])
+
+        while href:
+            updates_href = href
+            href = await ingest_feed_page(logger, metrics, session, 'updates', feed, es_endpoint,
+                                          indexes_to_ingest_into, href)
+            await sleep(logger, feed.polling_page_interval)
+
+        await set_feed_updates_url(logger, redis_client, feed, updates_href)
+
+
+async def set_feed_updates_seed_url_init(redis_client, feed):
+    updates_seed_url_key = 'feed-updates-seed-url-' + feed.unique_id
+    await redis_client.execute('SET', updates_seed_url_key, NOT_EXISTS,
+                               'EX', FEED_UPDATE_URL_EXPIRE,
+                               'NX')
+
+
+async def set_feed_updates_seed_url(logger, redis_client, feed, updates_url):
+    updates_seed_url_key = 'feed-updates-seed-url-' + feed.unique_id
+    with logged(logger, 'Setting updates seed url to (%s)', [updates_url]):
+        await redis_client.execute('SET', updates_seed_url_key, updates_url,
+                                   'EX', FEED_UPDATE_URL_EXPIRE)
+
+
+async def set_feed_updates_url(logger, redis_client, feed, updates_url):
+    updates_latest_url_key = 'feed-updates-latest-url-' + feed.unique_id
+    with logged(logger, 'Setting updates url to (%s)', [updates_url]):
+        await redis_client.execute('SET', updates_latest_url_key, updates_url,
+                                   'EX', FEED_UPDATE_URL_EXPIRE)
+
+
+async def get_feed_updates_url(logger, redis_client, feed):
+    # For each live update, if a full ingest has recently finished, we use the URL set
+    # by that (required, for example, if the endpoint has changed, or if lots of recent
+    # event have been deleted). Otherwise, we use the URL set by the latest updates pass
+
+    updates_seed_url_key = 'feed-updates-seed-url-' + feed.unique_id
+    updates_latest_url_key = 'feed-updates-latest-url-' + feed.unique_id
+    with logged(logger, 'Getting updates url', []):
+        while True:
+            # We want the equivalent of an atomic GET/DEL, to avoid the race condition that the
+            # full ingest sets the updates seed URL, but the updates chain then overwrites it
+            # There is no atomic GETDEL command available, but it could be done with redis multi
+            # exec, but, we have multiple concurrent usages of the redis client, which I suspect
+            # would make transactions impossible right now
+            # We do have an atomic GETSET however, so we use that with a special NOT_EXISTS value
+            updates_seed_url = await redis_client.execute('GETSET', updates_seed_url_key,
+                                                          NOT_EXISTS)
+            if updates_seed_url is not None and updates_seed_url != NOT_EXISTS:
+                url = updates_seed_url
+                break
+
+            updates_latest_url = await redis_client.execute('GET', updates_latest_url_key)
+            if updates_latest_url is not None:
+                url = updates_latest_url
+                break
+
+            await sleep(logger, 1)
+
+    return url.decode('utf-8')
 
 
 async def sleep(logger, interval):
@@ -218,8 +308,8 @@ async def sleep(logger, interval):
         await asyncio.sleep(interval)
 
 
-async def ingest_feed_page(logger, metrics, session, ingest_type, feed,
-                           es_endpoint, index_names, href):
+async def ingest_feed_page(logger, metrics, session, ingest_type, feed, es_endpoint, index_names,
+                           href):
     with \
             logged(logger, 'Polling/pushing page', []), \
             metric_timer(metrics['ingest_page_duration_seconds'],

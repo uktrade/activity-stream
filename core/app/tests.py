@@ -15,6 +15,7 @@ from .tests_utils import (
     append_until,
     async_test,
     delete_all_es_data,
+    delete_all_redis_data,
     fast_sleep,
     fetch_all_es_data_until,
     fetch_es_index_names,
@@ -46,6 +47,7 @@ class TestBase(unittest.TestCase):
         ''' Test setUp function that can be customised on a per-test basis '''
 
         await delete_all_es_data()
+        await delete_all_redis_data()
 
         os_environ_patcher = patch.dict(os.environ, env)
         os_environ_patcher.start()
