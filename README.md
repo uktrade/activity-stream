@@ -48,6 +48,18 @@ and then to run the tests themselves
 
     ./tests.sh
 
+## Outgoing and incoming applications
+
+The core of the Activity Stream is made of two applications.
+
+### Outgoing
+
+This is the application that performs the above algorithm, continually making <em>outgoing</em> HTTP connections to pull data. It is not scalable, and other than during deployments, there should only be one instance running at any time. However, it has low CPU requirements, and as explained above, self-correcting after any downtime.
+
+### Incoming
+
+This is the application that features a HTTP server, accepting <em>incoming</em> HTTP requests, and passes requests for data to Elasticsearch. It converts the raw Elasticsearch format returned into a Activity Streams 2.0 compatible format. This is scalable, and multiple instances of this application can be running at any given time.
+
 ## Elasticsearch / Kibana proxy
 
 A proxy is provided to allow developer access to Elasticsearch / Kibana in [elasticsearch_proxy](elasticsearch_proxy).
