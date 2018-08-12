@@ -172,13 +172,13 @@ async def ingest_feeds(logger, metrics, raven_client, redis_client, session,
         logger, session, es_endpoint, indexes_to_delete,
     )
 
-    def feed_ingester(feed_endpoint, ingest_func, ingest_type):
+    def feed_ingester(feed_lock, feed_endpoint, ingest_func, ingest_type):
         feed_logger = get_child_logger(logger, feed_endpoint.unique_id)
         ingest_type_logger = get_child_logger(feed_logger, ingest_type)
 
         async def _feed_ingester():
-            await ingest_func(ingest_type_logger, metrics, redis_client, session, feed_endpoint,
-                              es_endpoint)
+            await ingest_func(ingest_type_logger, metrics, redis_client, session, feed_lock,
+                              feed_endpoint, es_endpoint)
         return _feed_ingester
 
     await asyncio.gather(*[
@@ -186,9 +186,10 @@ async def ingest_feeds(logger, metrics, raven_client, redis_client, session,
             logger, raven_client, EXCEPTION_INTERVAL, ingester,
         )
         for feed_endpoint in feed_endpoints
+        for feed_lock in [asyncio.Lock()]
         for ingester in [
-            feed_ingester(feed_endpoint, ingest_feed_full, 'full'),
-            feed_ingester(feed_endpoint, ingest_feed_updates, 'updates'),
+            feed_ingester(feed_lock, feed_endpoint, ingest_feed_full, 'full'),
+            feed_ingester(feed_lock, feed_endpoint, ingest_feed_updates, 'updates'),
         ]
     ])
 
@@ -197,7 +198,7 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-async def ingest_feed_full(logger, metrics, redis_client, session, feed, es_endpoint):
+async def ingest_feed_full(logger, metrics, redis_client, session, feed_lock, feed, es_endpoint):
     with \
             logged(logger, 'Full ingest', []), \
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'full']), \
@@ -218,7 +219,7 @@ async def ingest_feed_full(logger, metrics, redis_client, session, feed, es_endp
         while href:
             updates_href = href
             href = await ingest_feed_page(
-                logger, metrics, session, 'full', feed, es_endpoint, [index_name], href
+                logger, metrics, session, 'full', feed_lock, feed, es_endpoint, [index_name], href
             )
             await sleep(logger, feed.polling_page_interval)
 
@@ -231,7 +232,8 @@ async def ingest_feed_full(logger, metrics, redis_client, session, feed, es_endp
         await set_feed_updates_seed_url(logger, redis_client, feed, updates_href)
 
 
-async def ingest_feed_updates(logger, metrics, redis_client, session, feed, es_endpoint):
+async def ingest_feed_updates(logger, metrics, redis_client, session, feed_lock, feed,
+                              es_endpoint):
     with \
             logged(logger, 'Updates ingest', []), \
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'updates']):
@@ -240,13 +242,15 @@ async def ingest_feed_updates(logger, metrics, redis_client, session, feed, es_e
         indexes_without_alias, indexes_with_alias = await get_old_index_names(
             logger, session, es_endpoint,
         )
+
+        # We deliberatly ingest into both the live and ingesting indexes
         indexes_to_ingest_into = indexes_matching_feeds(
             indexes_without_alias + indexes_with_alias, [feed.unique_id])
 
         while href:
             updates_href = href
-            href = await ingest_feed_page(logger, metrics, session, 'updates', feed, es_endpoint,
-                                          indexes_to_ingest_into, href)
+            href = await ingest_feed_page(logger, metrics, session, 'updates', feed_lock, feed,
+                                          es_endpoint, indexes_to_ingest_into, href)
 
         for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
             await refresh_index(logger, session, es_endpoint, index_name)
@@ -312,8 +316,8 @@ async def sleep(logger, interval):
         await asyncio.sleep(interval)
 
 
-async def ingest_feed_page(logger, metrics, session, ingest_type, feed, es_endpoint, index_names,
-                           href):
+async def ingest_feed_page(logger, metrics, session, ingest_type, feed_lock, feed, es_endpoint,
+                           index_names, href):
     with \
             logged(logger, 'Polling/pushing page', []), \
             metric_timer(metrics['ingest_page_duration_seconds'],
@@ -323,7 +327,9 @@ async def ingest_feed_page(logger, metrics, session, ingest_type, feed, es_endpo
                 logged(logger, 'Polling page (%s)', [href]), \
                 metric_timer(metrics['ingest_page_duration_seconds'],
                              [feed.unique_id, ingest_type, 'pull']):
-            feed_contents = await get_feed_contents(session, href, feed.auth_headers(href))
+            # Lock so there is only 1 request per feed at any given time
+            async with feed_lock:
+                feed_contents = await get_feed_contents(session, href, feed.auth_headers(href))
 
         with logged(logger, 'Parsing JSON', []):
             feed_parsed = json.loads(feed_contents)
