@@ -198,10 +198,10 @@ async def ingest_feed(logger, metrics, session, feed, es_endpoint):
 
         href = feed.seed
         while href:
-            href, interval = await ingest_feed_page(
+            href = await ingest_feed_page(
                 logger, metrics, session, feed, es_endpoint, index_name, href
             )
-            await sleep(logger, interval)
+            await sleep(logger, feed.polling_page_interval)
 
         await refresh_index(logger, session, es_endpoint, index_name)
 
@@ -240,8 +240,7 @@ async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_na
                                [feed.unique_id], len(es_bulk_items)):
             await es_bulk(logger, session, es_endpoint, es_bulk_items)
 
-        next_href = feed.next_href(feed_parsed)
-        return next_href, feed.polling_page_interval
+        return feed.next_href(feed_parsed)
 
 
 async def get_feed_contents(session, href, headers):
