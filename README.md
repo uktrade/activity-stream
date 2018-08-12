@@ -48,7 +48,7 @@ and then to run the tests themselves
 
     ./tests.sh
 
-## Elasticsearch / Kibana Proxy
+## Elasticsearch / Kibana proxy
 
 A proxy is provided to allow developer access to Elasticsearch / Kibana in [elasticsearch_proxy](elasticsearch_proxy).
 
