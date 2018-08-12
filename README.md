@@ -40,17 +40,3 @@ or to run the application that proxies incoming requests to Elasticsearch
     (cp -r -f shared core && cd core && python -m app.app_incoming)
 
 This closely resembles how the CI pipeline builds and deploys the applications.
-
-## Managing Requirements
-
-When adding a new library, first add it to requirements.in, then::
-
-    pip install pip-tools
-    pip-compile --output-file requirements.txt requirements.in
-    pip install -r requirements.txt
-
-For a library only to be present for tests, do the same but for `requirements_test.in` and `requirements_test.txt`.
-
-## Endpoints
-
-The server responds with a 200 to GET /, and it returns an error code otherwise.
