@@ -31,7 +31,7 @@ A proxy is provided to allow developer access to Elasticsearch / Kibana in [elas
 
 ## Running locally
 
-You must have a number of environment variables set. The up-to-date list of these are in the `mock_env` function defined in [tests_utils.py](core/tests_utils.py). Then to run the application that polls feeds
+The tests are fairly high level, and most development should be able to be done without starting the application separately. However, if you do wish to run the application locally, you must have a number of environment variables set: the up-to-date list of these are in the `mock_env` function defined in [tests_utils.py](core/tests_utils.py). Then to run the application that polls feeds
 
     (cp -r -f shared core && cd core && python -m app.app_outgoing)
 
