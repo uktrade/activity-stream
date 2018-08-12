@@ -199,7 +199,7 @@ async def ingest_feed(logger, metrics, session, feed, es_endpoint):
         href = feed.seed
         while href:
             href = await ingest_feed_page(
-                logger, metrics, session, feed, es_endpoint, index_name, href
+                logger, metrics, session, 'full', feed, es_endpoint, index_name, href
             )
             await sleep(logger, feed.polling_page_interval)
 
@@ -215,16 +215,17 @@ async def sleep(logger, interval):
         await asyncio.sleep(interval)
 
 
-async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_name, href):
+async def ingest_feed_page(logger, metrics, session, ingest_type, feed,
+                           es_endpoint, index_name, href):
     with \
             logged(logger, 'Polling/pushing page', []), \
             metric_timer(metrics['ingest_page_duration_seconds'],
-                         [feed.unique_id, 'full', 'total']):
+                         [feed.unique_id, ingest_type, 'total']):
 
         with \
                 logged(logger, 'Polling page (%s)', [href]), \
                 metric_timer(metrics['ingest_page_duration_seconds'],
-                             [feed.unique_id, 'full', 'pull']):
+                             [feed.unique_id, ingest_type, 'pull']):
             feed_contents = await get_feed_contents(session, href, feed.auth_headers(href))
 
         with logged(logger, 'Parsing JSON', []):
@@ -235,7 +236,7 @@ async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_na
 
         with \
                 metric_timer(metrics['ingest_page_duration_seconds'],
-                             [feed.unique_id, 'full', 'push']), \
+                             [feed.unique_id, ingest_type, 'push']), \
                 metric_counter(metrics['ingest_activities_nonunique_total'],
                                [feed.unique_id], len(es_bulk_items)):
             await es_bulk(logger, session, es_endpoint, es_bulk_items)
