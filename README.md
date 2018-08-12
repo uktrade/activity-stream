@@ -23,7 +23,7 @@ and then to run the tests themselves
 
 ## Verification Feed
 
-A small separate application in [verification_feed](verification_feed) is provided to allow the stream to be tested, even in production, without using real data. It provides a single activity, published date of the moment the feed is queried.
+A small separate application in [verification_feed](verification_feed) is provided to allow the stream to be tested, even in production, without using real data. It provides a number of activities, published date of the moment the feed is queried.
 
 ## Elasticsearch / Kibana Proxy
 
