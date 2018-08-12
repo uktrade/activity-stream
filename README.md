@@ -64,6 +64,22 @@ This is the application that features a HTTP server, accepting <em>incoming</em>
 
 A proxy is provided to allow developer access to Elasticsearch / Kibana in [elasticsearch_proxy](elasticsearch_proxy).
 
+## Logging
+
+Logs are usually output in the format
+
+    [application name,optional comma separated contexts] Action... (completion status)
+
+For example two message involved in gathering metrics would be shown in Kibana as
+
+    August 12th 2018, 10:59:45.829  [outgoing,metrics] Saving to Redis... (done)
+    August 12th 2018, 10:59:45.827  [outgoing,metrics] Saving to Redis...
+
+There are potentially many separate chains of concurrent behaviour at any given time: the context is used to help quickly distinguish them in the logs. For the outpoing application when it fetches data, the context is a human-readable unique identifier for the source. For incoming requests, the context is a unique identifier generated at the beginning of the request.
+
+    [elasticsearch-proxy,IbPY5ozS] Elasticsearch request by (ACCOUNT_ID) to (GET) (dev-v6qrmm4neh44yfdng3dlj24umu.eu-west-1.es.amazonaws.com:443/_plugin/kibana/bundles/one)...
+    [elasticsearch-proxy,IbPY5ozS] Receiving request (10.0.0.456) (GET /_plugin/kibana/bundles/commons.style.css?v=16602 HTTP/1.1) (Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36) (1.2.3.4, 127.0.0.1)
+
 ## Verification Feed
 
 A small separate application in [verification_feed](verification_feed) is provided to allow the stream to be tested, even in production, without using real data. It provides a number of activities, published date of the moment the feed is queried.
