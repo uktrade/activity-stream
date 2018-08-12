@@ -215,7 +215,7 @@ async def sleep(logger, interval):
         await asyncio.sleep(interval)
 
 
-async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_name, href, **_):
+async def ingest_feed_page(logger, metrics, session, feed, es_endpoint, index_name, href):
     with \
             logged(logger, 'Polling/pushing page', []), \
             metric_timer(metrics['ingest_page_duration_seconds'], [feed.unique_id, 'total']):
