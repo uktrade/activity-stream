@@ -64,9 +64,11 @@ async def run_application():
             request['logger'], 'Elasticsearch request by (%s) to (%s) (%s)',
             [es_endpoint['access_key_id'], request.method, str(url)],
         ):
-            response = await client_session.request(request.method, str(url), data=request_body,
-                                                    headers={**source_headers, **auth_headers})
-            response_body = await response.read()
+            async with client_session.request(
+                request.method, str(url), data=request_body,
+                headers={**source_headers, **auth_headers}
+            ) as response:
+                response_body = await response.read()
 
         return web.Response(status=response.status, body=response_body, headers=response.headers)
 

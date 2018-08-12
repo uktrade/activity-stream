@@ -346,11 +346,11 @@ async def ingest_feed_page(logger, metrics, session, ingest_type, feed_lock, fee
 
 
 async def get_feed_contents(session, href, headers):
-    result = await session.get(href, headers=headers)
-    if result.status != 200:
-        raise Exception(await result.text())
+    async with session.get(href, headers=headers) as result:
+        if result.status != 200:
+            raise Exception(await result.text())
 
-    return await result.read()
+        return await result.read()
 
 
 def parse_feed_config(feed_config):

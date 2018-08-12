@@ -409,13 +409,13 @@ async def es_request(logger, session, endpoint, method, path, query, headers, pa
 
         query_string = '&'.join([key + '=' + query[key] for key in query.keys()])
         url = endpoint['base_url'] + path + (('?' + query_string) if query_string != '' else '')
-        result = await session.request(
+        async with session.request(
             method, url,
             data=payload, headers={**headers, **auth_headers}
-        )
-        # Without this, after some number of requests, they end up hanging
-        await result.read()
-        return result
+        ) as result:
+            # Without this, after some number of requests, they end up hanging
+            await result.read()
+            return result
 
 
 class ESMetricsUnavailable(Exception):
