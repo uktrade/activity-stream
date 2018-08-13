@@ -291,17 +291,20 @@ async def get_feed_updates_url(logger, redis_client, feed):
             # We do have an atomic GETSET however, so we use that with a special NOT_EXISTS value
             updates_seed_url = await redis_client.execute('GETSET', updates_seed_url_key,
                                                           NOT_EXISTS)
+            logger.debug('Getting updates url... (seed: %s)', updates_seed_url)
             if updates_seed_url is not None and updates_seed_url != NOT_EXISTS:
                 url = updates_seed_url
                 break
 
             updates_latest_url = await redis_client.execute('GET', updates_latest_url_key)
+            logger.debug('Getting updates url... (latest: %s)', updates_latest_url)
             if updates_latest_url is not None:
                 url = updates_latest_url
                 break
 
             await sleep(logger, 1)
 
+    logger.debug('Getting updates url... (found: %s)', url)
     return url.decode('utf-8')
 
 
