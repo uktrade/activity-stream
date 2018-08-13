@@ -21,7 +21,7 @@ A simple paginated HTTP endpoint is exposed in each source service, exposing dat
 - A new Elasticsearch index is created with a unique name, and its mappings are set.
 - Starting from a pre-configured seed URL:
   - the Activity Stream fetches a page of activities from the URL, and ingests them into the Elasticsearch index;
-  - the URL for the next URL is given explicitly in the page;
+  - the URL for the next page is given explicitly in the page;
   - repeat until there is no next URL specified.
 - After all pages ingested, the index is aliased to `activities`, with any previous aliases for that source atomically removed.
 - Repeat indefinitely.
