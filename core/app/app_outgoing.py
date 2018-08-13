@@ -199,7 +199,7 @@ async def ingest_feed_full(logger, metrics, redis_client, session, feed_lock, fe
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'full']), \
             metric_inprogress(metrics['ingest_inprogress_ingests_total']):
 
-        await set_feed_updates_seed_url_init(redis_client, feed)
+        await set_feed_updates_seed_url_init(logger, redis_client, feed)
         indexes_without_alias, _ = await get_old_index_names(
             logger, session, es_endpoint,
         )
@@ -253,11 +253,12 @@ async def ingest_feed_updates(logger, metrics, redis_client, session, feed_lock,
     await sleep(logger, UPDATES_INTERVAL)
 
 
-async def set_feed_updates_seed_url_init(redis_client, feed):
+async def set_feed_updates_seed_url_init(logger, redis_client, feed):
     updates_seed_url_key = 'feed-updates-seed-url-' + feed.unique_id
-    await redis_client.execute('SET', updates_seed_url_key, NOT_EXISTS,
-                               'EX', FEED_UPDATE_URL_EXPIRE,
-                               'NX')
+    with logged(logger, 'Setting updates seed url initial to (%s)', [NOT_EXISTS]):
+        await redis_client.execute('SET', updates_seed_url_key, NOT_EXISTS,
+                                   'EX', FEED_UPDATE_URL_EXPIRE,
+                                   'NX')
 
 
 async def set_feed_updates_seed_url(logger, redis_client, feed, updates_url):
