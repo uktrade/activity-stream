@@ -118,9 +118,9 @@ async def acquire_and_keep_lock(parent_logger, redis_client, raven_client):
     harm
     '''
     logger = get_child_logger(parent_logger, 'lock')
-    ttl = 2
-    aquire_interval = 1
-    extend_interval = 1
+    ttl = 3
+    aquire_interval = 0.5
+    extend_interval = 0.5
     key = 'lock'
 
     async def acquire():
