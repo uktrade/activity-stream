@@ -158,29 +158,9 @@ async def refresh_index(logger, session, es_endpoint, index_name):
             endpoint=es_endpoint,
             method='POST',
             path=f'/{index_name}/_refresh',
-            query={},
+            query={'ignore_unavailable': 'true'},
             headers={'Content-Type': 'application/json'},
             payload=b'',
-        )
-
-
-async def set_refresh_interval(logger, session, es_endpoint, index_name, refresh_interval):
-    with logged(logger, 'Setting refresh interval on (%s) to (%s)',
-                [index_name, refresh_interval]):
-        settings = json.dumps({
-            'index': {
-                'refresh_interval': refresh_interval,
-            }
-        }).encode('utf-8')
-        await es_request_non_200_exception(
-            logger=logger,
-            session=session,
-            endpoint=es_endpoint,
-            method='PUT',
-            path=f'/{index_name}/_settings',
-            query={},
-            headers={'Content-Type': 'application/json'},
-            payload=settings,
         )
 
 

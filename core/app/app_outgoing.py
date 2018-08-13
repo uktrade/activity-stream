@@ -35,7 +35,6 @@ from .app_elasticsearch import (
     add_remove_aliases_atomically,
     delete_indexes,
     refresh_index,
-    set_refresh_interval,
 )
 
 from .app_feeds import (
@@ -62,6 +61,9 @@ METRICS_INTERVAL = 1
 # ever if the feed is turned off
 FEED_UPDATE_URL_EXPIRE = 60 * 60 * 24 * 31
 NOT_EXISTS = b'__NOT_EXISTS__'
+
+
+UPDATES_INTERVAL = 1
 
 
 async def run_outgoing_application():
@@ -221,7 +223,6 @@ async def ingest_feed_full(logger, metrics, redis_client, session, feed, es_endp
             await sleep(logger, feed.polling_page_interval)
 
         await refresh_index(logger, session, es_endpoint, index_name)
-        await set_refresh_interval(logger, session, es_endpoint, index_name, '1s')
 
         await add_remove_aliases_atomically(
             logger, session, es_endpoint, index_name, feed.unique_id,
@@ -246,9 +247,12 @@ async def ingest_feed_updates(logger, metrics, redis_client, session, feed, es_e
             updates_href = href
             href = await ingest_feed_page(logger, metrics, session, 'updates', feed, es_endpoint,
                                           indexes_to_ingest_into, href)
-            await sleep(logger, feed.polling_page_interval)
 
+        for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
+            await refresh_index(logger, session, es_endpoint, index_name)
         await set_feed_updates_url(logger, redis_client, feed, updates_href)
+
+    await sleep(logger, UPDATES_INTERVAL)
 
 
 async def set_feed_updates_seed_url_init(redis_client, feed):
