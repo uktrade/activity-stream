@@ -27,7 +27,6 @@ from .app_elasticsearch import (
     es_nonsearchable_total,
     es_min_verification_age,
     create_index,
-    create_mapping,
     get_new_index_name,
     get_old_index_names,
     indexes_matching_feeds,
@@ -211,7 +210,6 @@ async def ingest_feed_full(logger, metrics, redis_client, session, feed_lock, fe
 
         index_name = get_new_index_name(feed.unique_id)
         await create_index(logger, session, es_endpoint, index_name)
-        await create_mapping(logger, session, es_endpoint, index_name)
 
         href = feed.seed
         while href:

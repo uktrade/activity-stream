@@ -136,7 +136,22 @@ async def create_index(logger, session, es_endpoint, index_name):
                     'number_of_replicas': 1,
                     'refresh_interval': '-1',
                 }
-            }
+            },
+            'mappings': {
+                '_doc': {
+                    'properties': {
+                        'published_date': {
+                            'type': 'date',
+                        },
+                        'type': {
+                            'type': 'keyword',
+                        },
+                        'object.type': {
+                            'type': 'keyword',
+                        },
+                    },
+                },
+            },
         }).encode('utf-8')
         await es_request_non_200_exception(
             logger=logger,
@@ -161,33 +176,6 @@ async def refresh_index(logger, session, es_endpoint, index_name):
             query={'ignore_unavailable': 'true'},
             headers={'Content-Type': 'application/json'},
             payload=b'',
-        )
-
-
-async def create_mapping(logger, session, es_endpoint, index_name):
-    with logged(logger, 'Creating mapping for index (%s)', [index_name]):
-        mapping_definition = json.dumps({
-            'properties': {
-                'published_date': {
-                    'type': 'date',
-                },
-                'type': {
-                    'type': 'keyword',
-                },
-                'object.type': {
-                    'type': 'keyword',
-                },
-            },
-        }).encode('utf-8')
-        await es_request_non_200_exception(
-            logger=logger,
-            session=session,
-            endpoint=es_endpoint,
-            method='PUT',
-            path=f'/{index_name}/_mapping/_doc',
-            query={},
-            headers={'Content-Type': 'application/json'},
-            payload=mapping_definition,
         )
 
 
