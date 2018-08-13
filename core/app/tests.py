@@ -724,7 +724,7 @@ class TestApplication(TestBase):
     @async_test
     async def test_es_no_connect_recovered(self):
         modified = 0
-        max_modifications = 2
+        max_modifications = 4
 
         async def handle_client(local_reader, local_writer):
             nonlocal modified
@@ -760,7 +760,7 @@ class TestApplication(TestBase):
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
         result, status, _ = await get_until(url, x_forwarded_for,
                                             has_at_least_ordered_items(2))
-        mock_sleep.assert_any_call(60)
+        mock_sleep.assert_any_call(2)
         server.close()
         await server.wait_closed()
         self.assertEqual(status, 200)

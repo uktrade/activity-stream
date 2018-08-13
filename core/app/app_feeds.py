@@ -9,6 +9,7 @@ from .app_utils import sub_dict_lower
 class ActivityStreamFeed:
 
     polling_page_interval = 0
+    exception_intervals = [1, 2, 4, 8, 16, 32, 64]
 
     @classmethod
     def parse_config(cls, config):
@@ -58,6 +59,7 @@ class ZendeskFeed:
     # The staging API is severely rate limited
     # This could be dynamic, but KISS
     polling_page_interval = 30
+    exception_intervals = [120, 180, 240, 300]
 
     company_number_regex = r'Company number:\s*(\d+)'
 

@@ -53,7 +53,7 @@ from .app_utils import (
     main,
 )
 
-EXCEPTION_INTERVAL = 60
+EXCEPTION_INTERVALS = [1, 2, 4, 8, 16, 32, 64]
 METRICS_INTERVAL = 1
 
 # So the latest URL for feeds don't hang around in Redis for
@@ -142,8 +142,7 @@ async def acquire_and_keep_lock(parent_logger, redis_client, raven_client):
 
     await acquire()
     asyncio.get_event_loop().create_task(async_repeat_until_cancelled(
-        logger, raven_client, extend_interval,
-        extend_forever,
+        logger, raven_client, EXCEPTION_INTERVALS, extend_forever,
     ))
 
 
@@ -154,7 +153,7 @@ async def create_outgoing_application(logger, metrics, raven_client, redis_clien
             logger, metrics, raven_client, redis_client, session, feed_endpoints, es_endpoint,
         )
     asyncio.get_event_loop().create_task(
-        async_repeat_until_cancelled(logger, raven_client, EXCEPTION_INTERVAL, ingester)
+        async_repeat_until_cancelled(logger, raven_client, EXCEPTION_INTERVALS, ingester)
     )
 
 
@@ -178,9 +177,8 @@ async def ingest_feeds(logger, metrics, raven_client, redis_client, session,
         return _feed_ingester
 
     await asyncio.gather(*[
-        async_repeat_until_cancelled(
-            ingest_type_logger, raven_client, EXCEPTION_INTERVAL, ingester,
-        )
+        async_repeat_until_cancelled(ingest_type_logger, raven_client,
+                                     feed_endpoint.exception_intervals, ingester)
         for feed_endpoint in feed_endpoints
         for feed_lock in [asyncio.Lock()]
         for feed_logger in [get_child_logger(logger, feed_endpoint.unique_id)]
@@ -399,7 +397,7 @@ async def create_metrics_application(parent_logger, metrics, metrics_registry, r
             await redis_client.set('metrics', metrics)
 
     asyncio.get_event_loop().create_task(
-        async_repeat_until_cancelled(logger, raven_client, METRICS_INTERVAL, poll_metrics)
+        async_repeat_until_cancelled(logger, raven_client, EXCEPTION_INTERVALS, poll_metrics)
     )
 
 
