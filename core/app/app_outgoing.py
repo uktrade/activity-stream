@@ -256,9 +256,11 @@ async def ingest_feed_updates(logger, metrics, redis_client, session, feed_lock,
 async def set_feed_updates_seed_url_init(logger, redis_client, feed):
     updates_seed_url_key = 'feed-updates-seed-url-' + feed.unique_id
     with logged(logger, 'Setting updates seed url initial to (%s)', [NOT_EXISTS]):
-        await redis_client.execute('SET', updates_seed_url_key, NOT_EXISTS,
-                                   'EX', FEED_UPDATE_URL_EXPIRE,
-                                   'NX')
+        result = await redis_client.execute('SET', updates_seed_url_key, NOT_EXISTS,
+                                            'EX', FEED_UPDATE_URL_EXPIRE,
+                                            'NX')
+        logger.debug('Setting updates seed url initial to (%s)... (result: %s)',
+                     NOT_EXISTS, result)
 
 
 async def set_feed_updates_seed_url(logger, redis_client, feed, updates_url):
