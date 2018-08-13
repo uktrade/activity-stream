@@ -16,34 +16,22 @@ def flatten(list_to_flatten):
     ]
 
 
-def async_repeat_until_cancelled(coroutine):
+async def async_repeat_until_cancelled(logger, raven_client, exception_interval, coroutine):
+    while True:
+        try:
+            await coroutine()
+        except asyncio.CancelledError:
+            break
+        except BaseException:
+            logger.exception(
+                'Raised exception in async_repeat_until_cancelled. '
+                'Waiting %s seconds until looping.', exception_interval)
+            raven_client.captureException()
 
-    async def _async_repeat_until_cancelled(*args, **kwargs):
-        app_logger = logging.getLogger('activity-stream')
-
-        kwargs_to_pass, (raven_client, exception_interval, logging_title) = \
-            extract_keys(kwargs, [
-                '_async_repeat_until_cancelled_raven_client',
-                '_async_repeat_until_cancelled_exception_interval',
-                '_async_repeat_until_cancelled_logging_title',
-            ])
-
-        while True:
             try:
-                await coroutine(*args, **kwargs_to_pass)
+                await asyncio.sleep(exception_interval)
             except asyncio.CancelledError:
                 break
-            except BaseException as exception:
-                app_logger.exception('%s raised exception: %s', logging_title, exception)
-                raven_client.captureException()
-                app_logger.warning('Waiting %s seconds until restarting', exception_interval)
-
-                try:
-                    await asyncio.sleep(exception_interval)
-                except asyncio.CancelledError:
-                    break
-
-    return _async_repeat_until_cancelled
 
 
 def sub_dict_lower(super_dict, keys):
@@ -51,19 +39,6 @@ def sub_dict_lower(super_dict, keys):
         key.lower(): super_dict[key]
         for key in keys
     }
-
-
-def extract_keys(dictionary, keys):
-    extracted = [
-        dictionary[key]
-        for key in keys
-    ]
-    without_keys = {
-        key: value
-        for key, value in dictionary.items()
-        if key not in keys
-    }
-    return without_keys, extracted
 
 
 async def cancel_non_current_tasks():
@@ -85,10 +60,6 @@ def get_raven_client(sentry):
 
 def main(run_application_coroutine):
     stdout_handler = logging.StreamHandler(sys.stdout)
-    aiohttp_log = logging.getLogger('aiohttp.access')
-    aiohttp_log.setLevel(logging.DEBUG)
-    aiohttp_log.addHandler(stdout_handler)
-
     app_logger = logging.getLogger('activity-stream')
     app_logger.setLevel(logging.DEBUG)
     app_logger.addHandler(stdout_handler)

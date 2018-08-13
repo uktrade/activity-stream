@@ -1,10 +1,15 @@
 import hmac
-import logging
-import uuid
 
 from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
+
+from shared.logger import (
+    get_child_logger,
+)
+from shared.utils import (
+    random_url_safe,
+)
 
 from .app_elasticsearch import (
     es_search,
@@ -23,12 +28,10 @@ UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
 def authenticator(incoming_key_pairs, redis_client, nonce_expire):
-    app_logger = logging.getLogger('activity-stream')
-
     @web.middleware
     async def authenticate(request, handler):
         if 'X-Forwarded-Proto' not in request.headers:
-            app_logger.warning(
+            request['logger'].warning(
                 'Failed authentication: no X-Forwarded-Proto header passed'
             )
             raise web.HTTPUnauthorized(text=MISSING_X_FORWARDED_PROTO)
@@ -43,9 +46,13 @@ def authenticator(incoming_key_pairs, redis_client, nonce_expire):
             receiver = await _authenticate_or_raise(incoming_key_pairs, redis_client,
                                                     nonce_expire, request)
         except HawkFail as exception:
-            app_logger.warning('Failed authentication %s', exception)
+            request['logger'].warning('Failed authentication %s', exception)
             raise web.HTTPUnauthorized(text=INCORRECT)
 
+        request['logger'] = get_child_logger(
+            request['logger'],
+            receiver.resource.credentials['id'],
+        )
         request['permissions'] = receiver.resource.credentials['permissions']
         return await handler(request)
 
@@ -127,8 +134,6 @@ def raven_reporter(raven_client):
 
 
 def convert_errors_to_json():
-    app_logger = logging.getLogger('activity-stream')
-
     @web.middleware
     async def _convert_errors_to_json(request, handler):
         try:
@@ -136,7 +141,7 @@ def convert_errors_to_json():
         except web.HTTPException as exception:
             response = json_response({'details': exception.text}, status=exception.status_code)
         except BaseException as exception:
-            app_logger.exception('About to return 500')
+            request['logger'].exception('About to return 500')
             response = json_response({'details': UNKNOWN_ERROR}, status=500)
         return response
 
@@ -147,30 +152,30 @@ async def handle_post(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
-def handle_get_new(session, redis_client, pagination_expire, es_endpoint):
-    return _handle_get(session, redis_client, pagination_expire, es_endpoint,
+def handle_get_new(logger, session, redis_client, pagination_expire, es_endpoint):
+    return _handle_get(logger, session, redis_client, pagination_expire, es_endpoint,
                        es_search_new_scroll)
 
 
-def handle_get_existing(session, redis_client, pagination_expire, es_endpoint):
-    return _handle_get(session, redis_client, pagination_expire, es_endpoint,
+def handle_get_existing(logger, session, redis_client, pagination_expire, es_endpoint):
+    return _handle_get(logger, session, redis_client, pagination_expire, es_endpoint,
                        es_search_existing_scroll)
 
 
-def _handle_get(session, redis_client, pagination_expire, es_endpoint, get_path_query):
+def _handle_get(logger, session, redis_client, pagination_expire, es_endpoint, get_path_query):
     async def handle(request):
         incoming_body = await request.read()
         path, query, body = await get_path_query(redis_client, request.match_info,
                                                  incoming_body)
 
         async def to_public_scroll_url(private_scroll_id):
-            public_scroll_id = uuid.uuid4().hex
+            public_scroll_id = random_url_safe(8)
             await redis_client.set(f'private-scroll-id-{public_scroll_id}', private_scroll_id,
                                    expire=pagination_expire)
             return str(request.url.join(
                 request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)))
 
-        results, status = await es_search(session, es_endpoint, path, query, body,
+        results, status = await es_search(logger, session, es_endpoint, path, query, body,
                                           {'Content-Type': request.headers['Content-Type']},
                                           to_public_scroll_url)
 

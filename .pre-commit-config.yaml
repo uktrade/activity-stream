@@ -34,7 +34,7 @@ repos:
       types: [python]
       args:
         - --include-naming-hint=yes
-        - --max-args=8
+        - --max-args=9
         - --max-locals=20
         - --ignore-imports=yes
         - --disable=attribute-defined-outside-init

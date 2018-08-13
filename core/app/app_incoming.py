@@ -1,14 +1,21 @@
 import asyncio
-import logging
 import os
 
 import aiohttp
 from aiohttp import web
 import aioredis
+
+from shared.logger import (
+    get_root_logger,
+    logged,
+)
 from shared.utils import (
-    authenticate_by_ip,
     get_common_config,
     normalise_environment,
+)
+from shared.web import (
+    server_logger,
+    authenticate_by_ip,
 )
 
 from .app_server import (
@@ -33,30 +40,28 @@ PAGINATION_EXPIRE = 10
 
 
 async def run_incoming_application():
-    app_logger = logging.getLogger('activity-stream')
+    logger = get_root_logger('incoming')
 
-    app_logger.debug('Examining environment...')
-    env = normalise_environment(os.environ)
-
-    es_endpoint, redis_uri, sentry = get_common_config(env)
-    port = env['PORT']
-    incoming_key_pairs = [{
-        'key_id': key_pair['KEY_ID'],
-        'secret_key': key_pair['SECRET_KEY'],
-        'permissions': key_pair['PERMISSIONS'],
-    } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
-    ip_whitelist = env['INCOMING_IP_WHITELIST']
-
-    app_logger.debug('Examining environment: done')
+    with logged(logger, 'Examining environment', []):
+        env = normalise_environment(os.environ)
+        es_endpoint, redis_uri, sentry = get_common_config(env)
+        port = env['PORT']
+        incoming_key_pairs = [{
+            'key_id': key_pair['KEY_ID'],
+            'secret_key': key_pair['SECRET_KEY'],
+            'permissions': key_pair['PERMISSIONS'],
+        } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
+        ip_whitelist = env['INCOMING_IP_WHITELIST']
 
     raven_client = get_raven_client(sentry)
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
     redis_client = await aioredis.create_redis(redis_uri)
 
-    runner = await create_incoming_application(
-        port, ip_whitelist, incoming_key_pairs,
-        redis_client, raven_client, session, es_endpoint,
-    )
+    with logged(logger, 'Creating listening web application', []):
+        runner = await create_incoming_application(
+            logger, port, ip_whitelist, incoming_key_pairs,
+            redis_client, raven_client, session, es_endpoint,
+        )
 
     async def cleanup():
         await cancel_non_current_tasks()
@@ -71,28 +76,29 @@ async def run_incoming_application():
 
 
 async def create_incoming_application(
-        port, ip_whitelist, incoming_key_pairs,
+        logger, port, ip_whitelist, incoming_key_pairs,
         redis_client, raven_client, session, es_endpoint):
-    app_logger = logging.getLogger('activity-stream')
-
-    app_logger.debug('Creating listening web application...')
 
     app = web.Application(middlewares=[
+        server_logger(logger),
         convert_errors_to_json(),
         raven_reporter(raven_client),
     ])
 
     private_app = web.Application(middlewares=[
-        authenticate_by_ip(app_logger, INCORRECT, ip_whitelist),
+        authenticate_by_ip(INCORRECT, ip_whitelist),
         authenticator(incoming_key_pairs, redis_client, NONCE_EXPIRE),
         authorizer(),
     ])
     private_app.add_routes([
         web.post('/', handle_post),
-        web.get('/', handle_get_new(session, redis_client, PAGINATION_EXPIRE, es_endpoint)),
+        web.get(
+            '/',
+            handle_get_new(logger, session, redis_client, PAGINATION_EXPIRE, es_endpoint)
+        ),
         web.get(
             '/{public_scroll_id}',
-            handle_get_existing(session, redis_client, PAGINATION_EXPIRE, es_endpoint),
+            handle_get_existing(logger, session, redis_client, PAGINATION_EXPIRE, es_endpoint),
             name='scroll',
         ),
     ])
@@ -100,13 +106,17 @@ async def create_incoming_application(
     app.add_routes([
         web.get('/metrics', handle_get_metrics(redis_client)),
     ])
-    access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
 
-    runner = web.AppRunner(app, access_log_format=access_log_format)
+    class NullAccessLogger(aiohttp.abc.AbstractAccessLogger):
+        # pylint: disable=too-few-public-methods
+
+        def log(self, request, response, time):
+            pass
+
+    runner = web.AppRunner(app, access_log_class=NullAccessLogger)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    app_logger.debug('Creating listening web application: done')
 
     return runner
 
