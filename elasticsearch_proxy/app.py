@@ -61,8 +61,8 @@ async def run_application():
         )
 
         with logged(
-            request['logger'], 'Elasticsearch request by (%s) to (%s) (%s)',
-            [es_endpoint['access_key_id'], request.method, str(url)],
+            request['logger'], 'Elasticsearch request by (%s) to (%s) (%s) (%s)',
+            [es_endpoint['access_key_id'], request.method, str(url), request_body],
         ):
             async with client_session.request(
                 request.method, str(url), data=request_body,
