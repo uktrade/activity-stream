@@ -61,8 +61,10 @@ async def run_application():
         )
 
         with logged(
-            request['logger'], 'Elasticsearch request by (%s) to (%s) (%s) (%s)',
-            [es_endpoint['access_key_id'], request.method, str(url), request_body],
+            request['logger'], 'Elasticsearch request by (%s)/(%s) to (%s) (%s) (%s)', [
+                request['me_profile']['email'], es_endpoint['access_key_id'],
+                request.method, str(url), request_body,
+            ],
         ):
             async with client_session.request(
                 request.method, str(url), data=request_body,
@@ -168,9 +170,9 @@ def authenticate_by_staff_sso(client_session, base, client_id, client_secret):
         async with client_session.get(f'{base}{me_path}', headers={
             'Authorization': f'Bearer {token}'
         }) as me_response:
-            # Without this, suspect connections are left open leading to eventual deadlock
-            await me_response.read()
+            me_profile = await me_response.json()
 
+        request['me_profile'] = me_profile
         return \
             await handler(request) if me_response.status == 200 else \
             web.Response(status=302, headers={
