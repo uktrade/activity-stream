@@ -13,13 +13,15 @@ Activity Stream is a collector of various interactions between people and DIT.
 
 ## Architecture and algorithm
 
+### Full ingest of all activities
+
 A simple paginated HTTP endpoint is exposed in each source service, exposing data in W3C Activity 2.0 format. Concurrently for each source:
 
 - (Delete any unused Elasticsearch indexes for the source)
 - A new Elasticsearch index is created with a unique name, and its mappings are set.
 - Starting from a pre-configured seed URL:
   - the Activity Stream fetches a page of activities from the URL, and ingests them into the Elasticsearch index;
-  - the URL for the next URL is given explicitly in the page;
+  - the URL for the next page is given explicitly in the page;
   - repeat until there is no next URL specified.
 - After all pages ingested, the index is aliased to `activities`, with any previous aliases for that source atomically removed.
 - Repeat indefinitely.
@@ -36,7 +38,35 @@ This algorithm has a number of nice properties that make it acceptable for an ea
 - Migrations, in terms of updating Elasticsearch mappings, are baked right into the algorithm, and happen on every ingest.
 - The fact that it's a single algorithm, with a single low-tech endpoint in each source, that has the above properties. It's one thing to code up, maintain and ensure is secure. This touches production data, and the team involved in this project is small.
 
-Of course, it is _not_ optimised for real time updates. Updates for new data will appear after the next full ingest.
+### (Almost) real time updates
+
+Real time updates are done using a variation of the algorithm for full ingest. Specifically, after a full ingest has completed:
+
+- The final URL used for the full ingest is saved as the seed for updates.
+- Fetch all indexes for each source, both the live one aliased to `activites`, and the one being currently the target of the full ingest.
+- Starting from the updates seed URL:
+  - the Activity Stream fetches a page of activities from the URL, and ingests them into the Elasticsearch indexes;
+  - the URL for the next page is given explicitly in the page;
+  - repeat until there is no next URL specified.
+- Once all the pages from the updates are ingested, save the final URL used as the seed for the next pass.
+- Sleep for 1 second.
+- Repeat indefinitely, but if a full ingest has completed, use its final URL as the seed for updates.
+
+A lock is used per feed, that ensures a single in-progress request to each source service. The rest of the behaviour is concurrent.
+
+This algorithm has a number of nice properties
+
+- The Activity Stream doesn't need to be aware of the format of the URLs. It only needs to know the seed URL.
+- The source service doesn't need to support multiple methods of fetching data: both real time updates and full ingest uses the same endpoint.
+- Once a full ingest is completed, the updates are independant of the time it takes to perform a full ingest.
+- Once activities are visible in the `activities` alias, they won't disappear due to race conditions between the full ingest and the updates ingest. This is the reason for ingesting updates into both the live and in-progress indexes.
+- This shares a fair bit of code with the full ingest. The team behind this project is small, and so this is less to maintain than other possibilities.
+- Similar to the full ingest, the behaviour of the source service when data is created is in no way dependant on the Activity Stream.
+- Similar to the full ingest, it doesn't require a highly available intermediate buffer, nor does it require the source service to keep track of what has been sent.
+- Similar to the full ingest, it is self-correcting after downtime of either the source service or the Activity Stream.
+- Data will still be changed/removed on the next full ingest pass.
+
+In tests, this results in updates being available in Elasticsearch in between 1 and 4 seconds.
 
 ## Running tests
 

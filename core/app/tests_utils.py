@@ -4,6 +4,7 @@ import os
 
 import aiohttp
 from aiohttp import web
+import aioredis
 import mohawk
 
 from .app_incoming import run_incoming_application
@@ -87,6 +88,11 @@ async def delete_all_es_data():
         await session.post('http://127.0.0.1:9200/_refresh')
 
     await fetch_until('http://127.0.0.1:9200/_search', has_exactly(0))
+
+
+async def delete_all_redis_data():
+    redis_client = await aioredis.create_redis('redis://127.0.0.1:6379')
+    await redis_client.execute('FLUSHDB')
 
 
 async def fetch_all_es_data_until(condition):

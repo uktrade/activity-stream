@@ -64,9 +64,11 @@ async def run_application():
             request['logger'], 'Elasticsearch request by (%s) to (%s) (%s)',
             [es_endpoint['access_key_id'], request.method, str(url)],
         ):
-            response = await client_session.request(request.method, str(url), data=request_body,
-                                                    headers={**source_headers, **auth_headers})
-            response_body = await response.read()
+            async with client_session.request(
+                request.method, str(url), data=request_body,
+                headers={**source_headers, **auth_headers}
+            ) as response:
+                response_body = await response.read()
 
         return web.Response(status=response.status, body=response_body, headers=response.headers)
 
@@ -163,11 +165,12 @@ def authenticate_by_staff_sso(client_session, base, client_id, client_secret):
             return web.Response(status=302, headers={'Location': redirect_uri_final})
 
         token = session[session_token_key]
-        me_response = await client_session.get(f'{base}{me_path}', headers={
+        async with client_session.get(f'{base}{me_path}', headers={
             'Authorization': f'Bearer {token}'
-        })
-        # Without this, suspect connections are left open leading to eventual deadlock
-        await me_response.read()
+        }) as me_response:
+            # Without this, suspect connections are left open leading to eventual deadlock
+            await me_response.read()
+
         return \
             await handler(request) if me_response.status == 200 else \
             web.Response(status=302, headers={

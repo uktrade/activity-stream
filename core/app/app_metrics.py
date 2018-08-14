@@ -14,9 +14,11 @@ from prometheus_client import (
 
 METRICS_CONF = [
     (Summary, 'ingest_feed_duration_seconds',
-     'Time to ingest all pages of a feed in seconds', ['feed_unique_id', 'status']),
+     'Time to ingest all pages of a feed in seconds',
+     ['feed_unique_id', 'ingest_type', 'status']),
     (Histogram, 'ingest_page_duration_seconds',
-     'Time for a page of data to be ingested in seconds', ['feed_unique_id', 'stage', 'status']),
+     'Time for a page of data to be ingested in seconds',
+     ['feed_unique_id', 'ingest_type', 'stage', 'status']),
     (Gauge, 'ingest_inprogress_ingests_total',
      'The number of inprogress ingests', []),
     (Counter, 'ingest_activities_nonunique_total',

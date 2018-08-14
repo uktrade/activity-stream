@@ -9,7 +9,7 @@ from .app_utils import sub_dict_lower
 class ActivityStreamFeed:
 
     polling_page_interval = 0
-    polling_seed_interval = 0
+    exception_intervals = [1, 2, 4, 8, 16, 32, 64]
 
     @classmethod
     def parse_config(cls, config):
@@ -37,17 +37,21 @@ class ActivityStreamFeed:
         }
 
     @classmethod
-    def convert_to_bulk_es(cls, feed, index_name):
-        return [{
-            'action_and_metadata': {
-                'index': {
-                    '_id': item['id'],
-                    '_index': index_name,
-                    '_type': '_doc',
-                }
-            },
-            'source': item
-        } for item in feed['orderedItems']]
+    def convert_to_bulk_es(cls, feed, index_names):
+        return [
+            {
+                'action_and_metadata': {
+                    'index': {
+                        '_id': item['id'],
+                        '_index': index_name,
+                        '_type': '_doc',
+                    }
+                },
+                'source': item
+            }
+            for item in feed['orderedItems']
+            for index_name in index_names
+        ]
 
 
 class ZendeskFeed:
@@ -55,7 +59,7 @@ class ZendeskFeed:
     # The staging API is severely rate limited
     # This could be dynamic, but KISS
     polling_page_interval = 30
-    polling_seed_interval = 60
+    exception_intervals = [120, 180, 240, 300]
 
     company_number_regex = r'Company number:\s*(\d+)'
 
@@ -82,7 +86,7 @@ class ZendeskFeed:
         }
 
     @classmethod
-    def convert_to_bulk_es(cls, page, index_name):
+    def convert_to_bulk_es(cls, page, index_names):
         def company_numbers(description):
             match = re.search(cls.company_number_regex, description)
             return [match[1]] if match else []
@@ -104,6 +108,7 @@ class ZendeskFeed:
             for ticket in page['tickets']
             for company_number in company_numbers(ticket['description'])
             for activity_id in ['dit:zendesk:Ticket:' + str(ticket['id']) + ':Create']
+            for index_name in index_names
         ]
 
 

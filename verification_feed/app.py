@@ -1,6 +1,7 @@
 import asyncio
 from datetime import (
     datetime,
+    timedelta,
     timezone,
 )
 import logging
@@ -27,15 +28,16 @@ async def create_incoming_application(port):
     app_logger = logging.getLogger(LOGGER_NAME)
 
     async def handle(request):
-        page = int(request.match_info['page'])
-        next_page_num = page + 1
-        next_page_href = str(request.url.with_scheme(request.headers.get(
-            'X-Forwarded-Proto', 'http')).with_path(f'/{next_page_num}'))
-        return web.json_response(get_page(page, next_page_href))
+        timestamp = int(request.match_info['timestamp'])
+
+        def get_next_page_href(next_timestamp):
+            return str(request.url.with_scheme(request.headers.get(
+                'X-Forwarded-Proto', 'http')).with_path(f'/{next_timestamp}'))
+        return web.json_response(get_page(timestamp, get_next_page_href))
 
     app_logger.debug('Creating listening web application...')
     app = web.Application()
-    app.add_routes([web.get(r'/{page:\d+}', handle)])
+    app.add_routes([web.get(r'/{timestamp:\d+}', handle)])
 
     access_log_format = '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" %{X-Forwarded-For}i'
     runner = web.AppRunner(app, access_log_format=access_log_format)
@@ -56,9 +58,19 @@ def setup_logging():
     app_logger.addHandler(stdout_handler)
 
 
-def get_page(page, next_page_href):
-    max_pages = 20
-    per_page = 1000
+def get_page(timestamp, get_next_page_href):
+    ''' Creates dummy activities where one has been created every second for the past 24 hours'''
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    one_day_ago = now - timedelta(hours=24)
+
+    first_timestamp = int(one_day_ago.timestamp())
+    final_timestamp = int(now.timestamp())
+
+    max_per_page = 1000
+    first_timestamp_of_page = max(first_timestamp, timestamp)
+    final_timestamp_of_page = min(first_timestamp_of_page + max_per_page, final_timestamp)
+    timestamps = range(first_timestamp_of_page, final_timestamp_of_page)
+
     return {
         '@context': [
             'https://www.w3.org/ns/ettystreams',
@@ -85,14 +97,14 @@ def get_page(page, next_page_href):
                     ],
                     'url': f'https://activitystream.uktrade.io/activities/{activity_id}'
                 },
-                'published': datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                'published': datetime.utcfromtimestamp(timestamp).isoformat(),
                 'type': 'Create'
             }
-            for i in range(page * per_page, (page + 1) * per_page)
-            for activity_id in [str(i)]
+            for timestamp in timestamps
+            for activity_id in [str(timestamp)]
         ],
         'type': 'Collection',
-        **({'next': next_page_href} if page < max_pages - 1 else {}),
+        **({'next': get_next_page_href(final_timestamp_of_page)} if timestamps else {}),
     }
 
 

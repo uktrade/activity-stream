@@ -16,13 +16,20 @@ def flatten(list_to_flatten):
     ]
 
 
-async def async_repeat_until_cancelled(logger, raven_client, exception_interval, coroutine):
+async def async_repeat_until_cancelled(logger, raven_client, exception_intervals, coroutine):
+
+    num_exceptions_in_chain = 0
+
     while True:
         try:
             await coroutine()
+            num_exceptions_in_chain = 0
         except asyncio.CancelledError:
             break
         except BaseException:
+            interval_index = min(num_exceptions_in_chain, len(exception_intervals) - 1)
+            exception_interval = exception_intervals[interval_index]
+            num_exceptions_in_chain += 1
             logger.exception(
                 'Raised exception in async_repeat_until_cancelled. '
                 'Waiting %s seconds until looping.', exception_interval)

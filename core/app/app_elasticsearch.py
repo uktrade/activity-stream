@@ -134,9 +134,24 @@ async def create_index(logger, session, es_endpoint, index_name):
                 'index': {
                     'number_of_shards': 4,
                     'number_of_replicas': 1,
-                    'refresh_interval': -1,
+                    'refresh_interval': '-1',
                 }
-            }
+            },
+            'mappings': {
+                '_doc': {
+                    'properties': {
+                        'published_date': {
+                            'type': 'date',
+                        },
+                        'type': {
+                            'type': 'keyword',
+                        },
+                        'object.type': {
+                            'type': 'keyword',
+                        },
+                    },
+                },
+            },
         }).encode('utf-8')
         await es_request_non_200_exception(
             logger=logger,
@@ -158,36 +173,9 @@ async def refresh_index(logger, session, es_endpoint, index_name):
             endpoint=es_endpoint,
             method='POST',
             path=f'/{index_name}/_refresh',
-            query={},
+            query={'ignore_unavailable': 'true'},
             headers={'Content-Type': 'application/json'},
             payload=b'',
-        )
-
-
-async def create_mapping(logger, session, es_endpoint, index_name):
-    with logged(logger, 'Creating mapping for index (%s)', [index_name]):
-        mapping_definition = json.dumps({
-            'properties': {
-                'published_date': {
-                    'type': 'date',
-                },
-                'type': {
-                    'type': 'keyword',
-                },
-                'object.type': {
-                    'type': 'keyword',
-                },
-            },
-        }).encode('utf-8')
-        await es_request_non_200_exception(
-            logger=logger,
-            session=session,
-            endpoint=es_endpoint,
-            method='PUT',
-            path=f'/{index_name}/_mapping/_doc',
-            query={},
-            headers={'Content-Type': 'application/json'},
-            payload=mapping_definition,
         )
 
 
@@ -409,13 +397,13 @@ async def es_request(logger, session, endpoint, method, path, query, headers, pa
 
         query_string = '&'.join([key + '=' + query[key] for key in query.keys()])
         url = endpoint['base_url'] + path + (('?' + query_string) if query_string != '' else '')
-        result = await session.request(
+        async with session.request(
             method, url,
             data=payload, headers={**headers, **auth_headers}
-        )
-        # Without this, after some number of requests, they end up hanging
-        await result.read()
-        return result
+        ) as result:
+            # Without this, after some number of requests, they end up hanging
+            await result.read()
+            return result
 
 
 class ESMetricsUnavailable(Exception):

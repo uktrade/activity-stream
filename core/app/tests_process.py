@@ -9,6 +9,7 @@ from aiohttp import web
 from .tests_utils import (
     async_test,
     delete_all_es_data,
+    delete_all_redis_data,
     is_http_accepted_eventually,
     wait_until_get_working,
     has_at_least_ordered_items,
@@ -38,6 +39,7 @@ class TestProcess(unittest.TestCase):
 
     async def setup_manual(self, common_env):
         await delete_all_es_data()
+        await delete_all_redis_data()
 
         env = {
             **common_env,

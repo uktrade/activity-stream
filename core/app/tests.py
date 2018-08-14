@@ -15,6 +15,7 @@ from .tests_utils import (
     append_until,
     async_test,
     delete_all_es_data,
+    delete_all_redis_data,
     fast_sleep,
     fetch_all_es_data_until,
     fetch_es_index_names,
@@ -46,6 +47,7 @@ class TestBase(unittest.TestCase):
         ''' Test setUp function that can be customised on a per-test basis '''
 
         await delete_all_es_data()
+        await delete_all_redis_data()
 
         os_environ_patcher = patch.dict(os.environ, env)
         os_environ_patcher.start()
@@ -722,7 +724,7 @@ class TestApplication(TestBase):
     @async_test
     async def test_es_no_connect_recovered(self):
         modified = 0
-        max_modifications = 2
+        max_modifications = 4
 
         async def handle_client(local_reader, local_writer):
             nonlocal modified
@@ -758,7 +760,7 @@ class TestApplication(TestBase):
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
         result, status, _ = await get_until(url, x_forwarded_for,
                                             has_at_least_ordered_items(2))
-        mock_sleep.assert_any_call(60)
+        mock_sleep.assert_any_call(2)
         server.close()
         await server.wait_closed()
         self.assertEqual(status, 200)
@@ -938,8 +940,13 @@ class TestApplication(TestBase):
         self.assertIn('status="success"', text)
         self.assertIn('ingest_activities_nonunique_total{feed_unique_id="first_feed"}',
                       text)
-        self.assertIn('ingest_page_duration_seconds_bucket'
-                      '{feed_unique_id="first_feed",le="0.005",stage="push"', text)
+
+        # The order of labels is apparently not deterministic
+        self.assertIn('ingest_page_duration_seconds_bucket{', text)
+        self.assertIn('ingest_type="full"', text)
+        self.assertIn('le="0.005"', text)
+        self.assertIn('stage="push"', text)
+
         self.assertIn('elasticsearch_activities_total{searchable="searchable"} 2.0', text)
         self.assertIn('elasticsearch_feed_activities_total'
                       '{feed_unique_id="first_feed",searchable="searchable"} 2.0', text)
