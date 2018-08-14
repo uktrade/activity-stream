@@ -74,7 +74,7 @@ async def run_outgoing_application():
         feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
     raven_client = get_raven_client(sentry)
-    conn = aiohttp.TCPConnector(use_dns_cache=False)
+    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
     session = aiohttp.ClientSession(connector=conn, skip_auto_headers=['Accept-Encoding'])
     redis_client = await aioredis.create_redis(redis_uri)
 
