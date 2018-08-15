@@ -68,6 +68,29 @@ This algorithm has a number of nice properties
 
 In tests, this results in updates being available in Elasticsearch in between 1 and 4 seconds.
 
+## Source HTTP endpoints
+
+### Requirements
+
+- Starting from a seed URL, search source HTTP endpoint must output activities in Activity Streams 2.0 JSON-LD format. Specifically, it must offer a `Collection` with the activites in the `orderedItems` key.
+- It must allow pagination, giving the full URL to the next page of results giving a full URL in the `next` key. The final page should not have a `next` key. The Activity Stream itself doesn't depend on what method is used for pagination, but care must be taken to not put too much pressure on the underlying database. For example, paginating using a simple offset/limit in a SQL query is likely to be extremely inefficient on later pages. However, pagination based on a combination of create/update timestamp and primary key, together with appropriate indexes in the database, is more likely to be suitable.
+- It should be expected that the final page, without a `next` key, will be polled for latest updates once a second. If a `next` key is later set in the results of this page, it will be paginated through until it reaches a page without the `next` key set.
+- Each activity must have an `id` field that is unique. [In the current implementation, it doesn't have to be unique accross all sources, but this should be treated as an implementation detail. It is recommend to ensure this is unique accross all sources.]
+
+### Techniques for updates / deletion
+
+Each activity is ingested into Elasticsearch into a document with the `id` of the activity. As is typical with Elasticsearch, ingest of a document completely overwrites any existing one with that `id`.  This gives a method for updates or deletions:
+
+- Activities can be updated, including redaction of any private data, by ensuring an activity is output with the same `id` as the original. This does not necessarily have to wait for the next full ingest, as long as the activity appears on the page being polled for updates.
+
+Alternatively, because each full ingest is into a new index:
+
+- Activities can be completely deleted by making sure they do not appear on the next full ingest. The limitation of this is that this won't take effect in Elasticsearch until the next full ingest is complete.
+
+### Duplicates
+
+The paginated feed can output the same activity multiple times, and as long as each has the same `id`, it won't be repeated in Elasticsearch.
+
 ## Running tests
 
 Elasticsearch and Redis must be started first, which you can do by
