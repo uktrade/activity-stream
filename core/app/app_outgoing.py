@@ -36,8 +36,7 @@ from .app_elasticsearch import (
 )
 
 from .app_feeds import (
-    ActivityStreamFeed,
-    ZendeskFeed,
+    parse_feed_config,
 )
 from .app_metrics import (
     metric_counter,
@@ -254,14 +253,6 @@ async def get_feed_contents(session, href, headers):
             raise Exception(await result.text())
 
         return await result.read()
-
-
-def parse_feed_config(feed_config):
-    by_feed_type = {
-        'activity_stream': ActivityStreamFeed,
-        'zendesk': ZendeskFeed,
-    }
-    return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
 
 async def create_metrics_application(parent_logger, metrics, metrics_registry, redis_client,

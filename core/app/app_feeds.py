@@ -6,6 +6,14 @@ import mohawk
 from .app_utils import sub_dict_lower
 
 
+def parse_feed_config(feed_config):
+    by_feed_type = {
+        'activity_stream': ActivityStreamFeed,
+        'zendesk': ZendeskFeed,
+    }
+    return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
+
+
 class ActivityStreamFeed:
 
     polling_page_interval = 0
