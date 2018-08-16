@@ -188,9 +188,14 @@ def _handle_get(logger, session, redis_client, pagination_expire, es_endpoint, g
     return handle
 
 
-def handle_get_check():
+def handle_get_check(redis_client):
     async def handle(_):
-        return web.Response(body=b'UP', status=200, headers={
+        await redis_client.execute('SET', 'redis-check', b'GREEN', 'EX', 1)
+        redis_result = await redis_client.execute('GET', 'redis-check')
+        is_redis_green = redis_result == b'GREEN'
+
+        status = (b'UP' if is_redis_green else b'DOWN') + b'\n'
+        return web.Response(body=status, status=200, headers={
             'Content-Type': 'text/plain; charset=utf-8',
         })
 

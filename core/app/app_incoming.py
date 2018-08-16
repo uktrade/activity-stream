@@ -110,7 +110,7 @@ async def create_incoming_application(
     ])
     app.add_subapp('/v1/', private_app)
     app.add_routes([
-        web.get('/check', handle_get_check()),
+        web.get('/check', handle_get_check(redis_client)),
         web.get('/metrics', handle_get_metrics(redis_client)),
     ])
 
