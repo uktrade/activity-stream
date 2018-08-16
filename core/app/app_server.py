@@ -203,7 +203,7 @@ def handle_get_check(parent_logger, session, redis_client, es_endpoint):
             is_elasticsearch_green = min_age < 60
 
             status = \
-                (b'UP' if is_redis_green and is_elasticsearch_green else b'DOWN') + b'\n' + \
+                (b'__UP__' if is_redis_green and is_elasticsearch_green else b'__DOWN__') + b'\n' + \
                 (b'redis:' + (b'GREEN' if is_redis_green else b'RED')) + b'\n' + \
                 (b'elasticsearch:' + (b'GREEN' if is_elasticsearch_green else b'RED')) + b'\n'
 

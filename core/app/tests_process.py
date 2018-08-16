@@ -177,8 +177,8 @@ class TestProcess(unittest.TestCase):
                       '{feed_unique_id="verification"}', metrics)
 
         def check_is_up(text):
-            return 'UP' in text
+            return '__UP__' in text
 
         check_url = 'http://127.0.0.1:8080/check'
         check, _, _ = await get_until_raw(check_url, x_forwarded_for, check_is_up)
-        self.assertIn('UP', check)
+        self.assertIn('__UP__', check)
