@@ -188,6 +188,15 @@ def _handle_get(logger, session, redis_client, pagination_expire, es_endpoint, g
     return handle
 
 
+def handle_get_check():
+    async def handle(_):
+        return web.Response(body=b'UP', status=200, headers={
+            'Content-Type': 'text/plain; charset=utf-8',
+        })
+
+    return handle
+
+
 def handle_get_metrics(redis_client):
     async def handle(_):
         return web.Response(body=await redis_get_metrics(redis_client), status=200, headers={

@@ -159,7 +159,7 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(server_out.returncode, 0)
 
     @async_test
-    async def test_metrics(self):
+    async def test_metrics_and_check(self):
         _, _ = await self.setup_manual(mock_env())
         self.assertTrue(await is_http_accepted_eventually())
         await wait_until_get_working()
@@ -175,3 +175,10 @@ class TestProcess(unittest.TestCase):
         metrics, _, _ = await get_until_raw(metrics_url, x_forwarded_for, metrics_has_success)
         self.assertIn('elasticsearch_activities_age_minimum_seconds'
                       '{feed_unique_id="verification"}', metrics)
+
+        def check_is_up(text):
+            return 'UP' in text
+
+        check_url = 'http://127.0.0.1:8080/check'
+        check, _, _ = await get_until_raw(check_url, x_forwarded_for, check_is_up)
+        self.assertIn('UP', check)

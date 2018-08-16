@@ -22,6 +22,7 @@ from .app_server import (
     authenticator,
     authorizer,
     convert_errors_to_json,
+    handle_get_check,
     handle_get_existing,
     handle_get_new,
     handle_get_metrics,
@@ -109,6 +110,7 @@ async def create_incoming_application(
     ])
     app.add_subapp('/v1/', private_app)
     app.add_routes([
+        web.get('/check', handle_get_check()),
         web.get('/metrics', handle_get_metrics(redis_client)),
     ])
 
