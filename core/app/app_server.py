@@ -194,7 +194,9 @@ def handle_get_check(redis_client):
         redis_result = await redis_client.execute('GET', 'redis-check')
         is_redis_green = redis_result == b'GREEN'
 
-        status = (b'UP' if is_redis_green else b'DOWN') + b'\n'
+        status = \
+            (b'UP' if is_redis_green else b'DOWN') + b'\n' + \
+            (b'redis:' + (b'GREEN' if is_redis_green else b'RED')) + b'\n'
         return web.Response(body=status, status=200, headers={
             'Content-Type': 'text/plain; charset=utf-8',
         })
