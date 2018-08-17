@@ -9,11 +9,11 @@ from raven_aiohttp import QueuedAioHttpTransport
 
 
 def flatten(list_to_flatten):
-    return [
+    return (
         item
         for sublist in list_to_flatten
         for item in sublist
-    ]
+    )
 
 
 async def async_repeat_until_cancelled(logger, raven_client, exception_intervals, coroutine):
