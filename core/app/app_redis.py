@@ -22,12 +22,12 @@ async def redis_get_client(redis_uri):
 
 
 async def set_private_scroll_id(redis_client, public_scroll_id, private_scroll_id, expire):
-    await redis_client.set(f'private-scroll-id-{public_scroll_id}', private_scroll_id,
-                           expire=expire)
+    await redis_client.execute('SET', f'private-scroll-id-{public_scroll_id}',
+                               private_scroll_id, 'EX', expire)
 
 
 async def get_private_scroll_id(redis_client, public_scroll_id):
-    return await redis_client.get(f'private-scroll-id-{public_scroll_id}')
+    return await redis_client.execute('GET', f'private-scroll-id-{public_scroll_id}')
 
 
 async def acquire_and_keep_lock(parent_logger, redis_client, raven_client, exception_intervals,
@@ -133,11 +133,11 @@ async def set_feed_updates_url(logger, redis_client, feed_id, updates_url):
 
 async def redis_set_metrics(logger, redis_client, metrics):
     with logged(logger, 'Saving to Redis', []):
-        await redis_client.set('metrics', metrics)
+        await redis_client.execute('SET', 'metrics', metrics)
 
 
 async def redis_get_metrics(redis_client):
-    return await redis_client.get('metrics')
+    return await redis_client.execute('GET', 'metrics')
 
 
 async def set_nonce_nx(redis_client, nonce_key, nonce_expire):
