@@ -1,10 +1,12 @@
 import hmac
+import time
 
 from aiohttp import web
 import mohawk
 from mohawk.exc import HawkFail
 
 from shared.logger import (
+    logged,
     get_child_logger,
 )
 from shared.utils import (
@@ -15,6 +17,13 @@ from .app_elasticsearch import (
     es_search,
     es_search_existing_scroll,
     es_search_new_scroll,
+    es_min_verification_age,
+)
+from .app_redis import (
+    set_private_scroll_id,
+    redis_get_metrics,
+    set_nonce_nx,
+    get_feeds_status,
 )
 
 
@@ -91,8 +100,7 @@ async def _authenticate_or_raise(incoming_key_pairs, redis_client, nonce_expire,
     nonce = receiver.resource.nonce
     access_key_id = receiver.resource.credentials['id']
     nonce_key = f'nonce-{access_key_id}-{nonce}'
-    redis_response = await redis_client.execute('SET', nonce_key, '1',
-                                                'EX', nonce_expire, 'NX')
+    redis_response = await set_nonce_nx(redis_client, nonce_key, nonce_expire)
     seen_nonce = not redis_response == b'OK'
     if seen_nonce:
         raise web.HTTPUnauthorized(text=INCORRECT)
@@ -170,8 +178,8 @@ def _handle_get(logger, session, redis_client, pagination_expire, es_endpoint, g
 
         async def to_public_scroll_url(private_scroll_id):
             public_scroll_id = random_url_safe(8)
-            await redis_client.set(f'private-scroll-id-{public_scroll_id}', private_scroll_id,
-                                   expire=pagination_expire)
+            await set_private_scroll_id(redis_client, public_scroll_id,
+                                        private_scroll_id, pagination_expire)
             return str(request.url.join(
                 request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)))
 
@@ -184,9 +192,62 @@ def _handle_get(logger, session, redis_client, pagination_expire, es_endpoint, g
     return handle
 
 
+def handle_get_check(parent_logger, session, redis_client, es_endpoint, feed_endpoints):
+    start_counter = time.perf_counter()
+
+    # Grace period after uptime to allow new feeds to start reporting
+    # without making the service appear down
+    startup_feed_grace_seconds = 30
+
+    async def handle(_):
+        logger = get_child_logger(parent_logger, 'check')
+
+        with logged(logger, 'Checking', []):
+            await redis_client.execute('SET', 'redis-check', b'GREEN', 'EX', 1)
+            redis_result = await redis_client.execute('GET', 'redis-check')
+            is_redis_green = redis_result == b'GREEN'
+
+            min_age = await es_min_verification_age(logger, session, es_endpoint)
+            is_elasticsearch_green = min_age < 60
+
+            uptime = time.perf_counter() - start_counter
+            in_grace_period = uptime <= startup_feed_grace_seconds
+
+            # The status of the feeds are via Redis...
+            # - To actually reflect if each was recently sucessful, since it is done by the
+            #   outgoing application, not this one
+            # - To keep the guarantee that we only make a single request to each feed at any one
+            #   time (locking between the outoing application and this one would be tricky)
+            feeds_statuses = await get_feeds_status(redis_client, [
+                feed.unique_id for feed in feed_endpoints
+            ])
+            feeds_statuses_with_red = [status if status ==
+                                       b'GREEN' else b'RED' for status in feeds_statuses]
+            are_all_feeds_green = all([status == b'GREEN' for status in feeds_statuses])
+
+            all_green = is_redis_green and is_elasticsearch_green and \
+                (are_all_feeds_green or in_grace_period)
+
+            status = \
+                (b'__UP__' if all_green else b'__DOWN__') + \
+                (b' (IN_STARTUP_GRACE_PERIOD)' if in_grace_period else b'') + b'\n' + \
+                (b'redis:' + (b'GREEN' if is_redis_green else b'RED')) + b'\n' + \
+                (b'elasticsearch:' + (b'GREEN' if is_elasticsearch_green else b'RED')) + b'\n' + \
+                b''.join([
+                    feed.unique_id.encode('utf-8') + b':' + feeds_statuses_with_red[i] + b'\n'
+                    for (i, feed) in enumerate(feed_endpoints)
+                ])
+
+        return web.Response(body=status, status=200, headers={
+            'Content-Type': 'text/plain; charset=utf-8',
+        })
+
+    return handle
+
+
 def handle_get_metrics(redis_client):
     async def handle(_):
-        return web.Response(body=await redis_client.get('metrics'), status=200, headers={
+        return web.Response(body=await redis_get_metrics(redis_client), status=200, headers={
             'Content-Type': 'text/plain; charset=utf-8',
         })
 

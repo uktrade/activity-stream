@@ -82,10 +82,14 @@ class TestProcess(unittest.TestCase):
             is_running = False
             await asyncio.sleep(0.2)
             if server_out.returncode is None:
-                server_out.kill()
+                server_out.terminate()
+            await server_out.wait()
             if server_inc.returncode is None:
-                server_inc.kill()
-            feed_runner_2.terminate()
+                server_inc.terminate()
+            await server_inc.wait()
+            if feed_runner_2.returncode is None:
+                feed_runner_2.terminate()
+            await feed_runner_2.wait()
             await feed_runner_1.cleanup()
             await asyncio.sleep(1)
 
@@ -96,11 +100,14 @@ class TestProcess(unittest.TestCase):
             return stdout_inc[0]
 
         self.add_async_cleanup(tear_down)
-        return (server_out, get_server_out_stdout), (server_inc, get_server_inc_stdout)
+        return \
+            (server_out, get_server_out_stdout), \
+            (server_inc, get_server_inc_stdout), \
+            feed_runner_2,
 
     @async_test
     async def test_http_and_exit_clean(self):
-        (server_out, stdout_out), (server_inc, stdout_inc) = await self.setup_manual(mock_env())
+        (server_out, stdout_out), (server_inc, stdout_inc), _ = await self.setup_manual(mock_env())
         self.assertTrue(await is_http_accepted_eventually())
         await wait_until_get_working()
 
@@ -121,7 +128,7 @@ class TestProcess(unittest.TestCase):
 
     @async_test
     async def test_if_es_down_exit_clean(self):
-        (server_out, stdout_out), (server_inc, stdout_inc) = await self.setup_manual({
+        (server_out, stdout_out), (server_inc, stdout_inc), _ = await self.setup_manual({
             **mock_env(), 'ELASTICSEARCH__PORT': '9202'  # Nothing listening
         })
         self.assertTrue(await is_http_accepted_eventually())
@@ -145,7 +152,7 @@ class TestProcess(unittest.TestCase):
         es_runner = await run_es_application(port=9201, override_routes=routes)
         self.add_async_cleanup(es_runner.cleanup)
 
-        (server_out, stdout_out), (server_inc, stdout_inc) = await self.setup_manual({
+        (server_out, stdout_out), (server_inc, stdout_inc), _ = await self.setup_manual({
             **mock_env(), 'ELASTICSEARCH__PORT': '9201'
         })
         self.assertTrue(await is_http_accepted_eventually())
@@ -159,19 +166,38 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(server_out.returncode, 0)
 
     @async_test
-    async def test_verification_metrics(self):
-        _, _ = await self.setup_manual(mock_env())
+    async def test_metrics_and_check(self):
+        _, _, verification_feed = await self.setup_manual(mock_env())
         self.assertTrue(await is_http_accepted_eventually())
         await wait_until_get_working()
 
-        url = 'http://127.0.0.1:8080/metrics'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
 
-        def has_success(text):
+        def metrics_has_success(text):
             return 'status="success"' in text and \
                    'elasticsearch_activities_age_minimum_seconds' \
                    '{feed_unique_id="verification"}' in text
-        text, _, _ = await get_until_raw(url, x_forwarded_for, has_success)
 
+        metrics_url = 'http://127.0.0.1:8080/metrics'
+        metrics, _, _ = await get_until_raw(metrics_url, x_forwarded_for, metrics_has_success)
         self.assertIn('elasticsearch_activities_age_minimum_seconds'
-                      '{feed_unique_id="verification"}', text)
+                      '{feed_unique_id="verification"}', metrics)
+
+        def check_is_up(text):
+            return '__UP__' in text
+
+        check_url = 'http://127.0.0.1:8080/check'
+        check, _, _ = await get_until_raw(check_url, x_forwarded_for, check_is_up)
+        self.assertIn('__UP__', check)
+
+        def check_verification_is_green(text):
+            return 'verification:GREEN' in text
+        _, _, _ = await get_until_raw(check_url, x_forwarded_for,
+                                      check_verification_is_green)
+
+        def check_is_not_up(text):
+            return '__UP__' not in text
+
+        verification_feed.terminate()
+        check_down, _, _ = await get_until_raw(check_url, x_forwarded_for, check_is_not_up)
+        self.assertIn('__DOWN__', check_down)

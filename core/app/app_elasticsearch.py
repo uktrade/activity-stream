@@ -14,6 +14,9 @@ from shared.utils import (
     random_url_safe,
 )
 
+from .app_redis import (
+    get_private_scroll_id,
+)
 from .app_utils import (
     flatten,
 )
@@ -189,8 +192,8 @@ async def es_search_existing_scroll(redis_client, match_info, _):
     # error if this isn't present, and so bubbling up and resulting in a 500
     # is appropriate if a KeyError is thrown
     public_scroll_id = match_info['public_scroll_id']
+    private_scroll_id = await get_private_scroll_id(redis_client, public_scroll_id)
 
-    private_scroll_id = await redis_client.get(f'private-scroll-id-{public_scroll_id}')
     if private_scroll_id is None:
         # It can be argued that this function shouldn't have knowledge that
         # it's called from a HTTP request. However, that _is_ its only use,

@@ -2,7 +2,6 @@ import asyncio
 import os
 
 import aiohttp
-import aioredis
 from prometheus_client import (
     CollectorRegistry,
     generate_latest,
@@ -37,8 +36,7 @@ from .app_elasticsearch import (
 )
 
 from .app_feeds import (
-    ActivityStreamFeed,
-    ZendeskFeed,
+    parse_feed_config,
 )
 from .app_metrics import (
     metric_counter,
@@ -46,21 +44,26 @@ from .app_metrics import (
     metric_timer,
     get_metrics,
 )
+from .app_redis import (
+    redis_get_client,
+    acquire_and_keep_lock,
+    set_feed_updates_seed_url_init,
+    set_feed_updates_seed_url,
+    set_feed_updates_url,
+    get_feed_updates_url,
+    redis_set_metrics,
+    set_feed_status,
+)
 from .app_utils import (
     get_raven_client,
     async_repeat_until_cancelled,
     cancel_non_current_tasks,
+    sleep,
     main,
 )
 
 EXCEPTION_INTERVALS = [1, 2, 4, 8, 16, 32, 64]
 METRICS_INTERVAL = 1
-
-# So the latest URL for feeds don't hang around in Redis for
-# ever if the feed is turned off
-FEED_UPDATE_URL_EXPIRE = 60 * 60 * 24 * 31
-NOT_EXISTS = b'__NOT_EXISTS__'
-
 
 UPDATES_INTERVAL = 1
 
@@ -76,18 +79,18 @@ async def run_outgoing_application():
     raven_client = get_raven_client(sentry)
     conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
     session = aiohttp.ClientSession(connector=conn, skip_auto_headers=['Accept-Encoding'])
-    redis_client = await aioredis.create_redis(redis_uri)
+    redis_client = await redis_get_client(redis_uri)
 
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
 
-    await acquire_and_keep_lock(logger, redis_client, raven_client)
+    await acquire_and_keep_lock(logger, redis_client, raven_client, EXCEPTION_INTERVALS,
+                                'lock')
 
     await create_outgoing_application(
         logger, metrics, raven_client, redis_client, session, feed_endpoints, es_endpoint,
     )
 
-    redis_client = await aioredis.create_redis(redis_uri)
     await create_metrics_application(
         logger, metrics, metrics_registry, redis_client, raven_client,
         session, feed_endpoints, es_endpoint,
@@ -97,54 +100,14 @@ async def run_outgoing_application():
         await cancel_non_current_tasks()
         await raven_client.remote.get_transport().close()
 
+        redis_client.close()
+        await redis_client.wait_closed()
+
         await session.close()
         # https://github.com/aio-libs/aiohttp/issues/1925
         await asyncio.sleep(0.250)
 
     return cleanup
-
-
-async def acquire_and_keep_lock(parent_logger, redis_client, raven_client):
-    ''' Prevents Elasticsearch errors during deployments
-
-    The exceptions would be caused by a new deployment deleting indexes while
-    the previous deployment is still ingesting into them
-
-    We do not offer a delete for simplicity: the lock will just expire if it's
-    not extended, which happens on destroy of the application
-
-    We don't use Redlock, since we don't care too much if a Redis failure causes
-    multiple clients to have the lock for a period of time. It would only cause
-    Elasticsearch errors to appear in sentry, but otherwise there would be no
-    harm
-    '''
-    logger = get_child_logger(parent_logger, 'lock')
-    ttl = 3
-    aquire_interval = 0.5
-    extend_interval = 0.5
-    key = 'lock'
-
-    async def acquire():
-        while True:
-            logger.debug('Acquiring...')
-            response = await redis_client.execute('SET', key, '1', 'EX', ttl, 'NX')
-            if response == b'OK':
-                logger.debug('Acquiring... (done)')
-                break
-            logger.debug('Acquiring... (failed)')
-            await sleep(logger, aquire_interval)
-
-    async def extend_forever():
-        await sleep(logger, extend_interval)
-        response = await redis_client.execute('EXPIRE', key, ttl)
-        if response != 1:
-            raven_client.captureMessage('Lock has been lost')
-            await acquire()
-
-    await acquire()
-    asyncio.get_event_loop().create_task(async_repeat_until_cancelled(
-        logger, raven_client, EXCEPTION_INTERVALS, extend_forever,
-    ))
 
 
 async def create_outgoing_application(logger, metrics, raven_client, redis_client, session,
@@ -200,7 +163,7 @@ async def ingest_feed_full(logger, metrics, redis_client, session, feed_lock, fe
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'full']), \
             metric_inprogress(metrics['ingest_inprogress_ingests_total']):
 
-        await set_feed_updates_seed_url_init(logger, redis_client, feed)
+        await set_feed_updates_seed_url_init(logger, redis_client, feed.unique_id)
         indexes_without_alias, _ = await get_old_index_names(
             logger, session, es_endpoint,
         )
@@ -214,7 +177,8 @@ async def ingest_feed_full(logger, metrics, redis_client, session, feed_lock, fe
         while href:
             updates_href = href
             href = await ingest_feed_page(
-                logger, metrics, session, 'full', feed_lock, feed, es_endpoint, [index_name], href
+                logger, metrics, redis_client, session, 'full', feed_lock, feed, es_endpoint, [
+                    index_name], href
             )
             await sleep(logger, feed.polling_page_interval)
 
@@ -224,7 +188,7 @@ async def ingest_feed_full(logger, metrics, redis_client, session, feed_lock, fe
             logger, session, es_endpoint, index_name, feed.unique_id,
         )
 
-        await set_feed_updates_seed_url(logger, redis_client, feed, updates_href)
+        await set_feed_updates_seed_url(logger, redis_client, feed.unique_id, updates_href)
 
 
 async def ingest_feed_updates(logger, metrics, redis_client, session, feed_lock, feed,
@@ -233,7 +197,7 @@ async def ingest_feed_updates(logger, metrics, redis_client, session, feed_lock,
             logged(logger, 'Updates ingest', []), \
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'updates']):
 
-        href = await get_feed_updates_url(logger, redis_client, feed)
+        href = await get_feed_updates_url(logger, redis_client, feed.unique_id)
         indexes_without_alias, indexes_with_alias = await get_old_index_names(
             logger, session, es_endpoint,
         )
@@ -244,81 +208,19 @@ async def ingest_feed_updates(logger, metrics, redis_client, session, feed_lock,
 
         while href:
             updates_href = href
-            href = await ingest_feed_page(logger, metrics, session, 'updates', feed_lock, feed,
-                                          es_endpoint, indexes_to_ingest_into, href)
+            href = await ingest_feed_page(logger, metrics, redis_client, session, 'updates',
+                                          feed_lock, feed, es_endpoint, indexes_to_ingest_into,
+                                          href)
 
         for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
             await refresh_index(logger, session, es_endpoint, index_name)
-        await set_feed_updates_url(logger, redis_client, feed, updates_href)
+        await set_feed_updates_url(logger, redis_client, feed.unique_id, updates_href)
 
     await sleep(logger, UPDATES_INTERVAL)
 
 
-async def set_feed_updates_seed_url_init(logger, redis_client, feed):
-    updates_seed_url_key = 'feed-updates-seed-url-' + feed.unique_id
-    with logged(logger, 'Setting updates seed url initial to (%s)', [NOT_EXISTS]):
-        result = await redis_client.execute('SET', updates_seed_url_key, NOT_EXISTS,
-                                            'EX', FEED_UPDATE_URL_EXPIRE,
-                                            'NX')
-        logger.debug('Setting updates seed url initial to (%s)... (result: %s)',
-                     NOT_EXISTS, result)
-
-
-async def set_feed_updates_seed_url(logger, redis_client, feed, updates_url):
-    updates_seed_url_key = 'feed-updates-seed-url-' + feed.unique_id
-    with logged(logger, 'Setting updates seed url to (%s)', [updates_url]):
-        await redis_client.execute('SET', updates_seed_url_key, updates_url,
-                                   'EX', FEED_UPDATE_URL_EXPIRE)
-
-
-async def set_feed_updates_url(logger, redis_client, feed, updates_url):
-    updates_latest_url_key = 'feed-updates-latest-url-' + feed.unique_id
-    with logged(logger, 'Setting updates url to (%s)', [updates_url]):
-        await redis_client.execute('SET', updates_latest_url_key, updates_url,
-                                   'EX', FEED_UPDATE_URL_EXPIRE)
-
-
-async def get_feed_updates_url(logger, redis_client, feed):
-    # For each live update, if a full ingest has recently finished, we use the URL set
-    # by that (required, for example, if the endpoint has changed, or if lots of recent
-    # event have been deleted). Otherwise, we use the URL set by the latest updates pass
-
-    updates_seed_url_key = 'feed-updates-seed-url-' + feed.unique_id
-    updates_latest_url_key = 'feed-updates-latest-url-' + feed.unique_id
-    with logged(logger, 'Getting updates url', []):
-        while True:
-            # We want the equivalent of an atomic GET/DEL, to avoid the race condition that the
-            # full ingest sets the updates seed URL, but the updates chain then overwrites it
-            # There is no atomic GETDEL command available, but it could be done with redis multi
-            # exec, but, we have multiple concurrent usages of the redis client, which I suspect
-            # would make transactions impossible right now
-            # We do have an atomic GETSET however, so we use that with a special NOT_EXISTS value
-            updates_seed_url = await redis_client.execute('GETSET', updates_seed_url_key,
-                                                          NOT_EXISTS)
-            logger.debug('Getting updates url... (seed: %s)', updates_seed_url)
-            if updates_seed_url is not None and updates_seed_url != NOT_EXISTS:
-                url = updates_seed_url
-                break
-
-            updates_latest_url = await redis_client.execute('GET', updates_latest_url_key)
-            logger.debug('Getting updates url... (latest: %s)', updates_latest_url)
-            if updates_latest_url is not None:
-                url = updates_latest_url
-                break
-
-            await sleep(logger, 1)
-
-    logger.debug('Getting updates url... (found: %s)', url)
-    return url.decode('utf-8')
-
-
-async def sleep(logger, interval):
-    with logged(logger, 'Sleeping for %s seconds', [interval]):
-        await asyncio.sleep(interval)
-
-
-async def ingest_feed_page(logger, metrics, session, ingest_type, feed_lock, feed, es_endpoint,
-                           index_names, href):
+async def ingest_feed_page(logger, metrics, redis_client, session, ingest_type, feed_lock, feed,
+                           es_endpoint, index_names, href):
     with \
             logged(logger, 'Polling/pushing page', []), \
             metric_timer(metrics['ingest_page_duration_seconds'],
@@ -345,6 +247,8 @@ async def ingest_feed_page(logger, metrics, session, ingest_type, feed_lock, fee
                                [feed.unique_id], len(es_bulk_items)):
             await es_bulk(logger, session, es_endpoint, es_bulk_items)
 
+        asyncio.ensure_future(set_feed_status(redis_client, feed.unique_id, b'GREEN'))
+
         return feed.next_href(feed_parsed)
 
 
@@ -354,14 +258,6 @@ async def get_feed_contents(session, href, headers):
             raise Exception(await result.text())
 
         return await result.read()
-
-
-def parse_feed_config(feed_config):
-    by_feed_type = {
-        'activity_stream': ActivityStreamFeed,
-        'zendesk': ZendeskFeed,
-    }
-    return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
 
 async def create_metrics_application(parent_logger, metrics, metrics_registry, redis_client,
@@ -396,12 +292,8 @@ async def create_metrics_application(parent_logger, metrics, metrics_registry, r
                 except ESMetricsUnavailable:
                     pass
 
-        await save_metrics_to_redis(logger, generate_latest(metrics_registry))
+        await redis_set_metrics(logger, redis_client, generate_latest(metrics_registry))
         await sleep(logger, METRICS_INTERVAL)
-
-    async def save_metrics_to_redis(logger, metrics):
-        with logged(logger, 'Saving to Redis', []):
-            await redis_client.set('metrics', metrics)
 
     asyncio.get_event_loop().create_task(
         async_repeat_until_cancelled(logger, raven_client, EXCEPTION_INTERVALS, poll_metrics)

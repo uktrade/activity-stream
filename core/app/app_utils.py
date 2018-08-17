@@ -7,6 +7,10 @@ import sys
 import raven
 from raven_aiohttp import QueuedAioHttpTransport
 
+from shared.logger import (
+    logged,
+)
+
 
 def flatten(list_to_flatten):
     return (
@@ -63,6 +67,11 @@ def get_raven_client(sentry):
         sentry['dsn'],
         environment=sentry['environment'],
         transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
+
+
+async def sleep(logger, interval):
+    with logged(logger, 'Sleeping for %s seconds', [interval]):
+        await asyncio.sleep(interval)
 
 
 def main(run_application_coroutine):

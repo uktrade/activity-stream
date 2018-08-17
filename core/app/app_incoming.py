@@ -3,7 +3,6 @@ import os
 
 import aiohttp
 from aiohttp import web
-import aioredis
 
 from shared.logger import (
     get_root_logger,
@@ -18,16 +17,23 @@ from shared.web import (
     authenticate_by_ip,
 )
 
+from .app_feeds import (
+    parse_feed_config,
+)
 from .app_server import (
     INCORRECT,
     authenticator,
     authorizer,
     convert_errors_to_json,
+    handle_get_check,
     handle_get_existing,
     handle_get_new,
     handle_get_metrics,
     handle_post,
     raven_reporter,
+)
+from .app_redis import (
+    redis_get_client,
 )
 from .app_utils import (
     get_raven_client,
@@ -45,6 +51,7 @@ async def run_incoming_application():
     with logged(logger, 'Examining environment', []):
         env = normalise_environment(os.environ)
         es_endpoint, redis_uri, sentry = get_common_config(env)
+        feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
         port = env['PORT']
         incoming_key_pairs = [{
             'key_id': key_pair['KEY_ID'],
@@ -55,18 +62,22 @@ async def run_incoming_application():
 
     raven_client = get_raven_client(sentry)
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
-    redis_client = await aioredis.create_redis(redis_uri)
+    redis_client = await redis_get_client(redis_uri)
 
     with logged(logger, 'Creating listening web application', []):
         runner = await create_incoming_application(
             logger, port, ip_whitelist, incoming_key_pairs,
             redis_client, raven_client, session, es_endpoint,
+            feed_endpoints,
         )
 
     async def cleanup():
         await cancel_non_current_tasks()
         await runner.cleanup()
         await raven_client.remote.get_transport().close()
+
+        redis_client.close()
+        await redis_client.wait_closed()
 
         await session.close()
         # https://github.com/aio-libs/aiohttp/issues/1925
@@ -77,7 +88,8 @@ async def run_incoming_application():
 
 async def create_incoming_application(
         logger, port, ip_whitelist, incoming_key_pairs,
-        redis_client, raven_client, session, es_endpoint):
+        redis_client, raven_client, session, es_endpoint,
+        feed_endpoints):
 
     app = web.Application(middlewares=[
         server_logger(logger),
@@ -104,6 +116,8 @@ async def create_incoming_application(
     ])
     app.add_subapp('/v1/', private_app)
     app.add_routes([
+        web.get('/check', handle_get_check(logger, session,
+                                           redis_client, es_endpoint, feed_endpoints)),
         web.get('/metrics', handle_get_metrics(redis_client)),
     ])
 
