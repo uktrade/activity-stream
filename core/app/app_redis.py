@@ -18,7 +18,7 @@ NOT_EXISTS = b'__NOT_EXISTS__'
 
 
 async def redis_get_client(redis_uri):
-    return await aioredis.create_redis(redis_uri)
+    return await aioredis.create_redis_pool(redis_uri, minsize=3, maxsize=3)
 
 
 async def set_private_scroll_id(redis_client, public_scroll_id, private_scroll_id, expire):
