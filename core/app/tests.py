@@ -709,8 +709,10 @@ class TestApplication(TestBase):
             server.close()
             await server.wait_closed()
             self.assertEqual(status, 200)
-            self.assertEqual(result['orderedItems'][0]['id'],
-                             'dit:exportOpportunities:Enquiry:49863:Create')
+            self.assertEqual(set(item['id'] for item in result['orderedItems']), {
+                'dit:exportOpportunities:Enquiry:49862:Create',
+                'dit:exportOpportunities:Enquiry:49863:Create',
+            })
 
             self.assertLessEqual(len(await fetch_es_index_names_with_alias()), 2)
             await ORIGINAL_SLEEP(2)
