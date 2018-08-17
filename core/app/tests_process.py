@@ -159,19 +159,19 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(server_out.returncode, 0)
 
     @async_test
-    async def test_verification_metrics(self):
+    async def test_metrics(self):
         _, _ = await self.setup_manual(mock_env())
         self.assertTrue(await is_http_accepted_eventually())
         await wait_until_get_working()
 
-        url = 'http://127.0.0.1:8080/metrics'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
 
-        def has_success(text):
+        def metrics_has_success(text):
             return 'status="success"' in text and \
                    'elasticsearch_activities_age_minimum_seconds' \
                    '{feed_unique_id="verification"}' in text
-        text, _, _ = await get_until_raw(url, x_forwarded_for, has_success)
 
+        metrics_url = 'http://127.0.0.1:8080/metrics'
+        metrics, _, _ = await get_until_raw(metrics_url, x_forwarded_for, metrics_has_success)
         self.assertIn('elasticsearch_activities_age_minimum_seconds'
-                      '{feed_unique_id="verification"}', text)
+                      '{feed_unique_id="verification"}', metrics)
