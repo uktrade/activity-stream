@@ -18,6 +18,7 @@ from .app_elasticsearch import (
 )
 from .app_redis import (
     set_private_scroll_id,
+    redis_get_metrics,
 )
 
 
@@ -189,7 +190,7 @@ def _handle_get(logger, session, redis_client, pagination_expire, es_endpoint, g
 
 def handle_get_metrics(redis_client):
     async def handle(_):
-        return web.Response(body=await redis_client.get('metrics'), status=200, headers={
+        return web.Response(body=await redis_get_metrics(redis_client), status=200, headers={
             'Content-Type': 'text/plain; charset=utf-8',
         })
 

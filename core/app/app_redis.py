@@ -129,3 +129,12 @@ async def set_feed_updates_url(logger, redis_client, feed_id, updates_url):
     with logged(logger, 'Setting updates url to (%s)', [updates_url]):
         await redis_client.execute('SET', updates_latest_url_key, updates_url,
                                    'EX', FEED_UPDATE_URL_EXPIRE)
+
+
+async def redis_set_metrics(logger, redis_client, metrics):
+    with logged(logger, 'Saving to Redis', []):
+        await redis_client.set('metrics', metrics)
+
+
+async def redis_get_metrics(redis_client):
+    return await redis_client.get('metrics')

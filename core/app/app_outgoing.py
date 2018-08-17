@@ -52,6 +52,7 @@ from .app_redis import (
     set_feed_updates_seed_url,
     set_feed_updates_url,
     get_feed_updates_url,
+    redis_set_metrics,
 )
 from .app_utils import (
     get_raven_client,
@@ -292,12 +293,8 @@ async def create_metrics_application(parent_logger, metrics, metrics_registry, r
                 except ESMetricsUnavailable:
                     pass
 
-        await save_metrics_to_redis(logger, generate_latest(metrics_registry))
+        await redis_set_metrics(logger, redis_client, generate_latest(metrics_registry))
         await sleep(logger, METRICS_INTERVAL)
-
-    async def save_metrics_to_redis(logger, metrics):
-        with logged(logger, 'Saving to Redis', []):
-            await redis_client.set('metrics', metrics)
 
     asyncio.get_event_loop().create_task(
         async_repeat_until_cancelled(logger, raven_client, EXCEPTION_INTERVALS, poll_metrics)
