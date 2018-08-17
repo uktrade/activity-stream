@@ -1,3 +1,4 @@
+import asyncio
 import re
 
 import aiohttp
@@ -29,6 +30,10 @@ class ActivityStreamFeed:
         self.seed = seed
         self.access_key_id = access_key_id
         self.secret_access_key = secret_access_key
+
+    @staticmethod
+    def get_lock():
+        return asyncio.Lock()
 
     @staticmethod
     def next_href(feed):
@@ -80,6 +85,10 @@ class ZendeskFeed:
         self.seed = seed
         self.api_email = api_email
         self.api_key = api_key
+
+    @staticmethod
+    def get_lock():
+        return asyncio.Lock()
 
     @staticmethod
     def next_href(feed):

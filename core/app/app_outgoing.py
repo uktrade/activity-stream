@@ -144,7 +144,7 @@ async def ingest_feeds(logger, metrics, raven_client, redis_client, session,
         async_repeat_until_cancelled(ingest_type_logger, raven_client,
                                      feed_endpoint.exception_intervals, ingester)
         for feed_endpoint in feed_endpoints
-        for feed_lock in [asyncio.Lock()]
+        for feed_lock in [feed_endpoint.get_lock()]
         for feed_logger in [get_child_logger(logger, feed_endpoint.unique_id)]
         for feed_func_ingest_type in [(ingest_feed_full, 'full'), (ingest_feed_updates, 'updates')]
         for ingest_type_logger in [get_child_logger(feed_logger, feed_func_ingest_type[1])]
