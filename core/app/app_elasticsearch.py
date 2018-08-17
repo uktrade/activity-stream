@@ -249,13 +249,13 @@ async def es_bulk(logger, session, es_endpoint, items):
             return
 
         with logged(logger, 'Converting to Elasticsearch bulk ingest commands', []):
-            es_bulk_contents = ('\n'.join(flatten([
+            es_bulk_contents = ('\n'.join(flatten(
                 [ujson.dumps(item['action_and_metadata'], sort_keys=True,
                              escape_forward_slashes=False),
                  ujson.dumps(item['source'], sort_keys=True,
                              escape_forward_slashes=False)]
                 for item in items
-            ])) + '\n').encode('utf-8')
+            )) + '\n').encode('utf-8')
 
         with logged(logger, 'POSTing bulk ingest to Elasticsearch', []):
             await es_request_non_200_exception(
