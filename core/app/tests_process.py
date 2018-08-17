@@ -83,9 +83,13 @@ class TestProcess(unittest.TestCase):
             await asyncio.sleep(0.2)
             if server_out.returncode is None:
                 server_out.kill()
+            await server_out.wait()
             if server_inc.returncode is None:
                 server_inc.kill()
-            feed_runner_2.terminate()
+            await server_inc.wait()
+            if feed_runner_2.returncode is None:
+                feed_runner_2.kill()
+            await feed_runner_2.wait()
             await feed_runner_1.cleanup()
             await asyncio.sleep(1)
 
@@ -163,7 +167,7 @@ class TestProcess(unittest.TestCase):
 
     @async_test
     async def test_metrics_and_check(self):
-        _, _, _ = await self.setup_manual(mock_env())
+        _, _, verification_feed = await self.setup_manual(mock_env())
         self.assertTrue(await is_http_accepted_eventually())
         await wait_until_get_working()
 
@@ -185,3 +189,15 @@ class TestProcess(unittest.TestCase):
         check_url = 'http://127.0.0.1:8080/check'
         check, _, _ = await get_until_raw(check_url, x_forwarded_for, check_is_up)
         self.assertIn('__UP__', check)
+
+        def check_verification_is_green(text):
+            return 'verification:GREEN' in text
+        _, _, _ = await get_until_raw(check_url, x_forwarded_for,
+                                      check_verification_is_green)
+
+        def check_is_not_up(text):
+            return '__UP__' not in text
+
+        verification_feed.terminate()
+        check_down, _, _ = await get_until_raw(check_url, x_forwarded_for, check_is_not_up)
+        self.assertIn('__DOWN__', check_down)

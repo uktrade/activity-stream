@@ -15,6 +15,7 @@ from .app_utils import (
 # ever if the feed is turned off
 FEED_UPDATE_URL_EXPIRE = 60 * 60 * 24 * 31
 NOT_EXISTS = b'__NOT_EXISTS__'
+SHOW_FEED_AS_RED_IF_NO_REQUEST_IN_SECONDS = 10
 
 
 async def redis_get_client(redis_uri):
@@ -143,3 +144,15 @@ async def redis_get_metrics(redis_client):
 async def set_nonce_nx(redis_client, nonce_key, nonce_expire):
     return await redis_client.execute('SET', nonce_key, '1',
                                       'EX', nonce_expire, 'NX')
+
+
+async def set_feed_status(redis_client, feed_id, status):
+    await redis_client.execute(
+        'SET', feed_id + '-status', status,
+        'EX', SHOW_FEED_AS_RED_IF_NO_REQUEST_IN_SECONDS)
+
+
+async def get_feeds_status(redis_client, feed_ids):
+    return await redis_client.execute('MGET', *[
+        feed_id + '-status' for feed_id in feed_ids
+    ])

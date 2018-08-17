@@ -52,6 +52,7 @@ from .app_redis import (
     set_feed_updates_url,
     get_feed_updates_url,
     redis_set_metrics,
+    set_feed_status,
 )
 from .app_utils import (
     get_raven_client,
@@ -176,7 +177,8 @@ async def ingest_feed_full(logger, metrics, redis_client, session, feed_lock, fe
         while href:
             updates_href = href
             href = await ingest_feed_page(
-                logger, metrics, session, 'full', feed_lock, feed, es_endpoint, [index_name], href
+                logger, metrics, redis_client, session, 'full', feed_lock, feed, es_endpoint, [
+                    index_name], href
             )
             await sleep(logger, feed.polling_page_interval)
 
@@ -206,8 +208,9 @@ async def ingest_feed_updates(logger, metrics, redis_client, session, feed_lock,
 
         while href:
             updates_href = href
-            href = await ingest_feed_page(logger, metrics, session, 'updates', feed_lock, feed,
-                                          es_endpoint, indexes_to_ingest_into, href)
+            href = await ingest_feed_page(logger, metrics, redis_client, session, 'updates',
+                                          feed_lock, feed, es_endpoint, indexes_to_ingest_into,
+                                          href)
 
         for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
             await refresh_index(logger, session, es_endpoint, index_name)
@@ -216,8 +219,8 @@ async def ingest_feed_updates(logger, metrics, redis_client, session, feed_lock,
     await sleep(logger, UPDATES_INTERVAL)
 
 
-async def ingest_feed_page(logger, metrics, session, ingest_type, feed_lock, feed, es_endpoint,
-                           index_names, href):
+async def ingest_feed_page(logger, metrics, redis_client, session, ingest_type, feed_lock, feed,
+                           es_endpoint, index_names, href):
     with \
             logged(logger, 'Polling/pushing page', []), \
             metric_timer(metrics['ingest_page_duration_seconds'],
@@ -243,6 +246,8 @@ async def ingest_feed_page(logger, metrics, session, ingest_type, feed_lock, fee
                 metric_counter(metrics['ingest_activities_nonunique_total'],
                                [feed.unique_id], len(es_bulk_items)):
             await es_bulk(logger, session, es_endpoint, es_bulk_items)
+
+        asyncio.ensure_future(set_feed_status(redis_client, feed.unique_id, b'GREEN'))
 
         return feed.next_href(feed_parsed)
 
