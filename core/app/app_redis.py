@@ -138,3 +138,8 @@ async def redis_set_metrics(logger, redis_client, metrics):
 
 async def redis_get_metrics(redis_client):
     return await redis_client.get('metrics')
+
+
+async def set_nonce_nx(redis_client, nonce_key, nonce_expire):
+    return await redis_client.execute('SET', nonce_key, '1',
+                                      'EX', nonce_expire, 'NX')

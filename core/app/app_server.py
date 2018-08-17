@@ -19,6 +19,7 @@ from .app_elasticsearch import (
 from .app_redis import (
     set_private_scroll_id,
     redis_get_metrics,
+    set_nonce_nx,
 )
 
 
@@ -95,8 +96,7 @@ async def _authenticate_or_raise(incoming_key_pairs, redis_client, nonce_expire,
     nonce = receiver.resource.nonce
     access_key_id = receiver.resource.credentials['id']
     nonce_key = f'nonce-{access_key_id}-{nonce}'
-    redis_response = await redis_client.execute('SET', nonce_key, '1',
-                                                'EX', nonce_expire, 'NX')
+    redis_response = await set_nonce_nx(redis_client, nonce_key, nonce_expire)
     seen_nonce = not redis_response == b'OK'
     if seen_nonce:
         raise web.HTTPUnauthorized(text=INCORRECT)
