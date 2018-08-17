@@ -70,6 +70,9 @@ async def run_incoming_application():
         await runner.cleanup()
         await raven_client.remote.get_transport().close()
 
+        redis_client.close()
+        await redis_client.wait_closed()
+
         await session.close()
         # https://github.com/aio-libs/aiohttp/issues/1925
         await asyncio.sleep(0.250)
