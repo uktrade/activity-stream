@@ -21,6 +21,15 @@ async def redis_get_client(redis_uri):
     return await aioredis.create_redis(redis_uri)
 
 
+async def set_private_scroll_id(redis_client, public_scroll_id, private_scroll_id, expire):
+    await redis_client.set(f'private-scroll-id-{public_scroll_id}', private_scroll_id,
+                           expire=expire)
+
+
+async def get_private_scroll_id(redis_client, public_scroll_id):
+    return await redis_client.get(f'private-scroll-id-{public_scroll_id}')
+
+
 async def acquire_and_keep_lock(parent_logger, redis_client, raven_client, exception_intervals,
                                 key):
     ''' Prevents Elasticsearch errors during deployments

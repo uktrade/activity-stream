@@ -16,6 +16,9 @@ from .app_elasticsearch import (
     es_search_existing_scroll,
     es_search_new_scroll,
 )
+from .app_redis import (
+    set_private_scroll_id,
+)
 
 
 NOT_PROVIDED = 'Authentication credentials were not provided.'
@@ -170,8 +173,8 @@ def _handle_get(logger, session, redis_client, pagination_expire, es_endpoint, g
 
         async def to_public_scroll_url(private_scroll_id):
             public_scroll_id = random_url_safe(8)
-            await redis_client.set(f'private-scroll-id-{public_scroll_id}', private_scroll_id,
-                                   expire=pagination_expire)
+            await set_private_scroll_id(redis_client, public_scroll_id,
+                                        private_scroll_id, pagination_expire)
             return str(request.url.join(
                 request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)))
 
