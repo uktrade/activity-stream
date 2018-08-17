@@ -4,11 +4,17 @@ import aioredis
 
 from shared.logger import (
     get_child_logger,
+    logged,
 )
 from .app_utils import (
     async_repeat_until_cancelled,
     sleep,
 )
+
+# So the latest URL for feeds don't hang around in Redis for
+# ever if the feed is turned off
+FEED_UPDATE_URL_EXPIRE = 60 * 60 * 24 * 31
+NOT_EXISTS = b'__NOT_EXISTS__'
 
 
 async def redis_get_client(redis_uri):
@@ -56,3 +62,61 @@ async def acquire_and_keep_lock(parent_logger, redis_client, raven_client, excep
     asyncio.get_event_loop().create_task(async_repeat_until_cancelled(
         logger, raven_client, exception_intervals, extend_forever,
     ))
+
+
+async def get_feed_updates_url(logger, redis_client, feed_id):
+    # For each live update, if a full ingest has recently finished, we use the URL set
+    # by that (required, for example, if the endpoint has changed, or if lots of recent
+    # event have been deleted). Otherwise, we use the URL set by the latest updates pass
+
+    updates_seed_url_key = 'feed-updates-seed-url-' + feed_id
+    updates_latest_url_key = 'feed-updates-latest-url-' + feed_id
+    with logged(logger, 'Getting updates url', []):
+        while True:
+            # We want the equivalent of an atomic GET/DEL, to avoid the race condition that the
+            # full ingest sets the updates seed URL, but the updates chain then overwrites it
+            # There is no atomic GETDEL command available, but it could be done with redis multi
+            # exec, but, we have multiple concurrent usages of the redis client, which I suspect
+            # would make transactions impossible right now
+            # We do have an atomic GETSET however, so we use that with a special NOT_EXISTS value
+            updates_seed_url = await redis_client.execute('GETSET', updates_seed_url_key,
+                                                          NOT_EXISTS)
+            logger.debug('Getting updates url... (seed: %s)', updates_seed_url)
+            if updates_seed_url is not None and updates_seed_url != NOT_EXISTS:
+                url = updates_seed_url
+                break
+
+            updates_latest_url = await redis_client.execute('GET', updates_latest_url_key)
+            logger.debug('Getting updates url... (latest: %s)', updates_latest_url)
+            if updates_latest_url is not None:
+                url = updates_latest_url
+                break
+
+            await sleep(logger, 1)
+
+    logger.debug('Getting updates url... (found: %s)', url)
+    return url.decode('utf-8')
+
+
+async def set_feed_updates_seed_url_init(logger, redis_client, feed_id):
+    updates_seed_url_key = 'feed-updates-seed-url-' + feed_id
+    with logged(logger, 'Setting updates seed url initial to (%s)', [NOT_EXISTS]):
+        result = await redis_client.execute('SET', updates_seed_url_key, NOT_EXISTS,
+                                            'EX', FEED_UPDATE_URL_EXPIRE,
+                                            'NX')
+        logger.debug('Setting updates seed url initial to (%s)... (result: %s)',
+                     NOT_EXISTS, result)
+
+
+async def set_feed_updates_seed_url(logger, redis_client, feed_id, updates_url):
+    updates_seed_url_key = 'feed-updates-seed-url-' + feed_id
+    with logged(logger, 'Setting updates seed url to (%s)', [updates_url]):
+        await redis_client.execute('SET', updates_seed_url_key, updates_url,
+                                   'EX', FEED_UPDATE_URL_EXPIRE)
+
+
+async def set_feed_updates_url(logger, redis_client, feed_id, updates_url):
+    updates_latest_url_key = 'feed-updates-latest-url-' + feed_id
+    with logged(logger, 'Setting updates url to (%s)', [updates_url]):
+        await redis_client.execute('SET', updates_latest_url_key, updates_url,
+                                   'EX', FEED_UPDATE_URL_EXPIRE)
