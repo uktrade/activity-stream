@@ -254,9 +254,7 @@ async def ingest_feed_page(logger, metrics, redis_client, session, ingest_type, 
 
 async def get_feed_contents(session, href, headers):
     async with session.get(href, headers=headers) as result:
-        if result.status != 200:
-            raise Exception(await result.text())
-
+        result.raise_for_status()
         return await result.read()
 
 
