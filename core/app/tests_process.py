@@ -96,11 +96,14 @@ class TestProcess(unittest.TestCase):
             return stdout_inc[0]
 
         self.add_async_cleanup(tear_down)
-        return (server_out, get_server_out_stdout), (server_inc, get_server_inc_stdout)
+        return \
+            (server_out, get_server_out_stdout), \
+            (server_inc, get_server_inc_stdout), \
+            feed_runner_2,
 
     @async_test
     async def test_http_and_exit_clean(self):
-        (server_out, stdout_out), (server_inc, stdout_inc) = await self.setup_manual(mock_env())
+        (server_out, stdout_out), (server_inc, stdout_inc), _ = await self.setup_manual(mock_env())
         self.assertTrue(await is_http_accepted_eventually())
         await wait_until_get_working()
 
@@ -121,7 +124,7 @@ class TestProcess(unittest.TestCase):
 
     @async_test
     async def test_if_es_down_exit_clean(self):
-        (server_out, stdout_out), (server_inc, stdout_inc) = await self.setup_manual({
+        (server_out, stdout_out), (server_inc, stdout_inc), _ = await self.setup_manual({
             **mock_env(), 'ELASTICSEARCH__PORT': '9202'  # Nothing listening
         })
         self.assertTrue(await is_http_accepted_eventually())
@@ -145,7 +148,7 @@ class TestProcess(unittest.TestCase):
         es_runner = await run_es_application(port=9201, override_routes=routes)
         self.add_async_cleanup(es_runner.cleanup)
 
-        (server_out, stdout_out), (server_inc, stdout_inc) = await self.setup_manual({
+        (server_out, stdout_out), (server_inc, stdout_inc), _ = await self.setup_manual({
             **mock_env(), 'ELASTICSEARCH__PORT': '9201'
         })
         self.assertTrue(await is_http_accepted_eventually())
@@ -160,7 +163,7 @@ class TestProcess(unittest.TestCase):
 
     @async_test
     async def test_metrics_and_check(self):
-        _, _ = await self.setup_manual(mock_env())
+        _, _, _ = await self.setup_manual(mock_env())
         self.assertTrue(await is_http_accepted_eventually())
         await wait_until_get_working()
 
