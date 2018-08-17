@@ -82,13 +82,13 @@ class TestProcess(unittest.TestCase):
             is_running = False
             await asyncio.sleep(0.2)
             if server_out.returncode is None:
-                server_out.kill()
+                server_out.terminate()
             await server_out.wait()
             if server_inc.returncode is None:
-                server_inc.kill()
+                server_inc.terminate()
             await server_inc.wait()
             if feed_runner_2.returncode is None:
-                feed_runner_2.kill()
+                feed_runner_2.terminate()
             await feed_runner_2.wait()
             await feed_runner_1.cleanup()
             await asyncio.sleep(1)
