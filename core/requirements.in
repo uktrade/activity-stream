@@ -5,3 +5,4 @@ mohawk==0.3.4
 prometheus_client==0.3.0
 raven-aiohttp==0.7.0
 raven==6.9.0
+ujson==1.35

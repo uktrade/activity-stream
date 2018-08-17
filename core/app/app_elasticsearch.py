@@ -1,10 +1,10 @@
 import datetime
-import json
 import time
 
 from aiohttp.web import (
     HTTPNotFound,
 )
+import ujson
 
 from shared.logger import (
     logged,
@@ -93,7 +93,7 @@ async def add_remove_aliases_atomically(logger, session, es_endpoint, index_name
                                         feed_unique_id):
     with logged(logger, 'Atomically flipping {ALIAS} alias to (%s)', [feed_unique_id]):
         remove_pattern = f'{ALIAS}__feed_id_{feed_unique_id}__*'
-        actions = json.dumps({
+        actions = ujson.dumps({
             'actions': [
                 {'remove': {'index': remove_pattern, 'alias': ALIAS}},
                 {'add': {'index': index_name, 'alias': ALIAS}}
@@ -129,7 +129,7 @@ async def delete_indexes(logger, session, es_endpoint, index_names):
 
 async def create_index(logger, session, es_endpoint, index_name):
     with logged(logger, 'Creating index (%s)', [index_name]):
-        index_definition = json.dumps({
+        index_definition = ujson.dumps({
             'settings': {
                 'index': {
                     'number_of_shards': 4,
@@ -152,7 +152,7 @@ async def create_index(logger, session, es_endpoint, index_name):
                     },
                 },
             },
-        }).encode('utf-8')
+        }, escape_forward_slashes=False).encode('utf-8')
         await es_request_non_200_exception(
             logger=logger,
             session=session,
@@ -197,9 +197,9 @@ async def es_search_existing_scroll(redis_client, match_info, _):
         # so KISS, and not introduce more layers unless needed
         raise HTTPNotFound(text='Scroll ID not found.')
 
-    return '/_search/scroll', {'scroll': '30s'}, json.dumps({
+    return '/_search/scroll', {'scroll': '30s'}, ujson.dumps({
         'scroll_id': private_scroll_id.decode('utf-8'),
-    }).encode('utf-8')
+    }, escape_forward_slashes=False).encode('utf-8')
 
 
 async def es_search(logger, session, es_endpoint, path, query, body,
@@ -250,8 +250,10 @@ async def es_bulk(logger, session, es_endpoint, items):
 
         with logged(logger, 'Converting to Elasticsearch bulk ingest commands', []):
             es_bulk_contents = ('\n'.join(flatten([
-                [json.dumps(item['action_and_metadata'], sort_keys=True),
-                 json.dumps(item['source'], sort_keys=True)]
+                [ujson.dumps(item['action_and_metadata'], sort_keys=True,
+                             escape_forward_slashes=False),
+                 ujson.dumps(item['source'], sort_keys=True,
+                             escape_forward_slashes=False)]
                 for item in items
             ])) + '\n').encode('utf-8')
 
@@ -275,7 +277,7 @@ async def es_searchable_total(logger, session, es_endpoint):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    return (await searchable_result.json())['count']
+    return (ujson.loads(await searchable_result.text()))['count']
 
 
 async def es_nonsearchable_total(logger, session, es_endpoint):
@@ -289,7 +291,7 @@ async def es_nonsearchable_total(logger, session, es_endpoint):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    return (await nonsearchable_result.json())['count']
+    return ujson.loads(await nonsearchable_result.text())['count']
 
 
 async def es_feed_activities_total(logger, session, es_endpoint, feed_id):
@@ -303,7 +305,7 @@ async def es_feed_activities_total(logger, session, es_endpoint, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    nonsearchable = (await nonsearchable_result.json())['count']
+    nonsearchable = ujson.loads(await nonsearchable_result.text())['count']
 
     total_result = await es_maybe_unvailable_metrics(
         logger=logger,
@@ -315,13 +317,13 @@ async def es_feed_activities_total(logger, session, es_endpoint, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    searchable = max((await total_result.json())['count'] - nonsearchable, 0)
+    searchable = max(ujson.loads(await total_result.text())['count'] - nonsearchable, 0)
 
     return searchable, nonsearchable
 
 
 async def es_min_verification_age(logger, session, es_endpoint):
-    payload = json.dumps({
+    payload = ujson.dumps({
         'size': 0,
         'aggs': {
             'verifier_activities': {
@@ -339,7 +341,7 @@ async def es_min_verification_age(logger, session, es_endpoint):
                 }
             }
         }
-    }).encode('utf-8')
+    }, escape_forward_slashes=False).encode('utf-8')
     result = await es_request_non_200_exception(
         logger=logger,
         session=session,
@@ -350,7 +352,7 @@ async def es_min_verification_age(logger, session, es_endpoint):
         headers={'Content-Type': 'application/json'},
         payload=payload,
     )
-    result_dict = await result.json()
+    result_dict = ujson.loads(await result.text())
     try:
         max_published = int(result_dict['aggregations']
                             ['verifier_activities']['max_published']['value'] / 1000)

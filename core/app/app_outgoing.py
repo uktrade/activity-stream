@@ -1,5 +1,4 @@
 import asyncio
-import json
 import os
 
 import aiohttp
@@ -8,6 +7,7 @@ from prometheus_client import (
     CollectorRegistry,
     generate_latest,
 )
+import ujson
 
 from shared.logger import (
     get_root_logger,
@@ -333,7 +333,7 @@ async def ingest_feed_page(logger, metrics, session, ingest_type, feed_lock, fee
                 feed_contents = await get_feed_contents(session, href, feed.auth_headers(href))
 
         with logged(logger, 'Parsing JSON', []):
-            feed_parsed = json.loads(feed_contents)
+            feed_parsed = ujson.loads(feed_contents)
 
         with logged(logger, 'Converting to bulk Elasticsearch items', []):
             es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_names)
