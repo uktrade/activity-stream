@@ -152,7 +152,7 @@ async def create_index(logger, session, es_endpoint, index_name):
                     },
                 },
             },
-        }, escape_forward_slashes=False).encode('utf-8')
+        }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
         await es_request_non_200_exception(
             logger=logger,
             session=session,
@@ -199,7 +199,7 @@ async def es_search_existing_scroll(redis_client, match_info, _):
 
     return '/_search/scroll', {'scroll': '30s'}, ujson.dumps({
         'scroll_id': private_scroll_id.decode('utf-8'),
-    }, escape_forward_slashes=False).encode('utf-8')
+    }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
 
 
 async def es_search(logger, session, es_endpoint, path, query, body,
@@ -251,10 +251,10 @@ async def es_bulk(logger, session, es_endpoint, items):
         with logged(logger, 'Converting to Elasticsearch bulk ingest commands', []):
             es_bulk_contents = ''.join(flatten(
                 [ujson.dumps(item['action_and_metadata'], sort_keys=True,
-                             escape_forward_slashes=False),
+                             escape_forward_slashes=False, ensure_ascii=False),
                  '\n',
                  ujson.dumps(item['source'], sort_keys=True,
-                             escape_forward_slashes=False),
+                             escape_forward_slashes=False, ensure_ascii=False),
                  '\n']
                 for item in items
             )).encode('utf-8')
@@ -343,7 +343,7 @@ async def es_min_verification_age(logger, session, es_endpoint):
                 }
             }
         }
-    }, escape_forward_slashes=False).encode('utf-8')
+    }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
     result = await es_request_non_200_exception(
         logger=logger,
         session=session,
