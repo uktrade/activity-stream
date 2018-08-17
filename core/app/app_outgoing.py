@@ -47,11 +47,13 @@ from .app_metrics import (
 )
 from .app_redis import (
     redis_get_client,
+    acquire_and_keep_lock,
 )
 from .app_utils import (
     get_raven_client,
     async_repeat_until_cancelled,
     cancel_non_current_tasks,
+    sleep,
     main,
 )
 
@@ -83,7 +85,8 @@ async def run_outgoing_application():
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
 
-    await acquire_and_keep_lock(logger, redis_client, raven_client)
+    await acquire_and_keep_lock(logger, redis_client, raven_client, EXCEPTION_INTERVALS,
+                                'lock')
 
     await create_outgoing_application(
         logger, metrics, raven_client, redis_client, session, feed_endpoints, es_endpoint,
@@ -103,49 +106,6 @@ async def run_outgoing_application():
         await asyncio.sleep(0.250)
 
     return cleanup
-
-
-async def acquire_and_keep_lock(parent_logger, redis_client, raven_client):
-    ''' Prevents Elasticsearch errors during deployments
-
-    The exceptions would be caused by a new deployment deleting indexes while
-    the previous deployment is still ingesting into them
-
-    We do not offer a delete for simplicity: the lock will just expire if it's
-    not extended, which happens on destroy of the application
-
-    We don't use Redlock, since we don't care too much if a Redis failure causes
-    multiple clients to have the lock for a period of time. It would only cause
-    Elasticsearch errors to appear in sentry, but otherwise there would be no
-    harm
-    '''
-    logger = get_child_logger(parent_logger, 'lock')
-    ttl = 3
-    aquire_interval = 0.5
-    extend_interval = 0.5
-    key = 'lock'
-
-    async def acquire():
-        while True:
-            logger.debug('Acquiring...')
-            response = await redis_client.execute('SET', key, '1', 'EX', ttl, 'NX')
-            if response == b'OK':
-                logger.debug('Acquiring... (done)')
-                break
-            logger.debug('Acquiring... (failed)')
-            await sleep(logger, aquire_interval)
-
-    async def extend_forever():
-        await sleep(logger, extend_interval)
-        response = await redis_client.execute('EXPIRE', key, ttl)
-        if response != 1:
-            raven_client.captureMessage('Lock has been lost')
-            await acquire()
-
-    await acquire()
-    asyncio.get_event_loop().create_task(async_repeat_until_cancelled(
-        logger, raven_client, EXCEPTION_INTERVALS, extend_forever,
-    ))
 
 
 async def create_outgoing_application(logger, metrics, raven_client, redis_client, session,
@@ -311,11 +271,6 @@ async def get_feed_updates_url(logger, redis_client, feed):
 
     logger.debug('Getting updates url... (found: %s)', url)
     return url.decode('utf-8')
-
-
-async def sleep(logger, interval):
-    with logged(logger, 'Sleeping for %s seconds', [interval]):
-        await asyncio.sleep(interval)
 
 
 async def ingest_feed_page(logger, metrics, session, ingest_type, feed_lock, feed, es_endpoint,
