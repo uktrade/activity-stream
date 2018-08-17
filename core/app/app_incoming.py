@@ -3,7 +3,6 @@ import os
 
 import aiohttp
 from aiohttp import web
-import aioredis
 
 from shared.logger import (
     get_root_logger,
@@ -28,6 +27,9 @@ from .app_server import (
     handle_get_metrics,
     handle_post,
     raven_reporter,
+)
+from .app_redis import (
+    redis_get_client,
 )
 from .app_utils import (
     get_raven_client,
@@ -55,7 +57,7 @@ async def run_incoming_application():
 
     raven_client = get_raven_client(sentry)
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
-    redis_client = await aioredis.create_redis(redis_uri)
+    redis_client = await redis_get_client(redis_uri)
 
     with logged(logger, 'Creating listening web application', []):
         runner = await create_incoming_application(

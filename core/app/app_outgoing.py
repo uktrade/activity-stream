@@ -2,7 +2,6 @@ import asyncio
 import os
 
 import aiohttp
-import aioredis
 from prometheus_client import (
     CollectorRegistry,
     generate_latest,
@@ -46,6 +45,9 @@ from .app_metrics import (
     metric_timer,
     get_metrics,
 )
+from .app_redis import (
+    redis_get_client,
+)
 from .app_utils import (
     get_raven_client,
     async_repeat_until_cancelled,
@@ -76,7 +78,7 @@ async def run_outgoing_application():
     raven_client = get_raven_client(sentry)
     conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
     session = aiohttp.ClientSession(connector=conn, skip_auto_headers=['Accept-Encoding'])
-    redis_client = await aioredis.create_redis(redis_uri)
+    redis_client = await redis_get_client(redis_uri)
 
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
