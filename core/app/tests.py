@@ -569,7 +569,7 @@ class TestApplication(TestBase):
             'AWS4-HMAC-SHA256 '
             'Credential=some-id/20120114/us-east-2/es/aws4_request, '
             'SignedHeaders=content-type;host;x-amz-date, '
-            'Signature=c488596a08fdde84ff85d75520c935d522eff0f4970f5cd2e07e92483e8f9dee')
+            'Signature=6e1da15cdf63b1c0f051b89f1057d8d403599454c0eb42b8efe6241f40ac349e')
         self.assertEqual(es_bulk_content.decode('utf-8')[-1], '\n')
         self.assertEqual(es_bulk_headers['Content-Type'], 'application/x-ndjson')
 
@@ -709,8 +709,10 @@ class TestApplication(TestBase):
             server.close()
             await server.wait_closed()
             self.assertEqual(status, 200)
-            self.assertEqual(result['orderedItems'][0]['id'],
-                             'dit:exportOpportunities:Enquiry:49863:Create')
+            self.assertEqual(set(item['id'] for item in result['orderedItems']), {
+                'dit:exportOpportunities:Enquiry:49862:Create',
+                'dit:exportOpportunities:Enquiry:49863:Create',
+            })
 
             self.assertLessEqual(len(await fetch_es_index_names_with_alias()), 2)
             await ORIGINAL_SLEEP(2)
