@@ -87,7 +87,6 @@ async def run_outgoing_application():
         logger, metrics, raven_client, redis_client, session, feed_endpoints, es_endpoint,
     )
 
-    redis_client = await aioredis.create_redis(redis_uri)
     await create_metrics_application(
         logger, metrics, metrics_registry, redis_client, raven_client,
         session, feed_endpoints, es_endpoint,
