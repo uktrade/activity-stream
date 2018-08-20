@@ -4,6 +4,7 @@ import logging
 import signal
 import sys
 
+import aiohttp
 import raven
 from raven_aiohttp import QueuedAioHttpTransport
 
@@ -72,6 +73,28 @@ def get_raven_client(sentry):
 async def sleep(logger, interval):
     with logged(logger, 'Sleeping for %s seconds', [interval]):
         await asyncio.sleep(interval)
+
+
+def http_429_retry_after(coroutine):
+
+    async def _http_429_retry_after(*args, **kwargs):
+        num_attempts = 0
+        max_attempts = 10
+        logger = kwargs['_http_429_retry_after_logger']
+
+        while True:
+            num_attempts += 1
+            try:
+                return await coroutine(*args, **kwargs)
+            except aiohttp.ClientResponseError as client_error:
+                if (num_attempts >= max_attempts or client_error.status != 429 or
+                        'Retry-After' not in client_error.headers):
+                    raise
+                logger.debug('HTTP 429 received at attempt (%s). Will retry after (%s) seconds',
+                             num_attempts, client_error.headers['Retry-After'])
+                await asyncio.sleep(int(client_error.headers['Retry-After']))
+
+    return _http_429_retry_after
 
 
 def main(run_application_coroutine):

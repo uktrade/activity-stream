@@ -59,6 +59,7 @@ from .app_utils import (
     async_repeat_until_cancelled,
     cancel_non_current_tasks,
     sleep,
+    http_429_retry_after,
     main,
 )
 
@@ -232,7 +233,8 @@ async def ingest_feed_page(logger, metrics, redis_client, session, ingest_type, 
                              [feed.unique_id, ingest_type, 'pull']):
             # Lock so there is only 1 request per feed at any given time
             async with feed_lock:
-                feed_contents = await get_feed_contents(session, href, feed.auth_headers(href))
+                feed_contents = await get_feed_contents(session, href, feed.auth_headers(href),
+                                                        _http_429_retry_after_logger=logger)
 
         with logged(logger, 'Parsing JSON', []):
             feed_parsed = ujson.loads(feed_contents)
@@ -252,7 +254,8 @@ async def ingest_feed_page(logger, metrics, redis_client, session, ingest_type, 
         return feed.next_href(feed_parsed)
 
 
-async def get_feed_contents(session, href, headers):
+@http_429_retry_after
+async def get_feed_contents(session, href, headers, **_):
     async with session.get(href, headers=headers) as result:
         result.raise_for_status()
         return await result.read()
