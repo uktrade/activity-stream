@@ -181,7 +181,7 @@ async def ingest_feed_full(logger, metrics, redis_client, session, feed_lock, fe
                 logger, metrics, redis_client, session, 'full', feed_lock, feed, es_endpoint, [
                     index_name], href
             )
-            await sleep(logger, feed.polling_page_interval)
+            await sleep(logger, feed.full_ingest_page_interval)
 
         await refresh_index(logger, session, es_endpoint, index_name)
 
@@ -212,12 +212,11 @@ async def ingest_feed_updates(logger, metrics, redis_client, session, feed_lock,
             href = await ingest_feed_page(logger, metrics, redis_client, session, 'updates',
                                           feed_lock, feed, es_endpoint, indexes_to_ingest_into,
                                           href)
+            await sleep(logger, feed.updates_page_interval)
 
         for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
             await refresh_index(logger, session, es_endpoint, index_name)
         await set_feed_updates_url(logger, redis_client, feed.unique_id, updates_href)
-
-    await sleep(logger, UPDATES_INTERVAL)
 
 
 async def ingest_feed_page(logger, metrics, redis_client, session, ingest_type, feed_lock, feed,
