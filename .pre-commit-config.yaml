@@ -41,3 +41,4 @@ repos:
         - --disable=duplicate-code
         - --disable=missing-docstring
         - --disable=too-many-instance-attributes
+        - --disable=too-many-lines

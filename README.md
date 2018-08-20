@@ -99,7 +99,7 @@ However, it is possible to rate limit the Activity Stream if it's necessary.
 
 - Responding with HTTP 429, containing a `Retry-After` header containing how after many seconds the Activity Stream should retry the same URL.
 
-- Responding with a HTTP code >= 400, that isn't a 429. The Activity Stream will treat this as a failed ingestion, and start again from the seed after 1 second. This time increases exponentially with each consecutive failure, until 64 seconds between retries. The process also occurs on general HTTP connection issues.
+- Responding with a HTTP code >= 400, that isn't a 429. The Activity Stream will treat this as a failed ingestion, and start again from the seed after 1 second. The time increases exponentially with each consecutive failure, until maxing out at 64 seconds between retries. The process also occurs on general HTTP connection issues.
 
 ## Running tests
 
