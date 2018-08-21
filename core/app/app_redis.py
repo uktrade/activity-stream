@@ -146,10 +146,10 @@ async def set_nonce_nx(redis_client, nonce_key, nonce_expire):
                                       'EX', nonce_expire, 'NX')
 
 
-async def set_feed_status(redis_client, feed_id, status):
+async def set_feed_status(redis_client, feed_id, feed_max_interval, status):
     await redis_client.execute(
         'SET', feed_id + '-status', status,
-        'EX', SHOW_FEED_AS_RED_IF_NO_REQUEST_IN_SECONDS)
+        'EX', feed_max_interval + SHOW_FEED_AS_RED_IF_NO_REQUEST_IN_SECONDS)
 
 
 async def get_feeds_status(redis_client, feed_ids):
