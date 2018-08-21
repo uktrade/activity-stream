@@ -13,11 +13,15 @@ from shared.logger import (
 )
 
 
-def flatten(list_to_flatten):
+def flatten(to_flatten):
+    return list(flatten_generator(to_flatten))
+
+
+def flatten_generator(to_flatten):
     return (
         item
-        for sublist in list_to_flatten
-        for item in sublist
+        for sub_list_or_generator in to_flatten
+        for item in sub_list_or_generator
     )
 
 

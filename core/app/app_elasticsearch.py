@@ -19,6 +19,7 @@ from .app_redis import (
 )
 from .app_utils import (
     flatten,
+    flatten_generator,
 )
 
 ALIAS = 'activities'
@@ -252,7 +253,7 @@ async def es_bulk(logger, session, es_endpoint, items):
             return
 
         with logged(logger, 'Converting to Elasticsearch bulk ingest commands', []):
-            es_bulk_contents = ''.join(flatten(
+            es_bulk_contents = ''.join(flatten_generator(
                 [ujson.dumps(item['action_and_metadata'], sort_keys=True,
                              escape_forward_slashes=False, ensure_ascii=False),
                  '\n',
