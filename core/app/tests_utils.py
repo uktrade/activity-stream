@@ -236,11 +236,11 @@ async def run_es_application(port, override_routes):
     return await _web_application(port=port, routes=routes_no_duplicates)
 
 
-async def run_feed_application(feed, status, feed_requested_callback, port):
+async def run_feed_application(feed, status, headers, feed_requested_callback, port):
     async def handle(request):
         path = request.match_info['feed']
         asyncio.get_event_loop().call_soon(feed_requested_callback, request)
-        return web.Response(text=feed(path), status=status())
+        return web.Response(text=feed(path), status=status(), headers=headers())
 
     routes = [web.get('/{feed}', handle)]
     return await _web_application(port=port, routes=routes)

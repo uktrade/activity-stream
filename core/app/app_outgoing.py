@@ -59,6 +59,7 @@ from .app_utils import (
     async_repeat_until_cancelled,
     cancel_non_current_tasks,
     sleep,
+    http_429_retry_after,
     main,
 )
 
@@ -144,7 +145,7 @@ async def ingest_feeds(logger, metrics, raven_client, redis_client, session,
         async_repeat_until_cancelled(ingest_type_logger, raven_client,
                                      feed_endpoint.exception_intervals, ingester)
         for feed_endpoint in feed_endpoints
-        for feed_lock in [asyncio.Lock()]
+        for feed_lock in [feed_endpoint.get_lock()]
         for feed_logger in [get_child_logger(logger, feed_endpoint.unique_id)]
         for feed_func_ingest_type in [(ingest_feed_full, 'full'), (ingest_feed_updates, 'updates')]
         for ingest_type_logger in [get_child_logger(feed_logger, feed_func_ingest_type[1])]
@@ -180,7 +181,7 @@ async def ingest_feed_full(logger, metrics, redis_client, session, feed_lock, fe
                 logger, metrics, redis_client, session, 'full', feed_lock, feed, es_endpoint, [
                     index_name], href
             )
-            await sleep(logger, feed.polling_page_interval)
+            await sleep(logger, feed.full_ingest_page_interval)
 
         await refresh_index(logger, session, es_endpoint, index_name)
 
@@ -211,12 +212,11 @@ async def ingest_feed_updates(logger, metrics, redis_client, session, feed_lock,
             href = await ingest_feed_page(logger, metrics, redis_client, session, 'updates',
                                           feed_lock, feed, es_endpoint, indexes_to_ingest_into,
                                           href)
+            await sleep(logger, feed.updates_page_interval)
 
         for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
             await refresh_index(logger, session, es_endpoint, index_name)
         await set_feed_updates_url(logger, redis_client, feed.unique_id, updates_href)
-
-    await sleep(logger, UPDATES_INTERVAL)
 
 
 async def ingest_feed_page(logger, metrics, redis_client, session, ingest_type, feed_lock, feed,
@@ -232,7 +232,8 @@ async def ingest_feed_page(logger, metrics, redis_client, session, ingest_type, 
                              [feed.unique_id, ingest_type, 'pull']):
             # Lock so there is only 1 request per feed at any given time
             async with feed_lock:
-                feed_contents = await get_feed_contents(session, href, feed.auth_headers(href))
+                feed_contents = await get_feed_contents(session, href, feed.auth_headers(href),
+                                                        _http_429_retry_after_logger=logger)
 
         with logged(logger, 'Parsing JSON', []):
             feed_parsed = ujson.loads(feed_contents)
@@ -252,11 +253,10 @@ async def ingest_feed_page(logger, metrics, redis_client, session, ingest_type, 
         return feed.next_href(feed_parsed)
 
 
-async def get_feed_contents(session, href, headers):
+@http_429_retry_after
+async def get_feed_contents(session, href, headers, **_):
     async with session.get(href, headers=headers) as result:
-        if result.status != 200:
-            raise Exception(await result.text())
-
+        result.raise_for_status()
         return await result.read()
 
 

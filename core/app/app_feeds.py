@@ -1,3 +1,4 @@
+import asyncio
 import re
 
 import aiohttp
@@ -16,7 +17,8 @@ def parse_feed_config(feed_config):
 
 class ActivityStreamFeed:
 
-    polling_page_interval = 0
+    full_ingest_page_interval = 0
+    updates_page_interval = 1
     exception_intervals = [1, 2, 4, 8, 16, 32, 64]
 
     @classmethod
@@ -29,6 +31,10 @@ class ActivityStreamFeed:
         self.seed = seed
         self.access_key_id = access_key_id
         self.secret_access_key = secret_access_key
+
+    @staticmethod
+    def get_lock():
+        return asyncio.Lock()
 
     @staticmethod
     def next_href(feed):
@@ -65,8 +71,9 @@ class ActivityStreamFeed:
 class ZendeskFeed:
 
     # The staging API is severely rate limited
-    # This could be dynamic, but KISS
-    polling_page_interval = 30
+    # Could be higher on prod, but KISS
+    full_ingest_page_interval = 30
+    updates_page_interval = 120
     exception_intervals = [120, 180, 240, 300]
 
     company_number_regex = r'Company number:\s*(\d+)'
@@ -80,6 +87,10 @@ class ZendeskFeed:
         self.seed = seed
         self.api_email = api_email
         self.api_key = api_key
+
+    @staticmethod
+    def get_lock():
+        return asyncio.Lock()
 
     @staticmethod
     def next_href(feed):

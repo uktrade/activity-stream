@@ -50,7 +50,8 @@ class TestProcess(unittest.TestCase):
             'FEEDS__2__SECRET_ACCESS_KEY': '',
             'FEEDS__2__TYPE': 'activity_stream',
         }
-        feed_runner_1 = await run_feed_application(read_file, lambda: 200, Mock(), 8081)
+        feed_runner_1 = await run_feed_application(read_file, lambda: 200, lambda: {}, Mock(),
+                                                   8081)
         feed_runner_2 = await asyncio.create_subprocess_exec(
             *[sys.executable, '-m', 'verification_feed.app'], env={
                 **env,
