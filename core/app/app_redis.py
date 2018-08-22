@@ -3,11 +3,11 @@ import asyncio
 import aioredis
 
 from shared.logger import (
-    get_child_logger,
     logged,
 )
 from .app_utils import (
     async_repeat_until_cancelled,
+    get_child_context,
     sleep,
 )
 
@@ -22,17 +22,16 @@ async def redis_get_client(redis_uri):
     return await aioredis.create_redis_pool(redis_uri, minsize=3, maxsize=3)
 
 
-async def set_private_scroll_id(redis_client, public_scroll_id, private_scroll_id, expire):
-    await redis_client.execute('SET', f'private-scroll-id-{public_scroll_id}',
-                               private_scroll_id, 'EX', expire)
+async def set_private_scroll_id(context, public_scroll_id, private_scroll_id, expire):
+    await context.redis_client.execute('SET', f'private-scroll-id-{public_scroll_id}',
+                                       private_scroll_id, 'EX', expire)
 
 
-async def get_private_scroll_id(redis_client, public_scroll_id):
-    return await redis_client.execute('GET', f'private-scroll-id-{public_scroll_id}')
+async def get_private_scroll_id(context, public_scroll_id):
+    return await context.redis_client.execute('GET', f'private-scroll-id-{public_scroll_id}')
 
 
-async def acquire_and_keep_lock(parent_logger, redis_client, raven_client, exception_intervals,
-                                key):
+async def acquire_and_keep_lock(parent_context, exception_intervals, key):
     ''' Prevents Elasticsearch errors during deployments
 
     The exceptions would be caused by a new deployment deleting indexes while
@@ -46,7 +45,9 @@ async def acquire_and_keep_lock(parent_logger, redis_client, raven_client, excep
     Elasticsearch errors to appear in sentry, but otherwise there would be no
     harm
     '''
-    logger = get_child_logger(parent_logger, 'lock')
+    context = get_child_context(parent_context, 'lock')
+    logger = context.logger
+    redis_client = context.redis_client
     ttl = 3
     aquire_interval = 0.5
     extend_interval = 0.5
@@ -59,29 +60,29 @@ async def acquire_and_keep_lock(parent_logger, redis_client, raven_client, excep
                 logger.debug('Acquiring... (done)')
                 break
             logger.debug('Acquiring... (failed)')
-            await sleep(logger, aquire_interval)
+            await sleep(context, aquire_interval)
 
     async def extend_forever():
-        await sleep(logger, extend_interval)
+        await sleep(context, extend_interval)
         response = await redis_client.execute('EXPIRE', key, ttl)
         if response != 1:
-            raven_client.captureMessage('Lock has been lost')
+            context.raven_client.captureMessage('Lock has been lost')
             await acquire()
 
     await acquire()
     asyncio.get_event_loop().create_task(async_repeat_until_cancelled(
-        logger, raven_client, exception_intervals, extend_forever,
+        context, exception_intervals, extend_forever,
     ))
 
 
-async def get_feed_updates_url(logger, redis_client, feed_id):
+async def get_feed_updates_url(context, feed_id):
     # For each live update, if a full ingest has recently finished, we use the URL set
     # by that (required, for example, if the endpoint has changed, or if lots of recent
     # event have been deleted). Otherwise, we use the URL set by the latest updates pass
 
     updates_seed_url_key = 'feed-updates-seed-url-' + feed_id
     updates_latest_url_key = 'feed-updates-latest-url-' + feed_id
-    with logged(logger, 'Getting updates url', []):
+    with logged(context.logger, 'Getting updates url', []):
         while True:
             # We want the equivalent of an atomic GET/DEL, to avoid the race condition that the
             # full ingest sets the updates seed URL, but the updates chain then overwrites it
@@ -89,70 +90,72 @@ async def get_feed_updates_url(logger, redis_client, feed_id):
             # exec, but, we have multiple concurrent usages of the redis client, which I suspect
             # would make transactions impossible right now
             # We do have an atomic GETSET however, so we use that with a special NOT_EXISTS value
-            updates_seed_url = await redis_client.execute('GETSET', updates_seed_url_key,
-                                                          NOT_EXISTS)
-            logger.debug('Getting updates url... (seed: %s)', updates_seed_url)
+            updates_seed_url = await context.redis_client.execute('GETSET', updates_seed_url_key,
+                                                                  NOT_EXISTS)
+            context.logger.debug('Getting updates url... (seed: %s)', updates_seed_url)
             if updates_seed_url is not None and updates_seed_url != NOT_EXISTS:
                 url = updates_seed_url
                 break
 
-            updates_latest_url = await redis_client.execute('GET', updates_latest_url_key)
-            logger.debug('Getting updates url... (latest: %s)', updates_latest_url)
+            updates_latest_url = await context.redis_client.execute('GET', updates_latest_url_key)
+            context.logger.debug('Getting updates url... (latest: %s)', updates_latest_url)
             if updates_latest_url is not None:
                 url = updates_latest_url
                 break
 
-            await sleep(logger, 1)
+            await sleep(context, 1)
 
-    logger.debug('Getting updates url... (found: %s)', url)
+    context.logger.debug('Getting updates url... (found: %s)', url)
     return url.decode('utf-8')
 
 
-async def set_feed_updates_seed_url_init(logger, redis_client, feed_id):
+async def set_feed_updates_seed_url_init(context, feed_id):
     updates_seed_url_key = 'feed-updates-seed-url-' + feed_id
-    with logged(logger, 'Setting updates seed url initial to (%s)', [NOT_EXISTS]):
-        result = await redis_client.execute('SET', updates_seed_url_key, NOT_EXISTS,
-                                            'EX', FEED_UPDATE_URL_EXPIRE,
-                                            'NX')
-        logger.debug('Setting updates seed url initial to (%s)... (result: %s)',
-                     NOT_EXISTS, result)
+    with logged(context.logger, 'Setting updates seed url initial to (%s)', [NOT_EXISTS]):
+        result = await context.redis_client.execute(
+            'SET', updates_seed_url_key, NOT_EXISTS,
+            'EX', FEED_UPDATE_URL_EXPIRE,
+            'NX',
+        )
+        context.logger.debug('Setting updates seed url initial to (%s)... (result: %s)',
+                             NOT_EXISTS, result)
 
 
-async def set_feed_updates_seed_url(logger, redis_client, feed_id, updates_url):
+async def set_feed_updates_seed_url(context, feed_id, updates_url):
     updates_seed_url_key = 'feed-updates-seed-url-' + feed_id
-    with logged(logger, 'Setting updates seed url to (%s)', [updates_url]):
-        await redis_client.execute('SET', updates_seed_url_key, updates_url,
-                                   'EX', FEED_UPDATE_URL_EXPIRE)
+    with logged(context.logger, 'Setting updates seed url to (%s)', [updates_url]):
+        await context.redis_client.execute('SET', updates_seed_url_key, updates_url,
+                                           'EX', FEED_UPDATE_URL_EXPIRE)
 
 
-async def set_feed_updates_url(logger, redis_client, feed_id, updates_url):
+async def set_feed_updates_url(context, feed_id, updates_url):
     updates_latest_url_key = 'feed-updates-latest-url-' + feed_id
-    with logged(logger, 'Setting updates url to (%s)', [updates_url]):
-        await redis_client.execute('SET', updates_latest_url_key, updates_url,
-                                   'EX', FEED_UPDATE_URL_EXPIRE)
+    with logged(context.logger, 'Setting updates url to (%s)', [updates_url]):
+        await context.redis_client.execute('SET', updates_latest_url_key, updates_url,
+                                           'EX', FEED_UPDATE_URL_EXPIRE)
 
 
-async def redis_set_metrics(logger, redis_client, metrics):
-    with logged(logger, 'Saving to Redis', []):
-        await redis_client.execute('SET', 'metrics', metrics)
+async def redis_set_metrics(context, metrics):
+    with logged(context.logger, 'Saving to Redis', []):
+        await context.redis_client.execute('SET', 'metrics', metrics)
 
 
-async def redis_get_metrics(redis_client):
-    return await redis_client.execute('GET', 'metrics')
+async def redis_get_metrics(context):
+    return await context.redis_client.execute('GET', 'metrics')
 
 
-async def set_nonce_nx(redis_client, nonce_key, nonce_expire):
-    return await redis_client.execute('SET', nonce_key, '1',
-                                      'EX', nonce_expire, 'NX')
+async def set_nonce_nx(context, nonce_key, nonce_expire):
+    return await context.redis_client.execute('SET', nonce_key, '1',
+                                              'EX', nonce_expire, 'NX')
 
 
-async def set_feed_status(redis_client, feed_id, feed_max_interval, status):
-    await redis_client.execute(
+async def set_feed_status(context, feed_id, feed_max_interval, status):
+    await context.redis_client.execute(
         'SET', feed_id + '-status', status,
         'EX', feed_max_interval + SHOW_FEED_AS_RED_IF_NO_REQUEST_IN_SECONDS)
 
 
-async def get_feeds_status(redis_client, feed_ids):
-    return await redis_client.execute('MGET', *[
+async def get_feeds_status(context, feed_ids):
+    return await context.redis_client.execute('MGET', *[
         feed_id + '-status' for feed_id in feed_ids
     ])

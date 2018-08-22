@@ -1,4 +1,5 @@
 import asyncio
+import collections
 import functools
 import logging
 import signal
@@ -10,7 +11,17 @@ from raven_aiohttp import QueuedAioHttpTransport
 
 from shared.logger import (
     logged,
+    get_child_logger,
 )
+
+
+Context = collections.namedtuple(
+    'Context', ['logger', 'metrics', 'raven_client', 'redis_client', 'session'],
+)
+
+
+def get_child_context(context, name):
+    return context._replace(logger=get_child_logger(context.logger, name))
 
 
 def flatten(to_flatten):
@@ -25,7 +36,7 @@ def flatten_generator(to_flatten):
     )
 
 
-async def async_repeat_until_cancelled(logger, raven_client, exception_intervals, coroutine):
+async def async_repeat_until_cancelled(context, exception_intervals, coroutine):
 
     num_exceptions_in_chain = 0
 
@@ -39,10 +50,10 @@ async def async_repeat_until_cancelled(logger, raven_client, exception_intervals
             interval_index = min(num_exceptions_in_chain, len(exception_intervals) - 1)
             exception_interval = exception_intervals[interval_index]
             num_exceptions_in_chain += 1
-            logger.exception(
+            context.logger.exception(
                 'Raised exception in async_repeat_until_cancelled. '
                 'Waiting %s seconds until looping.', exception_interval)
-            raven_client.captureException()
+            context.raven_client.captureException()
 
             try:
                 await asyncio.sleep(exception_interval)
@@ -74,8 +85,8 @@ def get_raven_client(sentry):
         transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
 
 
-async def sleep(logger, interval):
-    with logged(logger, 'Sleeping for %s seconds', [interval]):
+async def sleep(context, interval):
+    with logged(context.logger, 'Sleeping for %s seconds', [interval]):
         await asyncio.sleep(interval)
 
 
@@ -84,7 +95,7 @@ def http_429_retry_after(coroutine):
     async def _http_429_retry_after(*args, **kwargs):
         num_attempts = 0
         max_attempts = 10
-        logger = kwargs['_http_429_retry_after_logger']
+        logger = kwargs['_http_429_retry_after_context'].logger
 
         while True:
             num_attempts += 1
