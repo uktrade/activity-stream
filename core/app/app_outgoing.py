@@ -212,11 +212,11 @@ async def ingest_feed_updates(logger, metrics, redis_client, session, feed_lock,
             href = await ingest_feed_page(logger, metrics, redis_client, session, 'updates',
                                           feed_lock, feed, es_endpoint, indexes_to_ingest_into,
                                           href)
-            await sleep(logger, feed.updates_page_interval)
 
         for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
             await refresh_index(logger, session, es_endpoint, index_name)
         await set_feed_updates_url(logger, redis_client, feed.unique_id, updates_href)
+        await sleep(logger, feed.updates_page_interval)
 
 
 async def ingest_feed_page(logger, metrics, redis_client, session, ingest_type, feed_lock, feed,
