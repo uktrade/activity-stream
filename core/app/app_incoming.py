@@ -3,6 +3,9 @@ import os
 
 import aiohttp
 from aiohttp import web
+from prometheus_client import (
+    CollectorRegistry,
+)
 
 from shared.logger import (
     get_root_logger,
@@ -20,6 +23,9 @@ from shared.web import (
 from .app_feeds import (
     parse_feed_config,
 )
+from .app_metrics import (
+    get_metrics,
+)
 from .app_server import (
     INCORRECT,
     authenticator,
@@ -36,6 +42,7 @@ from .app_redis import (
     redis_get_client,
 )
 from .app_utils import (
+    Context,
     get_raven_client,
     cancel_non_current_tasks,
     main,
@@ -64,11 +71,17 @@ async def run_incoming_application():
     session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
     redis_client = await redis_get_client(redis_uri)
 
-    with logged(logger, 'Creating listening web application', []):
+    metrics_registry = CollectorRegistry()
+    metrics = get_metrics(metrics_registry)
+
+    context = Context(
+        logger=logger, metrics=metrics,
+        raven_client=raven_client, redis_client=redis_client, session=session)
+
+    with logged(context.logger, 'Creating listening web application', []):
         runner = await create_incoming_application(
-            logger, port, ip_whitelist, incoming_key_pairs,
-            redis_client, raven_client, session, es_endpoint,
-            feed_endpoints,
+            context, port, ip_whitelist, incoming_key_pairs,
+            es_endpoint, feed_endpoints,
         )
 
     async def cleanup():
@@ -87,38 +100,36 @@ async def run_incoming_application():
 
 
 async def create_incoming_application(
-        logger, port, ip_whitelist, incoming_key_pairs,
-        redis_client, raven_client, session, es_endpoint,
-        feed_endpoints):
+        context, port, ip_whitelist, incoming_key_pairs,
+        es_endpoint, feed_endpoints):
 
     app = web.Application(middlewares=[
-        server_logger(logger),
+        server_logger(context.logger),
         convert_errors_to_json(),
-        raven_reporter(raven_client),
+        raven_reporter(context),
     ])
 
     private_app = web.Application(middlewares=[
         authenticate_by_ip(INCORRECT, ip_whitelist),
-        authenticator(incoming_key_pairs, redis_client, NONCE_EXPIRE),
+        authenticator(context, incoming_key_pairs, NONCE_EXPIRE),
         authorizer(),
     ])
     private_app.add_routes([
         web.post('/', handle_post),
         web.get(
             '/',
-            handle_get_new(logger, session, redis_client, PAGINATION_EXPIRE, es_endpoint)
+            handle_get_new(context, PAGINATION_EXPIRE, es_endpoint)
         ),
         web.get(
             '/{public_scroll_id}',
-            handle_get_existing(logger, session, redis_client, PAGINATION_EXPIRE, es_endpoint),
+            handle_get_existing(context, PAGINATION_EXPIRE, es_endpoint),
             name='scroll',
         ),
     ])
     app.add_subapp('/v1/', private_app)
     app.add_routes([
-        web.get('/check', handle_get_check(logger, session,
-                                           redis_client, es_endpoint, feed_endpoints)),
-        web.get('/metrics', handle_get_metrics(redis_client)),
+        web.get('/check', handle_get_check(context, es_endpoint, feed_endpoints)),
+        web.get('/metrics', handle_get_metrics(context)),
     ])
 
     class NullAccessLogger(aiohttp.abc.AbstractAccessLogger):

@@ -10,7 +10,6 @@ import ujson
 
 from shared.logger import (
     get_root_logger,
-    get_child_logger,
     logged,
 )
 from shared.utils import (
@@ -55,6 +54,8 @@ from .app_redis import (
     set_feed_status,
 )
 from .app_utils import (
+    Context,
+    get_child_context,
     get_raven_client,
     async_repeat_until_cancelled,
     cancel_non_current_tasks,
@@ -85,16 +86,14 @@ async def run_outgoing_application():
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
 
-    await acquire_and_keep_lock(logger, redis_client, raven_client, EXCEPTION_INTERVALS,
-                                'lock')
+    context = Context(
+        logger=logger, metrics=metrics,
+        raven_client=raven_client, redis_client=redis_client, session=session)
 
-    await create_outgoing_application(
-        logger, metrics, raven_client, redis_client, session, feed_endpoints, es_endpoint,
-    )
-
+    await acquire_and_keep_lock(context, EXCEPTION_INTERVALS, 'lock')
+    await create_outgoing_application(context, feed_endpoints, es_endpoint)
     await create_metrics_application(
-        logger, metrics, metrics_registry, redis_client, raven_client,
-        session, feed_endpoints, es_endpoint,
+        context, metrics_registry, feed_endpoints, es_endpoint,
     )
 
     async def cleanup():
@@ -111,44 +110,37 @@ async def run_outgoing_application():
     return cleanup
 
 
-async def create_outgoing_application(logger, metrics, raven_client, redis_client, session,
-                                      feed_endpoints, es_endpoint):
+async def create_outgoing_application(context, feed_endpoints, es_endpoint):
     async def ingester():
-        await ingest_feeds(
-            logger, metrics, raven_client, redis_client, session, feed_endpoints, es_endpoint,
-        )
+        await ingest_feeds(context, feed_endpoints, es_endpoint)
+
     asyncio.get_event_loop().create_task(
-        async_repeat_until_cancelled(logger, raven_client, EXCEPTION_INTERVALS, ingester)
+        async_repeat_until_cancelled(context, EXCEPTION_INTERVALS, ingester)
     )
 
 
-async def ingest_feeds(logger, metrics, raven_client, redis_client, session,
-                       feed_endpoints, es_endpoint):
+async def ingest_feeds(context, feed_endpoints, es_endpoint):
     all_feed_ids = feed_unique_ids(feed_endpoints)
-    indexes_without_alias, indexes_with_alias = await get_old_index_names(
-        logger, session, es_endpoint,
-    )
+    indexes_without_alias, indexes_with_alias = await get_old_index_names(context, es_endpoint)
 
     indexes_to_delete = indexes_matching_no_feeds(
         indexes_without_alias + indexes_with_alias, all_feed_ids)
     await delete_indexes(
-        get_child_logger(logger, 'initial-delete'), session, es_endpoint, indexes_to_delete,
+        get_child_context(context, 'initial-delete'), es_endpoint, indexes_to_delete,
     )
 
-    def feed_ingester(ingest_type_logger, feed_lock, feed_endpoint, ingest_func):
+    def feed_ingester(ingest_type_context, feed_lock, feed_endpoint, ingest_func):
         async def _feed_ingester():
-            await ingest_func(ingest_type_logger, metrics, redis_client, session, feed_lock,
-                              feed_endpoint, es_endpoint)
+            await ingest_func(ingest_type_context, feed_lock, feed_endpoint, es_endpoint)
         return _feed_ingester
 
     await asyncio.gather(*[
-        async_repeat_until_cancelled(ingest_type_logger, raven_client,
-                                     feed_endpoint.exception_intervals, ingester)
+        async_repeat_until_cancelled(context, feed_endpoint.exception_intervals, ingester)
         for feed_endpoint in feed_endpoints
         for feed_lock in [feed_endpoint.get_lock()]
-        for feed_logger in [get_child_logger(logger, feed_endpoint.unique_id)]
+        for feed_context in [get_child_context(context, feed_endpoint.unique_id)]
         for feed_func_ingest_type in [(ingest_feed_full, 'full'), (ingest_feed_updates, 'updates')]
-        for ingest_type_logger in [get_child_logger(feed_logger, feed_func_ingest_type[1])]
+        for ingest_type_logger in [get_child_context(feed_context, feed_func_ingest_type[1])]
         for ingester in [feed_ingester(ingest_type_logger, feed_lock, feed_endpoint,
                                        feed_func_ingest_type[0])]
     ])
@@ -158,50 +150,43 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-async def ingest_feed_full(logger, metrics, redis_client, session, feed_lock, feed, es_endpoint):
+async def ingest_feed_full(context, feed_lock, feed, es_endpoint):
+    metrics = context.metrics
     with \
-            logged(logger, 'Full ingest', []), \
+            logged(context.logger, 'Full ingest', []), \
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'full']), \
             metric_inprogress(metrics['ingest_inprogress_ingests_total']):
 
-        await set_feed_updates_seed_url_init(logger, redis_client, feed.unique_id)
-        indexes_without_alias, _ = await get_old_index_names(
-            logger, session, es_endpoint,
-        )
+        await set_feed_updates_seed_url_init(context, feed.unique_id)
+
+        indexes_without_alias, _ = await get_old_index_names(context, es_endpoint)
         indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
-        await delete_indexes(logger, session, es_endpoint, indexes_to_delete)
+        await delete_indexes(context, es_endpoint, indexes_to_delete)
 
         index_name = get_new_index_name(feed.unique_id)
-        await create_index(logger, session, es_endpoint, index_name)
+        await create_index(context, es_endpoint, index_name)
 
         href = feed.seed
         while href:
             updates_href = href
             href = await ingest_feed_page(
-                logger, metrics, redis_client, session, 'full', feed_lock, feed, es_endpoint, [
-                    index_name], href
+                context, 'full', feed_lock, feed, es_endpoint, [index_name], href,
             )
-            await sleep(logger, feed.full_ingest_page_interval)
+            await sleep(context, feed.full_ingest_page_interval)
 
-        await refresh_index(logger, session, es_endpoint, index_name)
-
-        await add_remove_aliases_atomically(
-            logger, session, es_endpoint, index_name, feed.unique_id,
-        )
-
-        await set_feed_updates_seed_url(logger, redis_client, feed.unique_id, updates_href)
+        await refresh_index(context, es_endpoint, index_name)
+        await add_remove_aliases_atomically(context, es_endpoint, index_name, feed.unique_id)
+        await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
 
 
-async def ingest_feed_updates(logger, metrics, redis_client, session, feed_lock, feed,
-                              es_endpoint):
+async def ingest_feed_updates(context, feed_lock, feed, es_endpoint):
+    metrics = context.metrics
     with \
-            logged(logger, 'Updates ingest', []), \
+            logged(context.logger, 'Updates ingest', []), \
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'updates']):
 
-        href = await get_feed_updates_url(logger, redis_client, feed.unique_id)
-        indexes_without_alias, indexes_with_alias = await get_old_index_names(
-            logger, session, es_endpoint,
-        )
+        href = await get_feed_updates_url(context, feed.unique_id)
+        indexes_without_alias, indexes_with_alias = await get_old_index_names(context, es_endpoint)
 
         # We deliberatly ingest into both the live and ingesting indexes
         indexes_to_ingest_into = indexes_matching_feeds(
@@ -209,88 +194,86 @@ async def ingest_feed_updates(logger, metrics, redis_client, session, feed_lock,
 
         while href:
             updates_href = href
-            href = await ingest_feed_page(logger, metrics, redis_client, session, 'updates',
-                                          feed_lock, feed, es_endpoint, indexes_to_ingest_into,
-                                          href)
+            href = await ingest_feed_page(context, 'updates', feed_lock, feed, es_endpoint,
+                                          indexes_to_ingest_into, href)
 
         for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
-            await refresh_index(logger, session, es_endpoint, index_name)
-        await set_feed_updates_url(logger, redis_client, feed.unique_id, updates_href)
+            await refresh_index(context, es_endpoint, index_name)
+        await set_feed_updates_url(context, feed.unique_id, updates_href)
 
-    await sleep(logger, feed.updates_page_interval)
+    await sleep(context, feed.updates_page_interval)
 
 
-async def ingest_feed_page(logger, metrics, redis_client, session, ingest_type, feed_lock, feed,
-                           es_endpoint, index_names, href):
+async def ingest_feed_page(context, ingest_type, feed_lock, feed, es_endpoint, index_names, href):
     with \
-            logged(logger, 'Polling/pushing page', []), \
-            metric_timer(metrics['ingest_page_duration_seconds'],
+            logged(context.logger, 'Polling/pushing page', []), \
+            metric_timer(context.metrics['ingest_page_duration_seconds'],
                          [feed.unique_id, ingest_type, 'total']):
 
         with \
-                logged(logger, 'Polling page (%s)', [href]), \
-                metric_timer(metrics['ingest_page_duration_seconds'],
+                logged(context.logger, 'Polling page (%s)', [href]), \
+                metric_timer(context.metrics['ingest_page_duration_seconds'],
                              [feed.unique_id, ingest_type, 'pull']):
             # Lock so there is only 1 request per feed at any given time
             async with feed_lock:
-                feed_contents = await get_feed_contents(session, href, feed.auth_headers(href),
-                                                        _http_429_retry_after_logger=logger)
+                feed_contents = await get_feed_contents(context, href, feed.auth_headers(href),
+                                                        _http_429_retry_after_context=context)
 
-        with logged(logger, 'Parsing JSON', []):
+        with logged(context.logger, 'Parsing JSON', []):
             feed_parsed = ujson.loads(feed_contents)
 
-        with logged(logger, 'Converting to bulk Elasticsearch items', []):
+        with logged(context.logger, 'Converting to bulk Elasticsearch items', []):
             es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_names)
 
         with \
-                metric_timer(metrics['ingest_page_duration_seconds'],
+                metric_timer(context.metrics['ingest_page_duration_seconds'],
                              [feed.unique_id, ingest_type, 'push']), \
-                metric_counter(metrics['ingest_activities_nonunique_total'],
+                metric_counter(context.metrics['ingest_activities_nonunique_total'],
                                [feed.unique_id], len(es_bulk_items)):
-            await es_bulk(logger, session, es_endpoint, es_bulk_items)
+            await es_bulk(context, es_endpoint, es_bulk_items)
 
         assumed_max_es_ingest_time = 10
         max_interval = \
             max(feed.full_ingest_page_interval, feed.updates_page_interval) + \
             assumed_max_es_ingest_time
-        asyncio.ensure_future(set_feed_status(redis_client, feed.unique_id, max_interval,
-                                              b'GREEN'))
+        asyncio.ensure_future(set_feed_status(context, feed.unique_id, max_interval, b'GREEN'))
 
         return feed.next_href(feed_parsed)
 
 
 @http_429_retry_after
-async def get_feed_contents(session, href, headers, **_):
-    async with session.get(href, headers=headers) as result:
+async def get_feed_contents(context, href, headers, **_):
+    async with context.session.get(href, headers=headers) as result:
         result.raise_for_status()
         return await result.read()
 
 
-async def create_metrics_application(parent_logger, metrics, metrics_registry, redis_client,
-                                     raven_client, session, feed_endpoints, es_endpoint):
-    logger = get_child_logger(parent_logger, 'metrics')
+async def create_metrics_application(parent_context, metrics_registry, feed_endpoints,
+                                     es_endpoint):
+    context = get_child_context(parent_context, 'metrics')
+    metrics = context.metrics
 
     async def poll_metrics():
-        with logged(logger, 'Polling', []):
-            searchable = await es_searchable_total(logger, session, es_endpoint)
+        with logged(context.logger, 'Polling', []):
+            searchable = await es_searchable_total(context, es_endpoint)
             metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
 
             await set_metric_if_can(
                 metrics['elasticsearch_activities_total'],
                 ['nonsearchable'],
-                es_nonsearchable_total(logger, session, es_endpoint),
+                es_nonsearchable_total(context, es_endpoint),
             )
             await set_metric_if_can(
                 metrics['elasticsearch_activities_age_minimum_seconds'],
                 ['verification'],
-                es_min_verification_age(logger, session, es_endpoint),
+                es_min_verification_age(context, es_endpoint),
             )
 
             feed_ids = feed_unique_ids(feed_endpoints)
             for feed_id in feed_ids:
                 try:
                     searchable, nonsearchable = await es_feed_activities_total(
-                        logger, session, es_endpoint, feed_id)
+                        context, es_endpoint, feed_id)
                     metrics['elasticsearch_feed_activities_total'].labels(
                         feed_id, 'searchable').set(searchable)
                     metrics['elasticsearch_feed_activities_total'].labels(
@@ -298,11 +281,11 @@ async def create_metrics_application(parent_logger, metrics, metrics_registry, r
                 except ESMetricsUnavailable:
                     pass
 
-        await redis_set_metrics(logger, redis_client, generate_latest(metrics_registry))
-        await sleep(logger, METRICS_INTERVAL)
+        await redis_set_metrics(context, generate_latest(metrics_registry))
+        await sleep(context, METRICS_INTERVAL)
 
     asyncio.get_event_loop().create_task(
-        async_repeat_until_cancelled(logger, raven_client, EXCEPTION_INTERVALS, poll_metrics)
+        async_repeat_until_cancelled(context, EXCEPTION_INTERVALS, poll_metrics)
     )
 
 

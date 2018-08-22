@@ -19,13 +19,15 @@ from .app_elasticsearch import (
     es_search_new_scroll,
     es_min_verification_age,
 )
+from .app_utils import (
+    get_child_context,
+)
 from .app_redis import (
     set_private_scroll_id,
     redis_get_metrics,
     set_nonce_nx,
     get_feeds_status,
 )
-
 
 NOT_PROVIDED = 'Authentication credentials were not provided.'
 INCORRECT = 'Incorrect authentication credentials.'
@@ -36,7 +38,7 @@ NOT_AUTHORIZED = 'You are not authorized to perform this action.'
 UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
-def authenticator(incoming_key_pairs, redis_client, nonce_expire):
+def authenticator(context, incoming_key_pairs, nonce_expire):
     @web.middleware
     async def authenticate(request, handler):
         if 'X-Forwarded-Proto' not in request.headers:
@@ -52,7 +54,7 @@ def authenticator(incoming_key_pairs, redis_client, nonce_expire):
             raise web.HTTPUnauthorized(text=MISSING_CONTENT_TYPE)
 
         try:
-            receiver = await _authenticate_or_raise(incoming_key_pairs, redis_client,
+            receiver = await _authenticate_or_raise(context, incoming_key_pairs,
                                                     nonce_expire, request)
         except HawkFail as exception:
             request['logger'].warning('Failed authentication %s', exception)
@@ -68,7 +70,7 @@ def authenticator(incoming_key_pairs, redis_client, nonce_expire):
     return authenticate
 
 
-async def _authenticate_or_raise(incoming_key_pairs, redis_client, nonce_expire, request):
+async def _authenticate_or_raise(context, incoming_key_pairs, nonce_expire, request):
     def lookup_credentials(passed_access_key_id):
         matching_key_pairs = [
             key_pair
@@ -100,7 +102,7 @@ async def _authenticate_or_raise(incoming_key_pairs, redis_client, nonce_expire,
     nonce = receiver.resource.nonce
     access_key_id = receiver.resource.credentials['id']
     nonce_key = f'nonce-{access_key_id}-{nonce}'
-    redis_response = await set_nonce_nx(redis_client, nonce_key, nonce_expire)
+    redis_response = await set_nonce_nx(context, nonce_key, nonce_expire)
     seen_nonce = not redis_response == b'OK'
     if seen_nonce:
         raise web.HTTPUnauthorized(text=INCORRECT)
@@ -119,7 +121,7 @@ def authorizer():
     return authorize
 
 
-def raven_reporter(raven_client):
+def raven_reporter(context):
     @web.middleware
     async def _raven_reporter(request, handler):
         try:
@@ -127,7 +129,7 @@ def raven_reporter(raven_client):
         except (web.HTTPSuccessful, web.HTTPRedirection, web.HTTPClientError):
             raise
         except BaseException:
-            raven_client.captureException(data={
+            context.raven_client.captureException(data={
                 'request': {
                     'url': str(request.url.with_scheme(request.headers['X-Forwarded-Proto'])),
                     'query_string': request.query_string,
@@ -160,30 +162,27 @@ async def handle_post(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
-def handle_get_new(logger, session, redis_client, pagination_expire, es_endpoint):
-    return _handle_get(logger, session, redis_client, pagination_expire, es_endpoint,
-                       es_search_new_scroll)
+def handle_get_new(context, pagination_expire, es_endpoint):
+    return _handle_get(context, pagination_expire, es_endpoint, es_search_new_scroll)
 
 
-def handle_get_existing(logger, session, redis_client, pagination_expire, es_endpoint):
-    return _handle_get(logger, session, redis_client, pagination_expire, es_endpoint,
-                       es_search_existing_scroll)
+def handle_get_existing(context, pagination_expire, es_endpoint):
+    return _handle_get(context, pagination_expire, es_endpoint, es_search_existing_scroll)
 
 
-def _handle_get(logger, session, redis_client, pagination_expire, es_endpoint, get_path_query):
+def _handle_get(context, pagination_expire, es_endpoint, get_path_query):
     async def handle(request):
         incoming_body = await request.read()
-        path, query, body = await get_path_query(redis_client, request.match_info,
-                                                 incoming_body)
+        path, query, body = await get_path_query(context, request.match_info, incoming_body)
 
         async def to_public_scroll_url(private_scroll_id):
             public_scroll_id = random_url_safe(8)
-            await set_private_scroll_id(redis_client, public_scroll_id,
-                                        private_scroll_id, pagination_expire)
+            await set_private_scroll_id(context, public_scroll_id, private_scroll_id,
+                                        pagination_expire)
             return str(request.url.join(
                 request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)))
 
-        results, status = await es_search(logger, session, es_endpoint, path, query, body,
+        results, status = await es_search(context, es_endpoint, path, query, body,
                                           {'Content-Type': request.headers['Content-Type']},
                                           to_public_scroll_url)
 
@@ -192,7 +191,7 @@ def _handle_get(logger, session, redis_client, pagination_expire, es_endpoint, g
     return handle
 
 
-def handle_get_check(parent_logger, session, redis_client, es_endpoint, feed_endpoints):
+def handle_get_check(parent_context, es_endpoint, feed_endpoints):
     start_counter = time.perf_counter()
 
     # Grace period after uptime to allow new feeds to start reporting
@@ -200,14 +199,14 @@ def handle_get_check(parent_logger, session, redis_client, es_endpoint, feed_end
     startup_feed_grace_seconds = 30
 
     async def handle(_):
-        logger = get_child_logger(parent_logger, 'check')
+        context = get_child_context(parent_context, 'check')
 
-        with logged(logger, 'Checking', []):
-            await redis_client.execute('SET', 'redis-check', b'GREEN', 'EX', 1)
-            redis_result = await redis_client.execute('GET', 'redis-check')
+        with logged(context.logger, 'Checking', []):
+            await context.redis_client.execute('SET', 'redis-check', b'GREEN', 'EX', 1)
+            redis_result = await context.redis_client.execute('GET', 'redis-check')
             is_redis_green = redis_result == b'GREEN'
 
-            min_age = await es_min_verification_age(logger, session, es_endpoint)
+            min_age = await es_min_verification_age(context, es_endpoint)
             is_elasticsearch_green = min_age < 60
 
             uptime = time.perf_counter() - start_counter
@@ -218,7 +217,7 @@ def handle_get_check(parent_logger, session, redis_client, es_endpoint, feed_end
             #   outgoing application, not this one
             # - To keep the guarantee that we only make a single request to each feed at any one
             #   time (locking between the outoing application and this one would be tricky)
-            feeds_statuses = await get_feeds_status(redis_client, [
+            feeds_statuses = await get_feeds_status(context, [
                 feed.unique_id for feed in feed_endpoints
             ])
             feeds_statuses_with_red = [status if status ==
@@ -245,9 +244,9 @@ def handle_get_check(parent_logger, session, redis_client, es_endpoint, feed_end
     return handle
 
 
-def handle_get_metrics(redis_client):
+def handle_get_metrics(context):
     async def handle(_):
-        return web.Response(body=await redis_get_metrics(redis_client), status=200, headers={
+        return web.Response(body=await redis_get_metrics(context), status=200, headers={
             'Content-Type': 'text/plain; charset=utf-8',
         })
 
