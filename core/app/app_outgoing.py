@@ -132,7 +132,7 @@ async def ingest_feeds(logger, metrics, raven_client, redis_client, session,
     indexes_to_delete = indexes_matching_no_feeds(
         indexes_without_alias + indexes_with_alias, all_feed_ids)
     await delete_indexes(
-        logger, session, es_endpoint, indexes_to_delete,
+        get_child_logger(logger, 'initial-delete'), session, es_endpoint, indexes_to_delete,
     )
 
     def feed_ingester(ingest_type_logger, feed_lock, feed_endpoint, ingest_func):
