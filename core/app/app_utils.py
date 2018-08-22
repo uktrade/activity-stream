@@ -1,13 +1,10 @@
 import asyncio
 import collections
-import functools
 import logging
 import signal
 import sys
 
 import aiohttp
-import raven
-from raven_aiohttp import QueuedAioHttpTransport
 
 from shared.logger import (
     logged,
@@ -76,13 +73,6 @@ async def cancel_non_current_tasks():
         task.cancel()
     # Allow CancelledException to be thrown at the location of all awaits
     await asyncio.sleep(0)
-
-
-def get_raven_client(sentry):
-    return raven.Client(
-        sentry['dsn'],
-        environment=sentry['environment'],
-        transport=functools.partial(QueuedAioHttpTransport, workers=1, qsize=1000))
 
 
 async def sleep(context, interval):

@@ -43,6 +43,9 @@ from .app_metrics import (
     metric_timer,
     get_metrics,
 )
+from .app_raven import (
+    get_raven_client,
+)
 from .app_redis import (
     redis_get_client,
     acquire_and_keep_lock,
@@ -56,7 +59,6 @@ from .app_redis import (
 from .app_utils import (
     Context,
     get_child_context,
-    get_raven_client,
     async_repeat_until_cancelled,
     cancel_non_current_tasks,
     sleep,
@@ -78,9 +80,10 @@ async def run_outgoing_application():
         es_endpoint, redis_uri, sentry = get_common_config(env)
         feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
-    raven_client = get_raven_client(sentry)
     conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
     session = aiohttp.ClientSession(connector=conn, skip_auto_headers=['Accept-Encoding'])
+    raven_client = get_raven_client(sentry, session)
+
     redis_client = await redis_get_client(redis_uri)
 
     metrics_registry = CollectorRegistry()
@@ -98,7 +101,6 @@ async def run_outgoing_application():
 
     async def cleanup():
         await cancel_non_current_tasks()
-        await raven_client.remote.get_transport().close()
 
         redis_client.close()
         await redis_client.wait_closed()

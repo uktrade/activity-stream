@@ -25,7 +25,6 @@ prometheus_client==0.3.0
 pycares==2.3.0            # via aiodns
 pylint==1.9.1
 python-dateutil==2.7.3    # via freezegun
-raven-aiohttp==0.7.0
 raven==6.9.0
 six==1.11.0               # via astroid, freezegun, mohawk, pylint, python-dateutil
 ujson==1.35
