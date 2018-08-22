@@ -248,7 +248,10 @@ async def ingest_feed_page(logger, metrics, redis_client, session, ingest_type, 
                                [feed.unique_id], len(es_bulk_items)):
             await es_bulk(logger, session, es_endpoint, es_bulk_items)
 
-        max_interval = max(feed.full_ingest_page_interval, feed.updates_page_interval)
+        assumed_max_es_ingest_time = 10
+        max_interval = \
+            max(feed.full_ingest_page_interval, feed.updates_page_interval) + \
+            assumed_max_es_ingest_time
         asyncio.ensure_future(set_feed_status(redis_client, feed.unique_id, max_interval,
                                               b'GREEN'))
 
