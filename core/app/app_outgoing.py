@@ -210,12 +210,12 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed, es_endpoint, i
             metric_timer(context.metrics['ingest_page_duration_seconds'],
                          [feed.unique_id, ingest_type, 'total']):
 
-        with \
-                logged(context.logger, 'Polling page (%s)', [href]), \
-                metric_timer(context.metrics['ingest_page_duration_seconds'],
-                             [feed.unique_id, ingest_type, 'pull']):
-            # Lock so there is only 1 request per feed at any given time
-            async with feed_lock:
+        # Lock so there is only 1 request per feed at any given time
+        async with feed_lock:
+            with \
+                    logged(context.logger, 'Polling page (%s)', [href]), \
+                    metric_timer(context.metrics['ingest_page_duration_seconds'],
+                                 [feed.unique_id, ingest_type, 'pull']):
                 feed_contents = await get_feed_contents(context, href, feed.auth_headers(href),
                                                         _http_429_retry_after_context=context)
 
