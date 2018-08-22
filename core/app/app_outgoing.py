@@ -216,7 +216,8 @@ async def ingest_feed_updates(logger, metrics, redis_client, session, feed_lock,
         for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
             await refresh_index(logger, session, es_endpoint, index_name)
         await set_feed_updates_url(logger, redis_client, feed.unique_id, updates_href)
-        await sleep(logger, feed.updates_page_interval)
+
+    await sleep(logger, feed.updates_page_interval)
 
 
 async def ingest_feed_page(logger, metrics, redis_client, session, ingest_type, feed_lock, feed,
@@ -248,7 +249,10 @@ async def ingest_feed_page(logger, metrics, redis_client, session, ingest_type, 
                                [feed.unique_id], len(es_bulk_items)):
             await es_bulk(logger, session, es_endpoint, es_bulk_items)
 
-        max_interval = max(feed.full_ingest_page_interval, feed.updates_page_interval)
+        assumed_max_es_ingest_time = 10
+        max_interval = \
+            max(feed.full_ingest_page_interval, feed.updates_page_interval) + \
+            assumed_max_es_ingest_time
         asyncio.ensure_future(set_feed_status(redis_client, feed.unique_id, max_interval,
                                               b'GREEN'))
 

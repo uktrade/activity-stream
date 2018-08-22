@@ -181,7 +181,7 @@ async def get_until(url, x_forwarded_for, condition):
 
 
 async def get_until_raw(url, x_forwarded_for, condition):
-    for _ in range(0, 20):
+    for _ in range(0, 30):
         auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', b'', 'application/json',
         )
