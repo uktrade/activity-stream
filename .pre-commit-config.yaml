@@ -40,5 +40,7 @@ repos:
         - --disable=attribute-defined-outside-init
         - --disable=duplicate-code
         - --disable=missing-docstring
+        - --disable=protected-access
+        - --disable=too-few-public-methods
         - --disable=too-many-instance-attributes
         - --disable=too-many-lines

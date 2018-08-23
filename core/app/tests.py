@@ -33,6 +33,7 @@ from .tests_utils import (
     run_app_until_accepts_http,
     run_es_application,
     run_feed_application,
+    run_sentry_application,
     wait_until_get_working,
 )
 
@@ -68,6 +69,9 @@ class TestBase(unittest.TestCase):
                                                  mock_headers,
                                                  feed_requested_callback, 8081)
         self.add_async_cleanup(feed_runner.cleanup)
+
+        sentry_runner = await run_sentry_application()
+        self.add_async_cleanup(sentry_runner.cleanup)
 
         cleanup = await run_app_until_accepts_http()
         self.add_async_cleanup(cleanup)

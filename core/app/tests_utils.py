@@ -246,6 +246,25 @@ async def run_feed_application(feed, status, headers, feed_requested_callback, p
     return await _web_application(port=port, routes=routes)
 
 
+async def run_sentry_application():
+    # Very roughly simulates a flaky Sentry endpoint
+    num_calls = 0
+    responses = [
+        web.Response(text='', status=200, headers={}),
+        web.Response(text='', status=429, headers={'Retry-After': '1'}),
+        web.Response(text='', status=500, headers={'X-Sentry-Error': 'Error from Sentry'}),
+    ]
+
+    async def handle(_):
+        nonlocal num_calls
+        response = responses[num_calls % len(responses)]
+        num_calls += 1
+        return response
+
+    routes = [web.post('/api/123/store/', handle)]
+    return await _web_application(port=9872, routes=routes)
+
+
 async def _web_application(port, routes):
     app = web.Application()
     app.add_routes(routes)

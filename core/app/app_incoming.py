@@ -26,6 +26,9 @@ from .app_feeds import (
 from .app_metrics import (
     get_metrics,
 )
+from .app_raven import (
+    get_raven_client,
+)
 from .app_server import (
     INCORRECT,
     authenticator,
@@ -43,7 +46,6 @@ from .app_redis import (
 )
 from .app_utils import (
     Context,
-    get_raven_client,
     cancel_non_current_tasks,
     main,
 )
@@ -67,8 +69,10 @@ async def run_incoming_application():
         } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
         ip_whitelist = env['INCOMING_IP_WHITELIST']
 
-    raven_client = get_raven_client(sentry)
-    session = aiohttp.ClientSession(skip_auto_headers=['Accept-Encoding'])
+    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
+    session = aiohttp.ClientSession(connector=conn, skip_auto_headers=['Accept-Encoding'])
+    raven_client = get_raven_client(sentry, session)
+
     redis_client = await redis_get_client(redis_uri)
 
     metrics_registry = CollectorRegistry()
@@ -87,7 +91,6 @@ async def run_incoming_application():
     async def cleanup():
         await cancel_non_current_tasks()
         await runner.cleanup()
-        await raven_client.remote.get_transport().close()
 
         redis_client.close()
         await redis_client.wait_closed()

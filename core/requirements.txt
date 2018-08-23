@@ -17,7 +17,6 @@ mohawk==0.3.4
 multidict==4.3.1          # via aiohttp, yarl
 prometheus_client==0.3.0
 pycares==2.3.0            # via aiodns
-raven-aiohttp==0.7.0
 raven==6.9.0
 six==1.11.0               # via mohawk
 ujson==1.35
