@@ -2,8 +2,6 @@ import hmac
 import time
 
 from aiohttp import web
-import mohawk
-from mohawk.exc import HawkFail
 
 from shared.logger import (
     logged,
@@ -19,13 +17,15 @@ from .app_elasticsearch import (
     es_search_new_scroll,
     es_min_verification_age,
 )
+from .app_hawk import (
+    authenticate_hawk_header,
+)
 from .app_utils import (
     get_child_context,
 )
 from .app_redis import (
     set_private_scroll_id,
     redis_get_metrics,
-    set_nonce_nx,
     get_feeds_status,
 )
 
@@ -39,6 +39,10 @@ UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
 def authenticator(context, incoming_key_pairs, nonce_expire):
+
+    def _lookup_credentials(passed_access_key_id):
+        return lookup_credentials(incoming_key_pairs, passed_access_key_id)
+
     @web.middleware
     async def authenticate(request, handler):
         if 'X-Forwarded-Proto' not in request.headers:
@@ -53,61 +57,45 @@ def authenticator(context, incoming_key_pairs, nonce_expire):
         if 'Content-Type' not in request.headers:
             raise web.HTTPUnauthorized(text=MISSING_CONTENT_TYPE)
 
-        try:
-            receiver = await _authenticate_or_raise(context, incoming_key_pairs,
-                                                    nonce_expire, request)
-        except HawkFail as exception:
-            request['logger'].warning('Failed authentication %s', exception)
+        is_authentic, private_error_message, credentials = await authenticate_hawk_header(
+            context=context,
+            nonce_expire=nonce_expire,
+            lookup_credentials=_lookup_credentials,
+            header=request.headers['Authorization'],
+            method=request.method,
+            host=request.url.host,
+            port=str(request.url.with_scheme(request.headers['X-Forwarded-Proto']).port),
+            path=request.url.raw_path_qs,
+            content_type=request.headers['Content-Type'].encode('utf-8'),
+            content=await request.read()
+        )
+
+        if not is_authentic:
+            request['logger'].warning('Failed authentication (%s)', private_error_message)
             raise web.HTTPUnauthorized(text=INCORRECT)
 
         request['logger'] = get_child_logger(
             request['logger'],
-            receiver.resource.credentials['id'],
+            credentials['id'],
         )
-        request['permissions'] = receiver.resource.credentials['permissions']
+        request['permissions'] = credentials['permissions']
         return await handler(request)
 
     return authenticate
 
 
-async def _authenticate_or_raise(context, incoming_key_pairs, nonce_expire, request):
-    def lookup_credentials(passed_access_key_id):
-        matching_key_pairs = [
-            key_pair
-            for key_pair in incoming_key_pairs
-            if hmac.compare_digest(key_pair['key_id'], passed_access_key_id)
-        ]
+def lookup_credentials(incoming_key_pairs, passed_access_key_id):
+    matching_key_pairs = [
+        key_pair
+        for key_pair in incoming_key_pairs
+        if hmac.compare_digest(key_pair['key_id'], passed_access_key_id)
+    ]
 
-        if not matching_key_pairs:
-            raise HawkFail(f'No Hawk ID of {passed_access_key_id}')
-
-        return {
-            'id': matching_key_pairs[0]['key_id'],
-            'key': matching_key_pairs[0]['secret_key'],
-            'permissions': matching_key_pairs[0]['permissions'],
-            'algorithm': 'sha256',
-        }
-
-    receiver = mohawk.Receiver(
-        lookup_credentials,
-        request.headers['Authorization'],
-        str(request.url.with_scheme(request.headers['X-Forwarded-Proto'])),
-        request.method,
-        content=await request.read(),
-        content_type=request.headers['Content-Type'],
-        # Mohawk doesn't provide an async way of checking nonce
-        seen_nonce=lambda _, __, ___: False,
-    )
-
-    nonce = receiver.resource.nonce
-    access_key_id = receiver.resource.credentials['id']
-    nonce_key = f'nonce-{access_key_id}-{nonce}'
-    redis_response = await set_nonce_nx(context, nonce_key, nonce_expire)
-    seen_nonce = not redis_response == b'OK'
-    if seen_nonce:
-        raise web.HTTPUnauthorized(text=INCORRECT)
-
-    return receiver
+    return {
+        'id': matching_key_pairs[0]['key_id'],
+        'key': matching_key_pairs[0]['secret_key'],
+        'permissions': matching_key_pairs[0]['permissions'],
+    } if matching_key_pairs else None
 
 
 def authorizer():
