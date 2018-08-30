@@ -2,8 +2,11 @@ import asyncio
 import re
 
 import aiohttp
-import mohawk
+import yarl
 
+from .app_hawk import (
+    get_hawk_header,
+)
 from .app_utils import sub_dict_lower
 
 
@@ -41,13 +44,18 @@ class ActivityStreamFeed:
         return feed.get('next', None)
 
     def auth_headers(self, url):
-        method = 'GET'
+        parsed_url = yarl.URL(url)
         return {
-            'Authorization': mohawk.Sender({
-                'id': self.access_key_id,
-                'key': self.secret_access_key,
-                'algorithm': 'sha256'
-            }, url, method, content_type='', content='').request_header,
+            'Authorization': get_hawk_header(
+                access_key_id=self.access_key_id,
+                secret_access_key=self.secret_access_key,
+                method='GET',
+                host=parsed_url.host,
+                port=str(parsed_url.port),
+                path=parsed_url.raw_path_qs,
+                content_type=b'',
+                content=b'',
+            )
         }
 
     @classmethod

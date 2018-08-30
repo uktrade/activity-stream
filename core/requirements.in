@@ -1,7 +1,6 @@
 aiodns==1.1.1
 aiohttp==3.3.2
 aioredis==1.1.0
-mohawk==0.3.4
 prometheus_client==0.3.0
 raven==6.9.0
 ujson==1.35

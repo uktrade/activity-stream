@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import json
 import os
+import re
 import unittest
 from unittest.mock import patch
 
@@ -230,6 +231,48 @@ class TestAuthentication(TestBase):
         text_2, status_2 = await post(url, auth, x_forwarded_for)
         self.assertEqual(status_2, 401)
         self.assertEqual(text_2, '{"details": "Incorrect authentication credentials."}')
+
+    @async_test
+    async def test_invalid_header_then_401(self):
+        await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
+                                mock_headers=lambda: {})
+
+        url = 'http://127.0.0.1:8080/v1/'
+        auth = hawk_auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
+        )
+        bad_auth = re.sub(r'Hawk ', 'Something ', auth)
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+        _, status_1 = await post(url, bad_auth, x_forwarded_for)
+        self.assertEqual(status_1, 401)
+
+    @async_test
+    async def test_invalid_ts_format_then_401(self):
+        await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
+                                mock_headers=lambda: {})
+
+        url = 'http://127.0.0.1:8080/v1/'
+        auth = hawk_auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
+        )
+        bad_auth = re.sub(r'ts="[^"]+"', 'ts="non-numeric"', auth)
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+        _, status_1 = await post(url, bad_auth, x_forwarded_for)
+        self.assertEqual(status_1, 401)
+
+    @async_test
+    async def test_missing_nonce_then_401(self):
+        await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
+                                mock_headers=lambda: {})
+
+        url = 'http://127.0.0.1:8080/v1/'
+        auth = hawk_auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
+        )
+        bad_auth = re.sub(r', nonce="[^"]+"', '', auth)
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+        _, status_1 = await post(url, bad_auth, x_forwarded_for)
+        self.assertEqual(status_1, 401)
 
     @async_test
     async def test_nonces_cleared(self):
