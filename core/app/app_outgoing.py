@@ -62,7 +62,6 @@ from .app_utils import (
     async_repeat_until_cancelled,
     cancel_non_current_tasks,
     sleep,
-    http_429_retry_after,
     main,
 )
 
@@ -221,8 +220,7 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed, es_endpoint, i
                     logged(context.logger, 'Polling page (%s)', [href]), \
                     metric_timer(context.metrics['ingest_page_duration_seconds'],
                                  [feed.unique_id, ingest_type, 'pull']):
-                feed_contents = await get_feed_contents(context, href, feed.auth_headers(href),
-                                                        _http_429_retry_after_context=context)
+                feed_contents = await get_feed_contents(context, href, feed.auth_headers(href))
 
         with logged(context.logger, 'Parsing JSON', []):
             feed_parsed = ujson.loads(feed_contents)
@@ -246,11 +244,24 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed, es_endpoint, i
         return feed.next_href(feed_parsed)
 
 
-@http_429_retry_after
-async def get_feed_contents(context, href, headers, **_):
-    async with context.session.get(href, headers=headers) as result:
-        result.raise_for_status()
-        return await result.read()
+async def get_feed_contents(context, href, headers):
+    num_attempts = 0
+    max_attempts = 10
+    logger = context.logger
+
+    while True:
+        num_attempts += 1
+        try:
+            async with context.session.get(href, headers=headers) as result:
+                result.raise_for_status()
+                return await result.read()
+        except aiohttp.ClientResponseError as client_error:
+            if (num_attempts >= max_attempts or client_error.status != 429 or
+                    'Retry-After' not in client_error.headers):
+                raise
+            logger.debug('HTTP 429 received at attempt (%s). Will retry after (%s) seconds',
+                         num_attempts, client_error.headers['Retry-After'])
+            await asyncio.sleep(int(client_error.headers['Retry-After']))
 
 
 async def create_metrics_application(parent_context, metrics_registry, feed_endpoints,
