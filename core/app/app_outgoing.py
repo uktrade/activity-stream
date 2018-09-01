@@ -251,17 +251,16 @@ async def get_feed_contents(context, href, headers):
 
     while True:
         num_attempts += 1
-        try:
-            async with context.session.get(href, headers=headers) as result:
-                result.raise_for_status()
+        async with context.session.get(href, headers=headers) as result:
+            if result.status < 400:
                 return await result.read()
-        except aiohttp.ClientResponseError as client_error:
-            if (num_attempts >= max_attempts or client_error.status != 429 or
-                    'Retry-After' not in client_error.headers):
-                raise
-            logger.debug('HTTP 429 received at attempt (%s). Will retry after (%s) seconds',
-                         num_attempts, client_error.headers['Retry-After'])
-            await asyncio.sleep(int(client_error.headers['Retry-After']))
+            elif result.status != 429 or num_attempts >= max_attempts \
+                    or 'Retry-After' not in result.headers:
+                raise Exception(result)
+
+        logger.debug('HTTP 429 received at attempt (%s). Will retry after (%s) seconds',
+                     num_attempts, result.headers['Retry-After'])
+        await asyncio.sleep(int(result.headers['Retry-After']))
 
 
 async def create_metrics_application(parent_context, metrics_registry, feed_endpoints,
