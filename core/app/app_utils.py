@@ -14,6 +14,10 @@ Context = collections.namedtuple(
     'Context', ['logger', 'metrics', 'raven_client', 'redis_client', 'session'],
 )
 
+ContextHttp = collections.namedtuple(
+    'Context', ['logger', 'metrics', 'raven_client', 'redis_client', 'session', 'http_session'],
+)
+
 
 def get_child_context(context, name):
     return context._replace(logger=get_child_logger(context.logger, name))
