@@ -70,7 +70,10 @@ async def run_incoming_application():
         ip_whitelist = env['INCOMING_IP_WHITELIST']
 
     conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
-    session = aiohttp.ClientSession(connector=conn, skip_auto_headers=['Accept-Encoding'])
+    session = aiohttp.ClientSession(
+        connector=conn,
+        headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
+    )
     raven_client = get_raven_client(sentry, session)
 
     redis_client = await redis_get_client(redis_uri)
