@@ -20,7 +20,7 @@ def parse_feed_config(feed_config):
 
 class ActivityStreamFeed:
 
-    full_ingest_page_interval = 0
+    full_ingest_page_interval = 0.25
     updates_page_interval = 1
     exception_intervals = [1, 2, 4, 8, 16, 32, 64]
 
