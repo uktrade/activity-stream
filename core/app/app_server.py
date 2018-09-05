@@ -167,8 +167,12 @@ def _handle_get(context, pagination_expire, es_endpoint, get_path_query):
             public_scroll_id = random_url_safe(8)
             await set_private_scroll_id(context, public_scroll_id, private_scroll_id,
                                         pagination_expire)
-            return str(request.url.join(
-                request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)))
+            url_with_correct_scheme = request.url.with_scheme(
+                request.headers['X-Forwarded-Proto'],
+            )
+            return str(url_with_correct_scheme.join(
+                request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)
+            ))
 
         results, status = await es_search(context, es_endpoint, path, query, body,
                                           {'Content-Type': request.headers['Content-Type']},
