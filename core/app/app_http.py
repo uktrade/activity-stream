@@ -16,7 +16,8 @@ HttpSession = namedtuple(
 
 def http_session():
     loop = asyncio.get_event_loop()
-    max_recv_size = 65536
+    max_recv_size = 2000
+    chunk_size_regex = re.compile(b'([0-9a-fA-F]+)\r\n')
 
     # Dict of host, port, scheme -> list of sockets
     pool = defaultdict(list)
@@ -64,6 +65,15 @@ def http_session():
         header_length = None
         content_length = None
 
+        is_chunked = False
+        chunk_header_buf = bytearray()
+        chunk_body_bufs = []
+        chunk_header_cursor = 0
+        chunk_body_cursor = 0
+        chunk_header_length = 0
+        chunk_body_length = 0
+        chunk_end_of_body_cursor = 0
+
         result = asyncio.Future()
         lock = asyncio.Lock()
 
@@ -93,6 +103,7 @@ def http_session():
                     break
 
                 to_be_processed_buf.extend(incoming_buf)
+
                 while to_be_processed_cursor != len(to_be_processed_buf):
                     _process()
 
@@ -121,6 +132,17 @@ def http_session():
             nonlocal header_length
             nonlocal content_length
 
+            nonlocal is_chunked
+            nonlocal chunk_header_buf
+            nonlocal chunk_body_bufs
+            nonlocal chunk_header_cursor
+            nonlocal chunk_body_cursor
+            nonlocal chunk_header_length
+            nonlocal chunk_body_length
+            nonlocal chunk_end_of_body_cursor
+
+            # instead of section, have parse funcs, process_header... ect?
+
             if section == 'header':
                 header_length = to_be_processed_buf.find(b'\r\n\r\n') + 4
                 has_header = header_length != 3
@@ -129,10 +151,11 @@ def http_session():
                 else:
                     header_buf = to_be_processed_buf[0:header_length]
                     to_be_processed_cursor = header_length
+                    is_chunked = re.search(b'\r\nTransfer-Encoding: chunked\r\n', header_buf)
                     length_match = re.search(b'\r\nContent-Length: (\\d+)\r\n', header_buf)
                     content_length = int(length_match[1]) if length_match else 0
                     body_buf = bytearray(content_length)
-                    section = 'non-chunked-body'
+                    section = 'chunked-header' if is_chunked else 'non-chunked-body'
 
             elif section == 'non-chunked-body':
                 num_bytes = len(to_be_processed_buf) - to_be_processed_cursor
@@ -143,6 +166,56 @@ def http_session():
                 to_be_processed_cursor = 0
                 if body_cursor == content_length:
                     section = 'done'
+
+            elif section == 'chunked-header':
+                chunked_header_end_pos = to_be_processed_buf.find(b'\r\n', to_be_processed_cursor)
+                has_chunked_header = chunked_header_end_pos != -1
+                if not has_chunked_header:
+                    to_be_processed_cursor = len(to_be_processed_buf)
+                else:
+                    chunk_header_length = chunked_header_end_pos - to_be_processed_cursor + 2
+                    chunk_size_match = chunk_size_regex.match(
+                        to_be_processed_buf, to_be_processed_cursor)
+                    chunk_body_length = int(chunk_size_match[1], 16)
+                    if chunk_body_length == 0:
+                        to_be_processed_buf = bytearray()
+                        to_be_processed_cursor = 0
+                        body_buf = b''.join(chunk_body_bufs)
+                        section = 'done'
+                    else:
+                        to_be_processed_cursor += chunk_header_length
+                        chunk_body_bufs.append(bytearray(chunk_body_length))
+                        chunk_body_cursor = 0
+                        section = 'chunked-body'
+
+            elif section == 'chunked-body':
+                remaining_total_bytes = len(to_be_processed_buf) - to_be_processed_cursor
+                remaining_chunk_bytes = chunk_body_length - chunk_body_cursor
+                num_bytes = min(remaining_total_bytes, remaining_chunk_bytes)
+                chunk_body_bufs[-1][chunk_body_cursor:chunk_body_cursor+num_bytes] = \
+                    to_be_processed_buf[to_be_processed_cursor:to_be_processed_cursor+num_bytes]
+                chunk_body_cursor += num_bytes
+                to_be_processed_cursor += num_bytes
+
+                # Would copy what is after this chunk, but suspect usually, if the
+                # sending server does actually send in chunks, this would be empty
+                if chunk_body_cursor == chunk_body_length:
+                    section = 'end-of-chunk-body'
+                    to_be_processed_buf = to_be_processed_buf[to_be_processed_cursor:]
+                    to_be_processed_cursor = 0
+                    chunk_end_of_body_cursor = 0
+
+            elif section == 'end-of-chunk-body':
+                # We don't need a buffer, we just wait for 2 bytes to pass
+                remaining_chunk_end_of_body = 2 - chunk_end_of_body_cursor
+                num_bytes = min(remaining_chunk_end_of_body, len(to_be_processed_buf))
+                chunk_end_of_body_cursor += num_bytes
+                if chunk_end_of_body_cursor == 2:
+                    to_be_processed_cursor = 2
+                    section = 'chunked-header'
+                else:
+                    # to_be_processed_cursor is set to 2 when
+                    to_be_processed_cursor = len(to_be_processed_buf)
 
         loop.add_reader(sock.fileno(), _on_read_available)
 
