@@ -75,7 +75,7 @@ async def get_old_index_names(context, es_endpoint):
             headers={'Content-Type': 'application/json'},
             payload=b'',
         )
-        indexes = await results.json()
+        indexes = ujson.loads(await results.text())
 
         without_alias = [
             index_name
@@ -213,7 +213,7 @@ async def es_search(context, es_endpoint, path, query, body, headers, to_public_
         payload=body,
     )
 
-    response = await results.json()
+    response = ujson.loads(await results.text())
     return \
         (await activities(response, to_public_scroll_url), 200) if results.status == 200 else \
         (response, results.status)

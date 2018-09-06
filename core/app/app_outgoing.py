@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 
 import aiohttp
 from prometheus_client import (
@@ -33,6 +34,9 @@ from .app_elasticsearch import (
     delete_indexes,
     refresh_index,
 )
+from .app_http import (
+    http_session,
+)
 
 from .app_feeds import (
     parse_feed_config,
@@ -57,12 +61,11 @@ from .app_redis import (
     set_feed_status,
 )
 from .app_utils import (
-    Context,
+    ContextHttp,
     get_child_context,
     async_repeat_until_cancelled,
     cancel_non_current_tasks,
     sleep,
-    http_429_retry_after,
     main,
 )
 
@@ -92,9 +95,11 @@ async def run_outgoing_application():
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
 
-    context = Context(
+    context_http_session = http_session()
+    context = ContextHttp(
         logger=logger, metrics=metrics,
-        raven_client=raven_client, redis_client=redis_client, session=session)
+        raven_client=raven_client, redis_client=redis_client, session=session,
+        http_session=context_http_session)
 
     await acquire_and_keep_lock(context, EXCEPTION_INTERVALS, 'lock')
     await create_outgoing_application(context, feed_endpoints, es_endpoint)
@@ -108,6 +113,7 @@ async def run_outgoing_application():
         redis_client.close()
         await redis_client.wait_closed()
 
+        context_http_session.close()
         await session.close()
         # https://github.com/aio-libs/aiohttp/issues/1925
         await asyncio.sleep(0.250)
@@ -221,8 +227,7 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed, es_endpoint, i
                     logged(context.logger, 'Polling page (%s)', [href]), \
                     metric_timer(context.metrics['ingest_page_duration_seconds'],
                                  [feed.unique_id, ingest_type, 'pull']):
-                feed_contents = await get_feed_contents(context, href, feed.auth_headers(href),
-                                                        _http_429_retry_after_context=context)
+                feed_contents = await get_feed_contents(context, href, feed.auth_headers(href))
 
         with logged(context.logger, 'Parsing JSON', []):
             feed_parsed = ujson.loads(feed_contents)
@@ -246,11 +251,25 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed, es_endpoint, i
         return feed.next_href(feed_parsed)
 
 
-@http_429_retry_after
-async def get_feed_contents(context, href, headers, **_):
-    async with context.session.get(href, headers=headers) as result:
-        result.raise_for_status()
-        return await result.read()
+async def get_feed_contents(context, href, headers):
+    num_attempts = 0
+    max_attempts = 10
+    logger = context.logger
+
+    while True:
+        num_attempts += 1
+        status, headers, body = await context.http_session.request('GET', href, headers, b'')
+
+        if status < 400:
+            return body
+        elif status != 429 or num_attempts >= max_attempts \
+                or b'Retry-After: ' not in headers:
+            raise Exception(status, headers, body)
+
+        retry_after = re.search(b'Retry-After: (\\d+)', headers)
+        logger.debug('HTTP 429 received at attempt (%s). Will retry after (%s) seconds',
+                     num_attempts, retry_after)
+        await asyncio.sleep(int(retry_after))
 
 
 async def create_metrics_application(parent_context, metrics_registry, feed_endpoints,
