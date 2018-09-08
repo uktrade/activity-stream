@@ -1,7 +1,9 @@
 import asyncio
+from base64 import (
+    b64encode,
+)
 import re
 
-import aiohttp
 import yarl
 
 from .app_hawk import (
@@ -105,11 +107,9 @@ class ZendeskFeed:
         return feed['next_page']
 
     def auth_headers(self, _):
+        auth = b64encode(f'{self.api_email}/token:{self.api_key}'.encode('utf-8')).decode('utf-8')
         return {
-            'Authorization': aiohttp.helpers.BasicAuth(
-                login=self.api_email + '/token',
-                password=self.api_key,
-            ).encode()
+            'Authorization': f'Basic {auth}'
         }
 
     @classmethod
