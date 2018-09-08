@@ -23,6 +23,9 @@ from shared.web import (
 from .app_feeds import (
     parse_feed_config,
 )
+from .app_http import (
+    http_session,
+)
 from .app_metrics import (
     get_metrics,
 )
@@ -69,12 +72,8 @@ async def run_incoming_application():
         } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
         ip_whitelist = env['INCOMING_IP_WHITELIST']
 
-    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
-    session = aiohttp.ClientSession(
-        connector=conn,
-        headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
-    )
-    raven_client = get_raven_client(sentry, session)
+    context_http_session = http_session()
+    raven_client = get_raven_client(sentry, context_http_session)
 
     redis_client = await redis_get_client(redis_uri)
 
@@ -83,7 +82,8 @@ async def run_incoming_application():
 
     context = Context(
         logger=logger, metrics=metrics,
-        raven_client=raven_client, redis_client=redis_client, session=session)
+        raven_client=raven_client, redis_client=redis_client,
+        http_session=context_http_session)
 
     with logged(context.logger, 'Creating listening web application', []):
         runner = await create_incoming_application(
@@ -98,7 +98,7 @@ async def run_incoming_application():
         redis_client.close()
         await redis_client.wait_closed()
 
-        await session.close()
+        context_http_session.close()
         # https://github.com/aio-libs/aiohttp/issues/1925
         await asyncio.sleep(0.250)
 

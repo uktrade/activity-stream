@@ -1,7 +1,6 @@
 import asyncio
 import os
 
-import aiohttp
 from prometheus_client import (
     CollectorRegistry,
     generate_latest,
@@ -32,6 +31,9 @@ from .app_elasticsearch import (
     add_remove_aliases_atomically,
     delete_indexes,
     refresh_index,
+)
+from .app_http import (
+    http_session,
 )
 
 from .app_feeds import (
@@ -79,12 +81,8 @@ async def run_outgoing_application():
         es_endpoint, redis_uri, sentry = get_common_config(env)
         feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
-    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
-    session = aiohttp.ClientSession(
-        connector=conn,
-        headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
-    )
-    raven_client = get_raven_client(sentry, session)
+    context_http_session = http_session()
+    raven_client = get_raven_client(sentry, context_http_session)
 
     redis_client = await redis_get_client(redis_uri)
 
@@ -93,7 +91,8 @@ async def run_outgoing_application():
 
     context = Context(
         logger=logger, metrics=metrics,
-        raven_client=raven_client, redis_client=redis_client, session=session)
+        raven_client=raven_client, redis_client=redis_client,
+        http_session=context_http_session)
 
     await acquire_and_keep_lock(context, EXCEPTION_INTERVALS, 'lock')
     await create_outgoing_application(context, feed_endpoints, es_endpoint)
@@ -107,7 +106,7 @@ async def run_outgoing_application():
         redis_client.close()
         await redis_client.wait_closed()
 
-        await session.close()
+        context_http_session.close()
         # https://github.com/aio-libs/aiohttp/issues/1925
         await asyncio.sleep(0.250)
 
@@ -251,16 +250,19 @@ async def get_feed_contents(context, href, headers):
 
     while True:
         num_attempts += 1
-        async with context.session.get(href, headers=headers) as result:
-            if result.status < 400:
-                return await result.read()
-            elif result.status != 429 or num_attempts >= max_attempts \
-                    or 'Retry-After' not in result.headers:
-                raise Exception(result)
+        status, response_headers, body = \
+            await context.http_session.request('GET', href, headers, b'')
 
+        if status < 400:
+            return body
+        elif status != 429 or num_attempts >= max_attempts \
+                or b'retry-after' not in response_headers:
+            raise Exception(status, response_headers, body)
+
+        retry_after = response_headers['retry-after']
         logger.debug('HTTP 429 received at attempt (%s). Will retry after (%s) seconds',
-                     num_attempts, result.headers['Retry-After'])
-        await asyncio.sleep(int(result.headers['Retry-After']))
+                     num_attempts, retry_after)
+        await asyncio.sleep(int(retry_after))
 
 
 async def create_metrics_application(parent_context, metrics_registry, feed_endpoints,

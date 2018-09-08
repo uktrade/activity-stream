@@ -12,6 +12,7 @@ from shared.utils import (
 )
 
 from .app_elasticsearch import (
+    ESNotFound,
     es_search,
     es_search_existing_scroll,
     es_search_new_scroll,
@@ -136,6 +137,8 @@ def convert_errors_to_json():
     async def _convert_errors_to_json(request, handler):
         try:
             response = await handler(request)
+        except ESNotFound as exception:
+            response = json_response({'details': exception.args[0]}, status=404)
         except web.HTTPException as exception:
             response = json_response({'details': exception.text}, status=exception.status_code)
         except BaseException as exception:

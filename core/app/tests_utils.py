@@ -14,8 +14,8 @@ from .app_outgoing import run_outgoing_application
 ORIGINAL_SLEEP = asyncio.sleep
 
 
-async def fast_sleep(_):
-    await ORIGINAL_SLEEP(0.5)
+async def fast_sleep(time_to_sleep):
+    await ORIGINAL_SLEEP(min(time_to_sleep, 0.5))
 
 
 def async_test(func):

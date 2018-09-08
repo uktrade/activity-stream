@@ -45,17 +45,16 @@ def leaky_queue():
 
 async def send(session, url, data, headers, success_cb, failure_cb):
     try:
-        async with session.post(url, data=data, headers=headers) as response:
-            message = response.headers.get('x-sentry-error', 'NO_ERROR_MESSAGE')
-            retry_after = int(response.headers.get('retry-after', '0'))
-            status = response.status
-            if response.status == 200:
-                success_cb()
-            else:
-                error = \
-                    RateLimited(message, retry_after) if status == 429 else \
-                    APIError(message, status)
-                failure_cb(error)
+        status, response_headers, _ = await session.request('POST', url, headers, data)
+        message = response_headers.get('x-sentry-error', 'NO_ERROR_MESSAGE')
+        retry_after = int(response_headers.get('retry-after', '0'))
+        if status == 200:
+            success_cb()
+        else:
+            error = \
+                RateLimited(message, retry_after) if status == 429 else \
+                APIError(message, status)
+            failure_cb(error)
 
     except asyncio.CancelledError:
         success_cb()

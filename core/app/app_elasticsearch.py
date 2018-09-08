@@ -1,9 +1,6 @@
 import datetime
 import time
 
-from aiohttp.web import (
-    HTTPNotFound,
-)
 import ujson
 
 from shared.logger import (
@@ -75,7 +72,7 @@ async def get_old_index_names(context, es_endpoint):
             headers={'Content-Type': 'application/json'},
             payload=b'',
         )
-        indexes = ujson.loads(await results.text())
+        indexes = ujson.loads(results)
 
         without_alias = [
             index_name
@@ -192,10 +189,7 @@ async def es_search_existing_scroll(context, match_info, _):
     private_scroll_id = await get_private_scroll_id(context, public_scroll_id)
 
     if private_scroll_id is None:
-        # It can be argued that this function shouldn't have knowledge that
-        # it's called from a HTTP request. However, that _is_ its only use,
-        # so KISS, and not introduce more layers unless needed
-        raise HTTPNotFound(text='Scroll ID not found.')
+        raise ESNotFound('Scroll ID not found.')
 
     return '/_search/scroll', {'scroll': '30s'}, ujson.dumps({
         'scroll_id': private_scroll_id.decode('utf-8'),
@@ -203,7 +197,7 @@ async def es_search_existing_scroll(context, match_info, _):
 
 
 async def es_search(context, es_endpoint, path, query, body, headers, to_public_scroll_url):
-    results = await es_request(
+    status, results = await es_request(
         context=context,
         endpoint=es_endpoint,
         method='GET',
@@ -213,10 +207,10 @@ async def es_search(context, es_endpoint, path, query, body, headers, to_public_
         payload=body,
     )
 
-    response = ujson.loads(await results.text())
+    response = ujson.loads(results)
     return \
-        (await activities(response, to_public_scroll_url), 200) if results.status == 200 else \
-        (response, results.status)
+        (await activities(response, to_public_scroll_url), 200) if status == 200 else \
+        (response, status)
 
 
 async def activities(elasticsearch_reponse, to_public_scroll_url):
@@ -275,7 +269,7 @@ async def es_searchable_total(context, es_endpoint):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    return (ujson.loads(await searchable_result.text()))['count']
+    return (ujson.loads(searchable_result))['count']
 
 
 async def es_nonsearchable_total(context, es_endpoint):
@@ -288,7 +282,7 @@ async def es_nonsearchable_total(context, es_endpoint):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    return ujson.loads(await nonsearchable_result.text())['count']
+    return ujson.loads(nonsearchable_result)['count']
 
 
 async def es_feed_activities_total(context, es_endpoint, feed_id):
@@ -301,7 +295,7 @@ async def es_feed_activities_total(context, es_endpoint, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    nonsearchable = ujson.loads(await nonsearchable_result.text())['count']
+    nonsearchable = ujson.loads(nonsearchable_result)['count']
 
     total_result = await es_maybe_unvailable_metrics(
         context=context,
@@ -312,7 +306,7 @@ async def es_feed_activities_total(context, es_endpoint, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    searchable = max(ujson.loads(await total_result.text())['count'] - nonsearchable, 0)
+    searchable = max(ujson.loads(total_result)['count'] - nonsearchable, 0)
 
     return searchable, nonsearchable
 
@@ -346,7 +340,7 @@ async def es_min_verification_age(context, es_endpoint):
         headers={'Content-Type': 'application/json'},
         payload=payload,
     )
-    result_dict = ujson.loads(await result.text())
+    result_dict = ujson.loads(result)
     try:
         max_published = int(result_dict['aggregations']
                             ['verifier_activities']['max_published']['value'] / 1000)
@@ -359,20 +353,20 @@ async def es_min_verification_age(context, es_endpoint):
 
 
 async def es_request_non_200_exception(context, endpoint, method, path, query, headers, payload):
-    results = await es_request(context, endpoint, method, path, query, headers, payload)
-    if results.status != 200:
-        raise Exception(await results.text())
-    return results
+    status, body = await es_request(context, endpoint, method, path, query, headers, payload)
+    if status != 200:
+        raise Exception(body.decode('utf-8'))
+    return body
 
 
 async def es_maybe_unvailable_metrics(context, endpoint, method, path, query, headers, payload):
     ''' Some metrics may be unavailable since they query newly created indexes '''
-    results = await es_request(context, endpoint, method, path, query, headers, payload)
-    if results.status == 503:
+    status, body = await es_request(context, endpoint, method, path, query, headers, payload)
+    if status == 503:
         raise ESMetricsUnavailable()
-    if results.status != 200:
-        raise Exception(await results.text())
-    return results
+    if status != 200:
+        raise Exception(body.decode('utf-8'))
+    return body
 
 
 async def es_request(context, endpoint, method, path, query, headers, payload):
@@ -389,13 +383,16 @@ async def es_request(context, endpoint, method, path, query, headers, payload):
 
         query_string = '&'.join([key + '=' + query[key] for key in query.keys()])
         url = endpoint['base_url'] + path + (('?' + query_string) if query_string != '' else '')
-        async with context.session.request(
-            method, url,
-            data=payload, headers={**headers, **auth_headers}
-        ) as result:
-            # Without this, after some number of requests, they end up hanging
-            await result.read()
-            return result
+
+        status, _, body = await context.http_session.request(
+            method, url, {**headers, **auth_headers},
+            payload)
+
+        return status, body
+
+
+class ESNotFound(Exception):
+    pass
 
 
 class ESMetricsUnavailable(Exception):
