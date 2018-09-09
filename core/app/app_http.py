@@ -93,14 +93,18 @@ def http_session():
         def _write():
             nonlocal cursor
 
-            max_end_pos = min(cursor + max_send_size, final_pos)
-            try:
-                to_send = buf_memoryview[cursor:max_end_pos]
-                num_sent = sock.send(to_send) if to_send else 0
-            except (ssl.SSLWantWriteError, BlockingIOError, InterruptedError):
-                num_sent = 0
+            while True:
+                max_end_pos = min(cursor + max_send_size, final_pos)
+                try:
+                    to_send = buf_memoryview[cursor:max_end_pos]
+                    num_sent = sock.send(to_send) if to_send else 0
+                except (ssl.SSLWantWriteError, BlockingIOError, InterruptedError):
+                    num_sent = 0
 
-            cursor += num_sent
+                if not num_sent:
+                    break
+
+                cursor += num_sent
 
             if cursor == final_pos:
                 result.set_result(None)
