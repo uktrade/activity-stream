@@ -77,24 +77,20 @@ def http_session():
         buf_memoryview = memoryview(buf)
         final_pos = len(buf)
 
-        lock = asyncio.Lock()
         result = asyncio.Future()
         fileno = sock.fileno()
 
         def _on_write_available():
             loop.remove_writer(fileno)
-            loop.create_task(_locked_write())
+            _wrapped_write()
 
-        async def _locked_write():
-            async with lock:
-                if result.done():
-                    return
-                try:
-                    await _write()
-                except BaseException as exception:
-                    result.set_exception(exception)
+        def _wrapped_write():
+            try:
+                _write()
+            except BaseException as exception:
+                result.set_exception(exception)
 
-        async def _write():
+        def _write():
             nonlocal cursor
 
             max_end_pos = min(cursor + max_send_size, final_pos)
@@ -111,7 +107,7 @@ def http_session():
             else:
                 loop.add_writer(fileno, _on_write_available)
 
-        loop.add_writer(fileno, _on_write_available)
+        _wrapped_write()
 
         return result
 
@@ -131,23 +127,19 @@ def http_session():
         chunk_footer_start_pos = 0
 
         result = asyncio.Future()
-        lock = asyncio.Lock()
         fileno = sock.fileno()
 
         def _on_read_available():
             loop.remove_reader(fileno)
-            loop.create_task(_locked_read())
+            _wrapped_read()
 
-        async def _locked_read():
-            async with lock:
-                if result.done():
-                    return
-                try:
-                    await _read()
-                except BaseException as exception:
-                    result.set_exception(exception)
+        def _wrapped_read():
+            try:
+                _read()
+            except BaseException as exception:
+                result.set_exception(exception)
 
-        async def _read():
+        def _read():
             nonlocal parser
             nonlocal to_be_parsed_buf
             nonlocal to_be_parsed_end_pos
@@ -300,7 +292,7 @@ def http_session():
             ))
 
         parser = _parse_header
-        loop.add_reader(fileno, _on_read_available)
+        _wrapped_read()
 
         return result
 
