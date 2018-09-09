@@ -17,7 +17,7 @@ HttpSession = namedtuple(
 def http_session():
     loop = asyncio.get_event_loop()
     max_send_size = 8192
-    max_recv_size = 66560
+    max_recv_size = 8192
     chunk_size_regex = re.compile(b'([0-9a-fA-F]+)\r\n')
     header_regex = re.compile(b'([^:]+): *([^\r]*)\r\n')
     status_regex = re.compile(b'HTTP/1.1 (\\d\\d\\d)')
