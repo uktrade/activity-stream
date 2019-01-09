@@ -294,7 +294,7 @@ class TestAuthentication(TestBase):
         _, status_1 = await post(url, auth, x_forwarded_for)
         self.assertEqual(status_1, 200)
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(2)
 
         _, status_2 = await post(url, auth, x_forwarded_for)
         self.assertEqual(status_2, 200)
@@ -610,8 +610,10 @@ class TestApplication(TestBase):
         ]
 
         es_runner = await run_es_application(port=9201, override_routes=routes)
+        original_env = mock_env()
+        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
         self.add_async_cleanup(es_runner.cleanup)
-        await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
+        await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
                                 mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
@@ -633,10 +635,7 @@ class TestApplication(TestBase):
 
         self.assertEqual(
             es_bulk_headers['Authorization'],
-            'AWS4-HMAC-SHA256 '
-            'Credential=some-id/20120114/us-east-2/es/aws4_request, '
-            'SignedHeaders=content-type;host;x-amz-date, '
-            'Signature=6e1da15cdf63b1c0f051b89f1057d8d403599454c0eb42b8efe6241f40ac349e')
+            'Basic c29tZS1pZDpzb21lLXNlY3JldA==')
         self.assertEqual(es_bulk_content.decode('utf-8')[-1], '\n')
         self.assertEqual(es_bulk_headers['Content-Type'], 'application/x-ndjson')
 
@@ -666,6 +665,7 @@ class TestApplication(TestBase):
 
         async def return_200_and_callback(request):
             content, headers = (await request.content.read(), request.headers)
+            print('headers', headers)
             if content == b'{}':
                 asyncio.get_event_loop().call_soon(append_es, (content, headers))
             return await respond_http('{"hits":{},"_scroll_id":{}}', 200)(request)
@@ -676,27 +676,22 @@ class TestApplication(TestBase):
         es_runner = await run_es_application(port=9201, override_routes=routes)
         self.add_async_cleanup(es_runner.cleanup)
 
-        with \
-                freeze_time('2012-01-15 12:00:01'):
-            await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
-                                    mock_feed=read_file, mock_feed_status=lambda: 200,
-                                    mock_headers=lambda: {})
+        original_env = mock_env()
+        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
+        await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
+                                mock_feed=read_file, mock_feed_status=lambda: 200,
+                                mock_headers=lambda: {})
 
-            url = 'http://127.0.0.1:8080/v1/'
-            auth = hawk_auth_header(
-                'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '{}',
-                'application/json',
-            )
-            x_forwarded_for = '1.2.3.4, 127.0.0.0'
-            await get(url, auth, x_forwarded_for, b'{}')
-            [[_, es_headers]] = await get_es_once
+        url = 'http://127.0.0.1:8080/v1/'
+        auth = hawk_auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '{}',
+            'application/json',
+        )
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+        await get(url, auth, x_forwarded_for, b'{}')
+        [[_, es_headers]] = await get_es_once
 
-        self.assertEqual(es_headers['Authorization'],
-                         'AWS4-HMAC-SHA256 '
-                         'Credential=some-id/20120115/us-east-2/es/aws4_request, '
-                         'SignedHeaders=content-type;host;x-amz-date, '
-                         'Signature=144585a76bf689176d9c3e42fa0dea10a22c1cc0acbc32'
-                         'e3ade9f2f7438013dd')
+        self.assertEqual(es_headers['Authorization'], 'Basic c29tZS1pZDpzb21lLXNlY3JldA==')
 
     @async_test
     async def test_es_401_is_proxied(self):
@@ -704,7 +699,10 @@ class TestApplication(TestBase):
             web.get('/activities/_search', respond_http('{"elasticsearch": "error"}', 401)),
         ]
         es_runner = await run_es_application(port=9201, override_routes=routes)
-        await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
+
+        original_env = mock_env()
+        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
+        await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
                                 mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
@@ -762,9 +760,11 @@ class TestApplication(TestBase):
                 writer.close()
 
         server = await asyncio.start_server(handle_client, '0.0.0.0', 9201)
+        original_env = mock_env()
+        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
 
         with patch('asyncio.sleep', wraps=fast_sleep):
-            await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
+            await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
                                     mock_feed=read_file, mock_feed_status=lambda: 200,
                                     mock_headers=lambda: {})
             while modified_500 < max_modifications or modified_503 < max_modifications:
@@ -821,9 +821,11 @@ class TestApplication(TestBase):
                 writer.close()
 
         server = await asyncio.start_server(handle_client, '0.0.0.0', 9201)
+        original_env = mock_env()
+        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
 
         with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
-            await self.setup_manual(env={**mock_env(), 'ELASTICSEARCH__PORT': '9201'},
+            await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
                                     mock_feed=read_file, mock_feed_status=lambda: 200,
                                     mock_headers=lambda: {})
             await wait_until_get_working()
@@ -843,9 +845,11 @@ class TestApplication(TestBase):
     @async_test
     async def test_es_no_connect_on_get_500(self):
         es_runner = await run_es_application(port=9201, override_routes=[])
+        original_env = mock_env()
+        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
         env = {
-            **mock_env(),
-            'ELASTICSEARCH__PORT': '9201'
+            **original_env,
+            'VCAP_SERVICES': vcap_services,
         }
         await self.setup_manual(
             env, mock_feed=read_file,

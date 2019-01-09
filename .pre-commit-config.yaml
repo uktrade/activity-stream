@@ -35,10 +35,11 @@ repos:
       args:
         - --include-naming-hint=yes
         - --max-args=10
-        - --max-locals=20
+        - --max-locals=25
         - --max-returns=10
         - --ignore-imports=yes
         - --disable=attribute-defined-outside-init
+        - --disable=c-extension-no-member
         - --disable=duplicate-code
         - --disable=missing-docstring
         - --disable=protected-access

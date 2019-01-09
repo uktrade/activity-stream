@@ -113,10 +113,6 @@ This is the application that performs the above algorithm, continually making <e
 
 This is the application that features a HTTP server, accepting <em>incoming</em> HTTP requests, and passes requests for data to Elasticsearch. It converts the raw Elasticsearch format returned into a Activity Streams 2.0 compatible format. This is scalable, and multiple instances of this application can be running at any given time.
 
-## Elasticsearch / Kibana proxy
-
-A proxy is provided to allow developer access to Elasticsearch / Kibana in [elasticsearch_proxy](elasticsearch_proxy).
-
 ## Logging
 
 Logs are usually output in the format
