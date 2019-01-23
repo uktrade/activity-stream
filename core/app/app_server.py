@@ -138,7 +138,7 @@ def convert_errors_to_json():
             response = await handler(request)
         except web.HTTPException as exception:
             response = json_response({'details': exception.text}, status=exception.status_code)
-        except BaseException as exception:
+        except BaseException:
             request['logger'].exception('About to return 500')
             response = json_response({'details': UNKNOWN_ERROR}, status=500)
         return response
