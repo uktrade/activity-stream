@@ -101,18 +101,6 @@ However, it is possible to rate limit the Activity Stream if it's necessary.
 
 - Responding with a HTTP code >= 400, that isn't a 429. The Activity Stream will treat this as a failed ingestion, and start again from the seed after 1 second. The time increases exponentially with each consecutive failure, until maxing out at 64 seconds between retries. The process also occurs on general HTTP connection issues.
 
-## Running tests
-
-Elasticsearch and Redis must be started first, which you can do by
-
-    ./tests_es_start.sh && ./tests_redis_start.sh
-
-and then to run the tests themselves
-
-    ./tests.sh
-
-Higher-level feature tests, that assume very little over the internals of the application, are strongly preferred over lower-level tests that test individual functions, often called unit tests. This involves real Elasticsearch and Redis, and firing up various HTTP servers inside the test environment: since this is how the application interacts with the world in production. Mocking/patching is done for speed or determinism reasons: e.g. patching `asyncio.sleep` or `os.urandom`.
-
 ## Outgoing and incoming applications
 
 The core of the Activity Stream is made of two applications.
@@ -148,6 +136,18 @@ There are potentially many separate chains of concurrent behaviour at any given 
 ## Verification Feed
 
 A small separate application in [verification_feed](verification_feed) is provided to allow the stream to be tested, even in production, without using real data. It provides a number of activities, published date of the moment the feed is queried.
+
+## Running tests
+
+Elasticsearch and Redis must be started first, which you can do by
+
+    ./tests_es_start.sh && ./tests_redis_start.sh
+
+and then to run the tests themselves
+
+    ./tests.sh
+
+Higher-level feature tests, that assume very little over the internals of the application, are strongly preferred over lower-level tests that test individual functions, often called unit tests. This involves real Elasticsearch and Redis, and firing up various HTTP servers inside the test environment: since this is how the application interacts with the world in production. Mocking/patching is done for speed or determinism reasons: e.g. patching `asyncio.sleep` or `os.urandom`.
 
 ## Running locally
 
