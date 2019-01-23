@@ -150,15 +150,15 @@ async def handle_post(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
-def handle_get_new(context, pagination_expire, es_endpoint):
-    return _handle_get(context, pagination_expire, es_endpoint, es_search_new_scroll)
+def handle_get_new(context, pagination_expire, es_uri):
+    return _handle_get(context, pagination_expire, es_uri, es_search_new_scroll)
 
 
-def handle_get_existing(context, pagination_expire, es_endpoint):
-    return _handle_get(context, pagination_expire, es_endpoint, es_search_existing_scroll)
+def handle_get_existing(context, pagination_expire, es_uri):
+    return _handle_get(context, pagination_expire, es_uri, es_search_existing_scroll)
 
 
-def _handle_get(context, pagination_expire, es_endpoint, get_path_query):
+def _handle_get(context, pagination_expire, es_uri, get_path_query):
     async def handle(request):
         incoming_body = await request.read()
         path, query, body = await get_path_query(context, request.match_info, incoming_body)
@@ -174,7 +174,7 @@ def _handle_get(context, pagination_expire, es_endpoint, get_path_query):
                 request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)
             ))
 
-        results, status = await es_search(context, es_endpoint, path, query, body,
+        results, status = await es_search(context, es_uri, path, query, body,
                                           {'Content-Type': request.headers['Content-Type']},
                                           to_public_scroll_url)
 
@@ -183,7 +183,7 @@ def _handle_get(context, pagination_expire, es_endpoint, get_path_query):
     return handle
 
 
-def handle_get_check(parent_context, es_endpoint, feed_endpoints):
+def handle_get_check(parent_context, es_uri, feed_endpoints):
     start_counter = time.perf_counter()
 
     # Grace period after uptime to allow new feeds to start reporting
@@ -198,7 +198,7 @@ def handle_get_check(parent_context, es_endpoint, feed_endpoints):
             redis_result = await context.redis_client.execute('GET', 'redis-check')
             is_redis_green = redis_result == b'GREEN'
 
-            min_age = await es_min_verification_age(context, es_endpoint)
+            min_age = await es_min_verification_age(context, es_uri)
             is_elasticsearch_green = min_age < 60
 
             uptime = time.perf_counter() - start_counter

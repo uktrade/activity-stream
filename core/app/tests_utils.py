@@ -296,12 +296,6 @@ def has_at_least_ordered_items(num_results):
 def mock_env():
     return {
         'PORT': '8080',
-        'ELASTICSEARCH__AWS_ACCESS_KEY_ID': 'some-id',
-        'ELASTICSEARCH__AWS_SECRET_ACCESS_KEY': 'aws-secret',
-        'ELASTICSEARCH__HOST': '127.0.0.1',
-        'ELASTICSEARCH__PORT': '9200',
-        'ELASTICSEARCH__PROTOCOL': 'http',
-        'ELASTICSEARCH__REGION': 'us-east-2',
         'FEEDS__1__UNIQUE_ID': 'first_feed',
         'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_activity_stream_1.json',
         'FEEDS__1__ACCESS_KEY_ID': 'feed-some-id',
@@ -320,5 +314,10 @@ def mock_env():
         'INCOMING_IP_WHITELIST__2': '2.3.4.5',
         'SENTRY_DSN': 'http://abc:cvb@localhost:9872/123',
         'SENTRY_ENVIRONMENT': 'test',
-        'VCAP_SERVICES': '{"redis":[{"credentials":{"uri":"redis://127.0.0.1:6379"}}]}',
+        'VCAP_SERVICES': (
+            '{'
+            '"redis":[{"credentials":{"uri":"redis://127.0.0.1:6379"}}],'
+            '"elasticsearch":[{"credentials":{"uri":"http://some-id:some-secret@127.0.0.1:9200"}}]'
+            '}'
+        ),
     }

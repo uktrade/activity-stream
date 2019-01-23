@@ -1,0 +1,6 @@
+---
+applications:
+- docker:
+    image: quay.io/uktrade/kibana-gds-paas:latest
+  memory: 128M
+  disk_quota: 512M

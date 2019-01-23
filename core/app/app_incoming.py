@@ -59,7 +59,7 @@ async def run_incoming_application():
 
     with logged(logger, 'Examining environment', []):
         env = normalise_environment(os.environ)
-        es_endpoint, redis_uri, sentry = get_common_config(env)
+        es_uri, redis_uri, sentry = get_common_config(env)
         feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
         port = env['PORT']
         incoming_key_pairs = [{
@@ -88,7 +88,7 @@ async def run_incoming_application():
     with logged(context.logger, 'Creating listening web application', []):
         runner = await create_incoming_application(
             context, port, ip_whitelist, incoming_key_pairs,
-            es_endpoint, feed_endpoints,
+            es_uri, feed_endpoints,
         )
 
     async def cleanup():
@@ -107,7 +107,7 @@ async def run_incoming_application():
 
 async def create_incoming_application(
         context, port, ip_whitelist, incoming_key_pairs,
-        es_endpoint, feed_endpoints):
+        es_uri, feed_endpoints):
 
     app = web.Application(middlewares=[
         server_logger(context.logger),
@@ -124,17 +124,17 @@ async def create_incoming_application(
         web.post('/', handle_post),
         web.get(
             '/',
-            handle_get_new(context, PAGINATION_EXPIRE, es_endpoint)
+            handle_get_new(context, PAGINATION_EXPIRE, es_uri)
         ),
         web.get(
             '/{public_scroll_id}',
-            handle_get_existing(context, PAGINATION_EXPIRE, es_endpoint),
+            handle_get_existing(context, PAGINATION_EXPIRE, es_uri),
             name='scroll',
         ),
     ])
     app.add_subapp('/v1/', private_app)
     app.add_routes([
-        web.get('/check', handle_get_check(context, es_endpoint, feed_endpoints)),
+        web.get('/check', handle_get_check(context, es_uri, feed_endpoints)),
         web.get('/metrics', handle_get_metrics(context)),
     ])
 
