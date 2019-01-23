@@ -207,3 +207,9 @@ To achieve the above, the below commands are likely required:
 - `git push origin my-feature-branch -f`
 
  Keeping commits small, releasable, and with working tests is especially helpful to make sure things don't go wrong with the above.
+
+## Style
+
+- Classes are only used when there isn't a reasonable alternative.
+- Each variable should be given a meaningful and useful value in all cases: often the ternary operator is used for this.
+- Mutation is kept to a minimum. Ideally once set, a variable's value will not change.
