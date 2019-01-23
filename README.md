@@ -181,3 +181,29 @@ or to run the application that proxies incoming requests to Elasticsearch
     (cp -r -f shared core && cd core && python -m app.app_incoming)
 
 This closely resembles how the CI pipeline builds and deploys the applications.
+
+## Development and git history
+
+Aim to make
+
+- `git log` and `git blame` helpful;
+- interruptions, changing requirements, and multiple people working on the same code, painless.
+
+To achieve this, wherever possible
+
+- PRs should also be small. A max of ~1 day of work is a reasonable guideline;
+- each commit in the PR should be small;
+- each commit message should explain _why_ the change was done;
+- tests should be in the same commit as the relevant production code change
+- all tests should pass for each commit;
+- documentation changes should be in the same commit as the relavant production code change;
+- refactoring to support a production code behaviour change should be in separate commits, and ideally come _before_ commits the behaviour change in the final `git log`;
+- you should take whatever steps you deem necessary in terms of tests or QA so that the master branch can be released with confidence after a merge of a PR.
+
+To achieve the above, the below commands are likely required:
+
+- `git rebase -i`
+- `git rebase master`
+- `git push origin my-feature-branch -f`
+
+ Keeping commits small, releasable, and with working tests is especially helpful to make sure things don't go wrong with the above.
