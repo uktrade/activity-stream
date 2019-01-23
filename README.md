@@ -101,18 +101,6 @@ However, it is possible to rate limit the Activity Stream if it's necessary.
 
 - Responding with a HTTP code >= 400, that isn't a 429. The Activity Stream will treat this as a failed ingestion, and start again from the seed after 1 second. The time increases exponentially with each consecutive failure, until maxing out at 64 seconds between retries. The process also occurs on general HTTP connection issues.
 
-## Running tests
-
-Elasticsearch and Redis must be started first, which you can do by
-
-    ./tests_es_start.sh && ./tests_redis_start.sh
-
-and then to run the tests themselves
-
-    ./tests.sh
-
-Higher-level feature tests, that assume very little over the internals of the application, are strongly preferred over lower-level tests that test individual functions, often called unit tests. This involves real Elasticsearch and Redis, and firing up various HTTP servers inside the test environment: since this is how the application interacts with the world in production. Mocking/patching is done for speed or determinism reasons: e.g. patching `asyncio.sleep` or `os.urandom`.
-
 ## Outgoing and incoming applications
 
 The core of the Activity Stream is made of two applications.
@@ -149,9 +137,42 @@ There are potentially many separate chains of concurrent behaviour at any given 
 
 A small separate application in [verification_feed](verification_feed) is provided to allow the stream to be tested, even in production, without using real data. It provides a number of activities, published date of the moment the feed is queried.
 
-## Running locally
+## Local development environment
 
-Since the tests are fairly high level, most development should be able to be done without starting the application separately. However, if you do wish to run the application locally, you must have a number of environment variables set: the up-to-date list of these are in the `mock_env` function defined in [tests_utils.py](core/tests_utils.py). Then to run the application that polls feeds
+Python 3.6 is required. You can set this up using conda.
+
+```bash
+conda create -n python36 python=3.6 anaconda
+conda activate python36
+```
+
+### Running tests
+
+You must have the dependencies specified in [core/requirements_test.txt](core/requirements_test.txt), which can be installed by
+
+```bash
+pip install -r core/requirements_test.txt
+```
+
+Elasticsearch and Redis must be started before the tests, which you can do by
+
+    ./tests_es_start.sh && ./tests_redis_start.sh
+
+and then to run the tests themselves
+
+    ./tests.sh
+
+Higher-level feature tests, that assume very little over the internals of the application, are strongly preferred over lower-level tests that test individual functions, often called unit tests. This involves real Elasticsearch and Redis, and firing up various HTTP servers inside the test environment: since this is how the application interacts with the world in production. Mocking/patching is done for speed or determinism reasons: e.g. patching `asyncio.sleep` or `os.urandom`.
+
+### Running locally
+
+Since the tests are fairly high level, most development should be able to be done without starting the application separately. However, if you do wish to run the application locally, you must have the dependencies specified in [core/requirements.txt](core/requirements.txt), which can be installed by
+
+```bash
+pip install -r core/requirements.txt
+```
+
+and have a number of environment variables set: the up-to-date list of these are in the `mock_env` function defined in [tests_utils.py](core/tests_utils.py). Then to run the application that polls feeds
 
     (cp -r -f shared core && cd core && python -m app.app_outgoing)
 
