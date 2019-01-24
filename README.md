@@ -210,3 +210,4 @@ Keeping commits small, releasable, and with working tests is especially helpful 
 - Classes are only used when there isn't a reasonable alternative.
 - Each variable should be given a meaningful and useful value in all cases: often the ternary operator is used for this.
 - Mutation is kept to a minimum. Ideally once set, a variable's value will not change.
+- Comments should be kept to a minimum: refactoring code to make it self-documenting is preferred.
