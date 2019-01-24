@@ -211,7 +211,7 @@ Keeping commits small, releasable, and with working tests is especially helpful 
 - Each variable should be given a meaningful and useful value in all cases: often the ternary operator is used for this.
 - Mutation is kept to a minimum. Ideally once set, a variable's value will not change.
 - If a variable's value does change, it should have the same type.
-- Ideally every line of code in a function is used by every caller of the function. Exceptions include functions that "guard conditions" that return early as part of validation.
+- Ideally every line of code in a function is used by every caller of the function. Exceptions include functions that use "guard conditions" that return early as part of validation.
 - Comments should be kept to a minimum: refactoring code to make it self-documenting is preferred.
 
 These guidelines also apply to test code, since the behaviour of production code is enforced, in part, by the tests.
