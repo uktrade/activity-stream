@@ -194,15 +194,16 @@ To achieve this, wherever possible
 - all tests should pass for each commit;
 - documentation changes should be in the same commit as the relavant production code change;
 - refactoring to support a production code behaviour change should be in separate commits, and ideally come _before_ commits the behaviour change in the final `git log`;
-- you should take whatever steps you deem necessary in terms of tests or QA so that the master branch can be released with confidence after a merge of a PR.
+- you should take whatever steps you deem necessary in terms of tests or QA so that the master branch can be released with confidence after a merge of a PR;
+- keep a linear / semi-linear git history: avoid `git merge master` when on a feature branch.
 
-To achieve the above, the below commands are likely required:
+To achieve the above, you are likely to need
 
-- `git rebase -i`
-- `git rebase master`
-- `git push origin my-feature-branch -f`
+- `git rebase -i`;
+- `git rebase master`;
+- `git push origin my-feature-branch -f`.
 
- Keeping commits small, releasable, and with working tests is especially helpful to make sure things don't go wrong with the above.
+Keeping commits small, releasable, and with working tests is especially helpful to make sure things don't go wrong with the above.
 
 ## Style
 
