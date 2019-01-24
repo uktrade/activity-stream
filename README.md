@@ -207,7 +207,8 @@ Keeping commits small, releasable, and with working tests is especially helpful 
 
 ## Style
 
-- Classes are only used when there isn't a reasonable alternative.
+- Clarity of the data flow and transformations is paramount: classes are only used when there isn't a reasonable alternative.
 - Each variable should be given a meaningful and useful value in all cases: often the ternary operator is used for this.
 - Mutation is kept to a minimum. Ideally once set, a variable's value will not change.
+- If a variable's value does change, it should have the same type.
 - Comments should be kept to a minimum: refactoring code to make it self-documenting is preferred.
