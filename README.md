@@ -214,6 +214,6 @@ Keeping commits small, releasable, and with working tests is especially helpful 
 - Ideally every line of code in a function is used by every caller of the function. Exceptions include functions that use guard conditions to return early as part of validation.
 - Optional arguments are avoided in favour of consistency of the use of each function: all arguments are made explict by all callers.
 - Comments should be kept to a minimum: refactoring code to make it self-documenting is preferred.
-- External dependencies are added only if there is a very good argument over alternatives.
+- External dependencies are added only if there is a very good argument over alternatives. Ideally as time goes on, the amount of external dependencies will go down, not up.
 
 These guidelines also apply to test code, since the behaviour of production code is enforced, in part, by the tests.
