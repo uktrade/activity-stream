@@ -212,7 +212,7 @@ Keeping commits small, releasable, and with working tests is especially helpful 
 - Mutation is kept to a minimum. Ideally once set, a variable's value will not change.
 - If a variable's value does change, it should have the same type.
 - Ideally every line of code in a function is used by every caller of the function. Exceptions include functions that use guard conditions to return early as part of validation.
-- Optional arguments are avoided in favour of consistency of the use of each function: all arguments are explict by all callers.
+- Optional arguments are avoided in favour of consistency of the use of each function: all arguments are made explict by all callers.
 - Comments should be kept to a minimum: refactoring code to make it self-documenting is preferred.
 
 These guidelines also apply to test code, since the behaviour of production code is enforced, in part, by the tests.
