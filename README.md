@@ -170,11 +170,11 @@ pip install -r core/requirements.txt
 
 and have a number of environment variables set: the up-to-date list of these are in the `mock_env` function defined in [tests_utils.py](core/tests_utils.py). Then to run the application that polls feeds
 
-    (cp -r -f shared core && cd core && python -m app.app_outgoing)
+    (cp -r -f shared core && cd core && python3 -m app.app_outgoing)
 
 or to run the application that proxies incoming requests to Elasticsearch
 
-    (cp -r -f shared core && cd core && python -m app.app_incoming)
+    (cp -r -f shared core && cd core && python3 -m app.app_incoming)
 
 This closely resembles how the CI pipeline builds and deploys the applications.
 
