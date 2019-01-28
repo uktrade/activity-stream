@@ -7,21 +7,12 @@ from prometheus_client import (
     CollectorRegistry,
 )
 
-from ..shared.logger import (
-    get_root_logger,
-    logged,
-)
-from ..shared.utils import (
-    get_common_config,
-    normalise_environment,
-)
-from ..shared.web import (
-    server_logger,
-    authenticate_by_ip,
-)
-
 from .app_feeds import (
     parse_feed_config,
+)
+from .app_logger import (
+    get_root_logger,
+    logged,
 )
 from .app_metrics import (
     get_metrics,
@@ -31,15 +22,17 @@ from .app_raven import (
 )
 from .app_server import (
     INCORRECT,
+    authenticate_by_ip,
     authenticator,
     authorizer,
     convert_errors_to_json,
     handle_get_check,
     handle_get_existing,
-    handle_get_new,
     handle_get_metrics,
+    handle_get_new,
     handle_post,
     raven_reporter,
+    server_logger,
 )
 from .app_redis import (
     redis_get_client,
@@ -47,7 +40,9 @@ from .app_redis import (
 from .app_utils import (
     Context,
     cancel_non_current_tasks,
+    get_common_config,
     main,
+    normalise_environment,
 )
 
 NONCE_EXPIRE = 120
