@@ -8,15 +8,6 @@ from prometheus_client import (
 )
 import ujson
 
-from shared.logger import (
-    get_root_logger,
-    logged,
-)
-from shared.utils import (
-    get_common_config,
-    normalise_environment,
-)
-
 from .app_elasticsearch import (
     ESMetricsUnavailable,
     es_bulk,
@@ -36,6 +27,10 @@ from .app_elasticsearch import (
 
 from .app_feeds import (
     parse_feed_config,
+)
+from .app_logger import (
+    get_root_logger,
+    logged,
 )
 from .app_metrics import (
     metric_counter,
@@ -58,12 +53,14 @@ from .app_redis import (
 )
 from .app_utils import (
     Context,
-    get_child_context,
     async_repeat_until_cancelled,
     cancel_non_current_tasks,
-    sleep,
+    get_child_context,
+    get_common_config,
     http_429_retry_after,
     main,
+    normalise_environment,
+    sleep,
 )
 
 EXCEPTION_INTERVALS = [1, 2, 4, 8, 16, 32, 64]
