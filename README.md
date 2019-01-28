@@ -53,7 +53,7 @@ Real time updates are done using a variation of the algorithm for full ingest. S
 - Repeat indefinitely, but if a full ingest has completed, use its final URL as the seed for updates.
 
 A lock is used per feed, that ensures a single in-progress request to each source service. The rest of the behaviour is concurrent.
-
+ 
 This algorithm has a number of nice properties
 
 - The Activity Stream doesn't need to be aware of the format of the URLs. It only needs to know the seed URL.
@@ -170,11 +170,11 @@ pip install -r core/requirements.txt
 
 and have a number of environment variables set: the up-to-date list of these are in the `mock_env` function defined in [tests_utils.py](core/tests_utils.py). Then to run the application that polls feeds
 
-    (cp -r -f shared core && cd core && python -m app.app_outgoing)
+    (cp -r -f shared core && cd core && python3 -m app.app_outgoing)
 
 or to run the application that proxies incoming requests to Elasticsearch
 
-    (cp -r -f shared core && cd core && python -m app.app_incoming)
+    (cp -r -f shared core && cd core && python3 -m app.app_incoming)
 
 This closely resembles how the CI pipeline builds and deploys the applications.
 
@@ -215,5 +215,6 @@ Keeping commits small, releasable, and with working tests is especially helpful 
 - Optional arguments are avoided in favour of consistency of the use of each function: all arguments are made explict by all callers.
 - Comments should be kept to a minimum: refactoring code to make it self-documenting is preferred.
 - External dependencies are added only if there is a very good argument over alternatives. Ideally as time goes on, the amount of external dependencies will go down, not up.
+- Code should be designed for the _current_ behaviour in terms of inputs and outputs, and avoid anything that isn't required for this. Be _very_ self-skeptical if you're adding complexity for perceived future requirements. Minimise complexity by only adding it when it's needed, rather than just in case.
 
 These guidelines also apply to test code, since the behaviour of production code is enforced, in part, by the tests.

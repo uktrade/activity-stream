@@ -2,7 +2,7 @@ import asyncio
 
 import aioredis
 
-from shared.logger import (
+from .app_logger import (
     logged,
 )
 from .app_utils import (

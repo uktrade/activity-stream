@@ -6,19 +6,16 @@ from aiohttp.web import (
 )
 import ujson
 
-from shared.logger import (
+from .app_logger import (
     logged,
 )
-from shared.utils import (
-    random_url_safe,
-)
-
 from .app_redis import (
     get_private_scroll_id,
 )
 from .app_utils import (
     flatten,
     flatten_generator,
+    random_url_safe,
 )
 
 ALIAS = 'activities'
