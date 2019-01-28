@@ -7,15 +7,15 @@ from prometheus_client import (
     CollectorRegistry,
 )
 
-from shared.logger import (
+from ..shared.logger import (
     get_root_logger,
     logged,
 )
-from shared.utils import (
+from ..shared.utils import (
     get_common_config,
     normalise_environment,
 )
-from shared.web import (
+from ..shared.web import (
     server_logger,
     authenticate_by_ip,
 )

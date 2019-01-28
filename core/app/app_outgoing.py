@@ -8,11 +8,11 @@ from prometheus_client import (
 )
 import ujson
 
-from shared.logger import (
+from ..shared.logger import (
     get_root_logger,
     logged,
 )
-from shared.utils import (
+from ..shared.utils import (
     get_common_config,
     normalise_environment,
 )

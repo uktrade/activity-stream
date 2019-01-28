@@ -3,11 +3,11 @@ import time
 
 from aiohttp import web
 
-from shared.logger import (
+from ..shared.logger import (
     logged,
     get_child_logger,
 )
-from shared.utils import (
+from ..shared.utils import (
     random_url_safe,
 )
 

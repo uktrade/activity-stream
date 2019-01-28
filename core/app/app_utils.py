@@ -6,7 +6,7 @@ import sys
 
 import aiohttp
 
-from shared.logger import (
+from ..shared.logger import (
     logged,
     get_child_logger,
 )

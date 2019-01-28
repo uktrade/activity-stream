@@ -6,10 +6,10 @@ from aiohttp.web import (
 )
 import ujson
 
-from shared.logger import (
+from ..shared.logger import (
     logged,
 )
-from shared.utils import (
+from ..shared.utils import (
     random_url_safe,
 )
 
