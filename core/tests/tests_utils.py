@@ -7,8 +7,8 @@ from aiohttp import web
 import aioredis
 import mohawk
 
-from .app_incoming import run_incoming_application
-from .app_outgoing import run_outgoing_application
+from ..app.app_incoming import run_incoming_application
+from ..app.app_outgoing import run_outgoing_application
 
 
 ORIGINAL_SLEEP = asyncio.sleep
