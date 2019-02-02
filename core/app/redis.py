@@ -2,10 +2,10 @@ import asyncio
 
 import aioredis
 
-from .app_logger import (
+from .logger import (
     logged,
 )
-from .app_utils import (
+from .utils import (
     async_repeat_until_cancelled,
     get_child_context,
     sleep,

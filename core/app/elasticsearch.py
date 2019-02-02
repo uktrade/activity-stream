@@ -6,13 +6,13 @@ from aiohttp.web import (
 )
 import ujson
 
-from .app_logger import (
+from .logger import (
     logged,
 )
-from .app_redis import (
+from .redis import (
     get_private_scroll_id,
 )
-from .app_utils import (
+from .utils import (
     flatten,
     flatten_generator,
     random_url_safe,

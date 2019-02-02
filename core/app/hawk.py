@@ -9,7 +9,7 @@ import hmac
 import os
 import re
 
-from .app_redis import (
+from .redis import (
     set_nonce_nx,
 )
 
