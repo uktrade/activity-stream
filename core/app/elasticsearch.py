@@ -18,7 +18,7 @@ from .utils import (
     random_url_safe,
 )
 
-ALIAS = 'activities'
+ALIAS_ACTIVITIES = 'activities'
 
 
 def get_new_index_name(feed_unique_id):
@@ -29,7 +29,7 @@ def get_new_index_name(feed_unique_id):
     # Storing metadata in index name allows operations to match on
     # them, both by elasticsearch itself, and by regex in Python
     return '' \
-        f'{ALIAS}__' \
+        f'{ALIAS_ACTIVITIES}__' \
         f'feed_id_{feed_unique_id}__' \
         f'date_{today}__' \
         f'timestamp_{now}__' \
@@ -47,7 +47,7 @@ def indexes_matching_feed(index_names, feed_unique_id):
     return [
         index_name
         for index_name in index_names
-        if f'{ALIAS}__feed_id_{feed_unique_id}__' in index_name
+        if f'{ALIAS_ACTIVITIES}__feed_id_{feed_unique_id}__' in index_name
     ]
 
 
@@ -76,12 +76,12 @@ async def get_old_index_names(context, es_uri):
         without_alias = [
             index_name
             for index_name, index_details in indexes.items()
-            if index_name.startswith(f'{ALIAS}_') and not index_details['aliases']
+            if index_name.startswith(f'{ALIAS_ACTIVITIES}_') and not index_details['aliases']
         ]
         with_alias = [
             index_name
             for index_name, index_details in indexes.items()
-            if index_name.startswith(f'{ALIAS}_') and index_details['aliases']
+            if index_name.startswith(f'{ALIAS_ACTIVITIES}_') and index_details['aliases']
         ]
         names = without_alias, with_alias
         context.logger.debug('Finding existing index names... (%s)', names)
@@ -90,13 +90,13 @@ async def get_old_index_names(context, es_uri):
 
 async def add_remove_aliases_atomically(context, es_uri, index_name,
                                         feed_unique_id):
-    with logged(context.logger, 'Atomically flipping {ALIAS} alias to (%s)',
+    with logged(context.logger, 'Atomically flipping {ALIAS_ACTIVITIES} alias to (%s)',
                 [feed_unique_id]):
-        remove_pattern = f'{ALIAS}__feed_id_{feed_unique_id}__*'
+        remove_pattern = f'{ALIAS_ACTIVITIES}__feed_id_{feed_unique_id}__*'
         actions = ujson.dumps({
             'actions': [
-                {'remove': {'index': remove_pattern, 'alias': ALIAS}},
-                {'add': {'index': index_name, 'alias': ALIAS}}
+                {'remove': {'index': remove_pattern, 'alias': ALIAS_ACTIVITIES}},
+                {'add': {'index': index_name, 'alias': ALIAS_ACTIVITIES}}
             ]
         }).encode('utf-8')
 
@@ -176,7 +176,7 @@ async def refresh_index(context, es_uri, index_name):
 
 
 async def es_search_new_scroll(_, __, query):
-    return f'/{ALIAS}/_search', {'scroll': '15s'}, query
+    return f'/{ALIAS_ACTIVITIES}/_search', {'scroll': '15s'}, query
 
 
 async def es_search_existing_scroll(context, match_info, _):
@@ -266,7 +266,7 @@ async def es_searchable_total(context, es_uri):
         context=context,
         uri=es_uri,
         method='GET',
-        path=f'/{ALIAS}/_count',
+        path=f'/{ALIAS_ACTIVITIES}/_count',
         query={'ignore_unavailable': 'true'},
         headers={'Content-Type': 'application/json'},
         payload=b'',
@@ -279,7 +279,7 @@ async def es_nonsearchable_total(context, es_uri):
         context=context,
         uri=es_uri,
         method='GET',
-        path=f'/{ALIAS}_*,-*{ALIAS}/_count',
+        path=f'/{ALIAS_ACTIVITIES}_*,-*{ALIAS_ACTIVITIES}/_count',
         query={'ignore_unavailable': 'true'},
         headers={'Content-Type': 'application/json'},
         payload=b'',
@@ -292,7 +292,7 @@ async def es_feed_activities_total(context, es_uri, feed_id):
         context=context,
         uri=es_uri,
         method='GET',
-        path=f'/{ALIAS}__feed_id_{feed_id}__*,-*{ALIAS}/_count',
+        path=f'/{ALIAS_ACTIVITIES}__feed_id_{feed_id}__*,-*{ALIAS_ACTIVITIES}/_count',
         query={'ignore_unavailable': 'true'},
         headers={'Content-Type': 'application/json'},
         payload=b'',
@@ -303,7 +303,7 @@ async def es_feed_activities_total(context, es_uri, feed_id):
         context=context,
         uri=es_uri,
         method='GET',
-        path=f'/{ALIAS}__feed_id_{feed_id}__*/_count',
+        path=f'/{ALIAS_ACTIVITIES}__feed_id_{feed_id}__*/_count',
         query={'ignore_unavailable': 'true'},
         headers={'Content-Type': 'application/json'},
         payload=b'',
@@ -337,7 +337,7 @@ async def es_min_verification_age(context, es_uri):
         context=context,
         uri=es_uri,
         method='GET',
-        path=f'/{ALIAS}/_search',
+        path=f'/{ALIAS_ACTIVITIES}/_search',
         query={'ignore_unavailable': 'true'},
         headers={'Content-Type': 'application/json'},
         payload=payload,
