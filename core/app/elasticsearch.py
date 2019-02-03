@@ -61,6 +61,9 @@ def indexes_matching_no_feeds(index_names, feed_unique_ids):
 
 
 async def get_old_index_names(context, es_uri):
+    def is_activity_stream_index(index_name):
+        return index_name.startswith(f'{ALIAS_ACTIVITIES}_')
+
     with logged(context.logger, 'Finding existing index names', []):
         results = await es_request_non_200_exception(
             context=context,
@@ -76,12 +79,12 @@ async def get_old_index_names(context, es_uri):
         without_alias = [
             index_name
             for index_name, index_details in indexes.items()
-            if index_name.startswith(f'{ALIAS_ACTIVITIES}_') and not index_details['aliases']
+            if is_activity_stream_index(index_name) and not index_details['aliases']
         ]
         with_alias = [
             index_name
             for index_name, index_details in indexes.items()
-            if index_name.startswith(f'{ALIAS_ACTIVITIES}_') and index_details['aliases']
+            if is_activity_stream_index(index_name) and index_details['aliases']
         ]
         names = without_alias, with_alias
         context.logger.debug('Finding existing index names... (%s)', names)
