@@ -784,9 +784,9 @@ class TestApplication(TestBase):
                 'dit:exportOpportunities:Enquiry:49863:Create',
             })
 
-            self.assertLessEqual(len(await fetch_es_index_names_with_alias()), 2)
+            self.assertLessEqual(len(await fetch_es_index_names_with_alias()), 4)
             await ORIGINAL_SLEEP(2)
-            self.assertLessEqual(len(await fetch_es_index_names()), 2)
+            self.assertLessEqual(len(await fetch_es_index_names()), 4)
 
         async with aiohttp.ClientSession() as session:
             metrics_result = await session.get('http://127.0.0.1:8080/metrics')

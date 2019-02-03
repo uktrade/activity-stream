@@ -19,21 +19,30 @@ from .utils import (
 )
 
 ALIAS_ACTIVITIES = 'activities'
+ALIAS_OBJECTS = 'objects'
 
 
-def get_new_index_name(feed_unique_id):
+def get_new_index_names(feed_unique_id):
     today = datetime.date.today().isoformat()
     now = str(datetime.datetime.now().timestamp()).split('.')[0]
     unique = random_url_safe(8)
 
     # Storing metadata in index name allows operations to match on
     # them, both by elasticsearch itself, and by regex in Python
-    return '' \
-        f'{ALIAS_ACTIVITIES}__' \
-        f'feed_id_{feed_unique_id}__' \
-        f'date_{today}__' \
-        f'timestamp_{now}__' \
+    return (
+        ''
+        f'{ALIAS_ACTIVITIES}__'
+        f'feed_id_{feed_unique_id}__'
+        f'date_{today}__'
+        f'timestamp_{now}__'
+        f'batch_id_{unique}__',
+        ''
+        f'{ALIAS_OBJECTS}__'
+        f'feed_id_{feed_unique_id}__'
+        f'date_{today}__'
+        f'timestamp_{now}__'
         f'batch_id_{unique}__'
+    )
 
 
 def indexes_matching_feeds(index_names, feed_unique_ids):
@@ -47,7 +56,10 @@ def indexes_matching_feed(index_names, feed_unique_id):
     return [
         index_name
         for index_name in index_names
-        if f'{ALIAS_ACTIVITIES}__feed_id_{feed_unique_id}__' in index_name
+        if (
+            f'{ALIAS_ACTIVITIES}__feed_id_{feed_unique_id}__' in index_name or
+            f'{ALIAS_OBJECTS}__feed_id_{feed_unique_id}__' in index_name
+        )
     ]
 
 
@@ -60,9 +72,20 @@ def indexes_matching_no_feeds(index_names, feed_unique_ids):
     ]
 
 
+def split_index_names(index_names):
+    return [
+        index_name for index_name in index_names if index_name.startswith(f'{ALIAS_ACTIVITIES}_')
+    ], [
+        index_name for index_name in index_names if index_name.startswith(f'{ALIAS_OBJECTS}_')
+    ]
+
+
 async def get_old_index_names(context, es_uri):
     def is_activity_stream_index(index_name):
-        return index_name.startswith(f'{ALIAS_ACTIVITIES}_')
+        return (
+            index_name.startswith(f'{ALIAS_ACTIVITIES}_') or
+            index_name.startswith(f'{ALIAS_OBJECTS}_')
+        )
 
     with logged(context.logger, 'Finding existing index names', []):
         results = await es_request_non_200_exception(
@@ -91,15 +114,18 @@ async def get_old_index_names(context, es_uri):
         return names
 
 
-async def add_remove_aliases_atomically(context, es_uri, index_name,
+async def add_remove_aliases_atomically(context, es_uri, activity_index_name, object_index_name,
                                         feed_unique_id):
     with logged(context.logger, 'Atomically flipping {ALIAS_ACTIVITIES} alias to (%s)',
                 [feed_unique_id]):
-        remove_pattern = f'{ALIAS_ACTIVITIES}__feed_id_{feed_unique_id}__*'
+        activities_remove_pattern = f'{ALIAS_ACTIVITIES}__feed_id_{feed_unique_id}__*'
+        objects_remove_pattern = f'{ALIAS_OBJECTS}__feed_id_{feed_unique_id}__*'
         actions = ujson.dumps({
             'actions': [
-                {'remove': {'index': remove_pattern, 'alias': ALIAS_ACTIVITIES}},
-                {'add': {'index': index_name, 'alias': ALIAS_ACTIVITIES}}
+                {'remove': {'index': activities_remove_pattern, 'alias': ALIAS_ACTIVITIES}},
+                {'remove': {'index': objects_remove_pattern, 'alias': ALIAS_OBJECTS}},
+                {'add': {'index': activity_index_name, 'alias': ALIAS_ACTIVITIES}},
+                {'add': {'index': object_index_name, 'alias': ALIAS_OBJECTS}},
             ]
         }).encode('utf-8')
 

@@ -16,8 +16,9 @@ from .elasticsearch import (
     es_nonsearchable_total,
     es_min_verification_age,
     create_index,
-    get_new_index_name,
+    get_new_index_names,
     get_old_index_names,
+    split_index_names,
     indexes_matching_feeds,
     indexes_matching_no_feeds,
     add_remove_aliases_atomically,
@@ -165,19 +166,23 @@ async def ingest_feed_full(context, feed_lock, feed, es_uri):
         indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
         await delete_indexes(context, es_uri, indexes_to_delete)
 
-        index_name = get_new_index_name(feed.unique_id)
-        await create_index(context, es_uri, index_name)
+        activities_index_name, objects_index_name = get_new_index_names(feed.unique_id)
+        await create_index(context, es_uri, activities_index_name)
+        await create_index(context, es_uri, objects_index_name)
 
         href = feed.seed
         while href:
             updates_href = href
             href = await ingest_feed_page(
-                context, 'full', feed_lock, feed, es_uri, [index_name], href,
+                context, 'full', feed_lock, feed, es_uri,
+                [activities_index_name], [objects_index_name], href,
             )
             await sleep(context, feed.full_ingest_page_interval)
 
-        await refresh_index(context, es_uri, index_name)
-        await add_remove_aliases_atomically(context, es_uri, index_name, feed.unique_id)
+        await refresh_index(context, es_uri, activities_index_name)
+        await refresh_index(context, es_uri, objects_index_name)
+        await add_remove_aliases_atomically(
+            context, es_uri, activities_index_name, objects_index_name, feed.unique_id)
         await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
 
 
@@ -194,10 +199,12 @@ async def ingest_feed_updates(context, feed_lock, feed, es_uri):
         indexes_to_ingest_into = indexes_matching_feeds(
             indexes_without_alias + indexes_with_alias, [feed.unique_id])
 
+        activities_index_names, objects_index_names = split_index_names(indexes_to_ingest_into)
+
         while href:
             updates_href = href
             href = await ingest_feed_page(context, 'updates', feed_lock, feed, es_uri,
-                                          indexes_to_ingest_into, href)
+                                          activities_index_names, objects_index_names, href)
 
         for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
             await refresh_index(context, es_uri, index_name)
@@ -206,7 +213,8 @@ async def ingest_feed_updates(context, feed_lock, feed, es_uri):
     await sleep(context, feed.updates_page_interval)
 
 
-async def ingest_feed_page(context, ingest_type, feed_lock, feed, es_uri, index_names, href):
+async def ingest_feed_page(context, ingest_type, feed_lock, feed, es_uri,
+                           activity_index_names, objects_index_names, href):
     with \
             logged(context.logger, 'Polling/pushing page', []), \
             metric_timer(context.metrics['ingest_page_duration_seconds'],
@@ -225,7 +233,8 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed, es_uri, index_
             feed_parsed = ujson.loads(feed_contents)
 
         with logged(context.logger, 'Converting to bulk Elasticsearch items', []):
-            es_bulk_items = feed.convert_to_bulk_es(feed_parsed, index_names)
+            es_bulk_items = feed.convert_to_bulk_es(
+                feed_parsed, activity_index_names, objects_index_names)
 
         with \
                 metric_timer(context.metrics['ingest_page_duration_seconds'],

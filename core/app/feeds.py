@@ -59,7 +59,9 @@ class ActivityStreamFeed:
         }
 
     @classmethod
-    def convert_to_bulk_es(cls, feed, index_names):
+    def convert_to_bulk_es(cls, feed, activity_index_names, object_index_names):
+        print('TODO: use', object_index_names)
+
         return [
             {
                 'action_and_metadata': {
@@ -72,7 +74,7 @@ class ActivityStreamFeed:
                 'source': item
             }
             for item in feed['orderedItems']
-            for index_name in index_names
+            for index_name in activity_index_names
         ]
 
 
@@ -113,10 +115,12 @@ class ZendeskFeed:
         }
 
     @classmethod
-    def convert_to_bulk_es(cls, page, index_names):
+    def convert_to_bulk_es(cls, page, activity_index_names, object_index_names):
         def company_numbers(description):
             match = re.search(cls.company_number_regex, description)
             return [match[1]] if match else []
+
+        print('TODO: use', object_index_names)
 
         return [
             {
@@ -135,7 +139,7 @@ class ZendeskFeed:
             for ticket in page['tickets']
             for company_number in company_numbers(ticket['description'])
             for activity_id in ['dit:zendesk:Ticket:' + str(ticket['id']) + ':Create']
-            for index_name in index_names
+            for index_name in activity_index_names
         ]
 
 
