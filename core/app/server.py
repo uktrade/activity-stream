@@ -3,24 +3,24 @@ import time
 
 from aiohttp import web
 
-from .app_elasticsearch import (
+from .elasticsearch import (
     es_search,
     es_search_existing_scroll,
     es_search_new_scroll,
     es_min_verification_age,
 )
-from .app_hawk import (
+from .hawk import (
     authenticate_hawk_header,
 )
-from .app_logger import (
+from .logger import (
     logged,
     get_child_logger,
 )
-from .app_utils import (
+from .utils import (
     get_child_context,
     random_url_safe,
 )
-from .app_redis import (
+from .redis import (
     set_private_scroll_id,
     redis_get_metrics,
     get_feeds_status,

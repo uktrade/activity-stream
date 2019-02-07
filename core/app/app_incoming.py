@@ -7,20 +7,20 @@ from prometheus_client import (
     CollectorRegistry,
 )
 
-from .app_feeds import (
+from .feeds import (
     parse_feed_config,
 )
-from .app_logger import (
+from .logger import (
     get_root_logger,
     logged,
 )
-from .app_metrics import (
+from .metrics import (
     get_metrics,
 )
-from .app_raven import (
+from .raven import (
     get_raven_client,
 )
-from .app_server import (
+from .server import (
     INCORRECT,
     authenticate_by_ip,
     authenticator,
@@ -34,10 +34,10 @@ from .app_server import (
     raven_reporter,
     server_logger,
 )
-from .app_redis import (
+from .redis import (
     redis_get_client,
 )
-from .app_utils import (
+from .utils import (
     Context,
     cancel_non_current_tasks,
     get_common_config,

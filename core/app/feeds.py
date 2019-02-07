@@ -4,10 +4,10 @@ import re
 import aiohttp
 import yarl
 
-from .app_hawk import (
+from .hawk import (
     get_hawk_header,
 )
-from .app_utils import sub_dict_lower
+from .utils import sub_dict_lower
 
 
 def parse_feed_config(feed_config):

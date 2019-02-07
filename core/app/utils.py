@@ -10,7 +10,7 @@ import sys
 
 import aiohttp
 
-from .app_logger import (
+from .logger import (
     logged,
     get_child_logger,
 )

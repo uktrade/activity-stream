@@ -3,6 +3,10 @@ checks:
   argument-count:
     config:
       threshold: 10
+  file-lines:
+    enabled: false
+  method-complexity:
+    enabled: false
 plugins:
   duplication:
     enabled: true
