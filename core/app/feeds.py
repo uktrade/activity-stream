@@ -60,8 +60,6 @@ class ActivityStreamFeed:
 
     @classmethod
     def convert_to_bulk_es(cls, feed, activity_index_names, object_index_names):
-        print('TODO: use', object_index_names)
-
         return [
             {
                 'action_and_metadata': {
@@ -75,6 +73,19 @@ class ActivityStreamFeed:
             }
             for item in feed['orderedItems']
             for index_name in activity_index_names
+        ] + [
+            {
+                'action_and_metadata': {
+                    'index': {
+                        '_id': item['object']['id'],
+                        '_index': index_name,
+                        '_type': '_doc',
+                    }
+                },
+                'source': item['object']
+            }
+            for item in feed['orderedItems']
+            for index_name in object_index_names
         ]
 
 
@@ -120,8 +131,6 @@ class ZendeskFeed:
             match = re.search(cls.company_number_regex, description)
             return [match[1]] if match else []
 
-        print('TODO: use', object_index_names)
-
         return [
             {
                 'action_and_metadata': _action_and_metadata(
@@ -140,7 +149,43 @@ class ZendeskFeed:
             for company_number in company_numbers(ticket['description'])
             for activity_id in ['dit:zendesk:Ticket:' + str(ticket['id']) + ':Create']
             for index_name in activity_index_names
+        ] + [
+            {
+                'action_and_metadata': {
+                    'index': {
+                        '_index': index_name,
+                        '_type': '_doc',
+                        '_id': activity_id,
+                    },
+                },
+                'object': {
+                    'type': [
+                        'Document',
+                        'dit:zendesk:Ticket',
+                    ],
+                    'id': 'dit:zendesk:Ticket:' + str(ticket['id']),
+                }
+            }
+            for ticket in page['tickets']
+            for company_number in company_numbers(ticket['description'])
+            for activity_id in ['dit:zendesk:Ticket:' + str(ticket['id']) + ':Create']
+            for index_name in object_index_names
         ]
+
+        # [
+        #     {
+        #         'action_and_metadata': {
+        #             'index': {
+        #                 '_id': item['object']['id'],
+        #                 '_index': index_name,
+        #                 '_type': '_doc',
+        #             }
+        #         },
+        #         'source': item['object']
+        #     }
+        #     for item in feed['orderedItems']
+        #     for index_name in 
+        # ]
 
 
 def _action_and_metadata(

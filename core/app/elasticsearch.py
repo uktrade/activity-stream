@@ -206,6 +206,7 @@ async def refresh_index(context, es_uri, index_name):
 
 async def es_search_new_scroll(_, __, query):
     return f'/{ALIAS_ACTIVITIES}/_search', {'scroll': '15s'}, query
+    #return f'/{ALIAS_OBJECTS}/_search', {'scroll': '15s'}, query
 
 
 async def es_search_existing_scroll(context, match_info, _):
