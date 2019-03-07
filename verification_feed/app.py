@@ -18,7 +18,7 @@ async def run_application():
     app_logger = logging.getLogger(LOGGER_NAME)
 
     app_logger.debug('Examining environment...')
-    port = os.environ['PORT']
+    port = os.environ['VERIFICATION_FEED_PORT']
     app_logger.debug('Examining environment: done')
 
     await create_incoming_application(port)
@@ -61,7 +61,7 @@ def setup_logging():
 def get_page(timestamp, get_next_page_href):
     ''' Creates dummy activities where one has been created every second for the past 24 hours'''
     now = datetime.now(timezone.utc).replace(microsecond=0)
-    one_day_ago = now - timedelta(hours=24)
+    one_day_ago = now - timedelta(minutes=5)
 
     first_timestamp = int(one_day_ago.timestamp())
     final_timestamp = int(now.timestamp())

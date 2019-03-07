@@ -129,9 +129,27 @@ There are potentially many separate chains of concurrent behaviour at any given 
     [elasticsearch-proxy,IbPY5ozS] Elasticsearch request by (ACCOUNT_ID) to (GET) (dev-v6qrmm4neh44yfdng3dlj24umu.eu-west-1.es.amazonaws.com:443/_plugin/kibana/bundles/one)...
     [elasticsearch-proxy,IbPY5ozS] Receiving request (10.0.0.456) (GET /_plugin/kibana/bundles/commons.style.css?v=16602 HTTP/1.1) (Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36) (1.2.3.4, 127.0.0.1)
 
-## Verification Feed
+Metrics are visible using Grafana:
 
-A small separate application in [verification_feed](verification_feed) is provided to allow the stream to be tested, even in production, without using real data. It provides a number of activities, published date of the moment the feed is queried.
+https://grafana.ci.uktrade.io/d/gKcrzUKmz/activity-stream?orgId=1&var-instance=activity-stream-staging.london.cloudapps.digital:443
+
+## Manually testing the app with real data
+
+To put real data into the elasticsearch database, we want to have the app read from a real feed.
+
+Such a feed is provided in a small separate application in [verification_feed](verification_feed). It provides a number of activities, published date of the moment the feed is queried.
+
+Run the verification feed app by running `$ verification_feed/python3 app.py`
+
+The Activity Stream Inbound App will need to be set up to read the verification feed. The following environment variables will read from the verification feed running on port 8081.
+'''
+export FEEDS__1__UNIQUE_ID=verification_feed
+export FEEDS__1__SEED=http://localhost:8081/0
+export FEEDS__1__ACCESS_KEY_ID=feed-some-id
+export FEEDS__1__SECRET_ACCESS_KEY=feed-some-secret
+export FEEDS__1__TYPE=activity_stream
+'''
+
 
 ## Local development environment
 
