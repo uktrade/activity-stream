@@ -154,7 +154,7 @@ async def delete_indexes(context, es_uri, index_names):
             )
 
 
-async def create_index(context, es_uri, index_name):
+async def create_activities_index(context, es_uri, index_name):
     with logged(context.logger, 'Creating index (%s)', [index_name]):
         index_definition = ujson.dumps({
             'settings': {
@@ -191,6 +191,42 @@ async def create_index(context, es_uri, index_name):
         )
 
 
+async def create_objects_index(context, es_uri, index_name):
+    with logged(context.logger, 'Creating index (%s)', [index_name]):
+        index_definition = ujson.dumps({
+            'settings': {
+                'index': {
+                    'number_of_shards': 4,
+                    'number_of_replicas': 1,
+                    'refresh_interval': '-1',
+                }
+            },
+            'mappings': {
+                '_doc': {
+                    'properties': {
+                        'published_date': {
+                            'type': 'date',
+                        },
+                        'type': {
+                            'type': 'keyword',
+                        },
+                        'object.type': {
+                            'type': 'keyword',
+                        },
+                    },
+                },
+            },
+        }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
+        await es_request_non_200_exception(
+            context=context,
+            uri=es_uri,
+            method='PUT',
+            path=f'/{index_name}',
+            query={},
+            headers={'Content-Type': 'application/json'},
+            payload=index_definition,
+        )
+
 async def refresh_index(context, es_uri, index_name):
     with logged(context.logger, 'Refreshing index (%s)', [index_name]):
         await es_request_non_200_exception(
@@ -206,7 +242,6 @@ async def refresh_index(context, es_uri, index_name):
 
 async def es_search_new_scroll(_, __, query):
     return f'/{ALIAS_ACTIVITIES}/_search', {'scroll': '15s'}, query
-    #return f'/{ALIAS_OBJECTS}/_search', {'scroll': '15s'}, query
 
 
 async def es_search_existing_scroll(context, match_info, _):

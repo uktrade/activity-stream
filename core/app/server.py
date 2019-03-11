@@ -8,6 +8,7 @@ from .elasticsearch import (
     es_search_existing_scroll,
     es_search_new_scroll,
     es_min_verification_age,
+    ALIAS_OBJECTS
 )
 from .hawk import (
     authenticate_hawk_header,
@@ -241,6 +242,21 @@ def handle_get_metrics(context):
 
     return handle
 
+
+def handle_get_search(context, es_uri):
+    async def handle(request):
+        path = f'/{ALIAS_OBJECTS}/_search'
+        query = ''
+        body = request.body
+        results, status = await es_search(context, es_uri, path, query, body,
+                                          {'Content-Type': request.headers['Content-Type']},
+                                          to_public_scroll_url)
+
+        return web.Response(body=results, status=200, headers={
+            'Content-Type': 'text/plain; charset=utf-8',
+        })
+
+    return handle
 
 def json_response(data, status):
     return web.json_response(data, status=status, headers={

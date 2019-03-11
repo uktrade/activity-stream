@@ -15,7 +15,8 @@ from .elasticsearch import (
     es_searchable_total,
     es_nonsearchable_total,
     es_min_verification_age,
-    create_index,
+    create_activities_index,
+    create_objects_index,
     get_new_index_names,
     get_old_index_names,
     split_index_names,
@@ -167,8 +168,8 @@ async def ingest_feed_full(context, feed_lock, feed, es_uri):
         await delete_indexes(context, es_uri, indexes_to_delete)
 
         activities_index_name, objects_index_name = get_new_index_names(feed.unique_id)
-        await create_index(context, es_uri, activities_index_name)
-        await create_index(context, es_uri, objects_index_name)
+        await create_activities_index(context, es_uri, activities_index_name)
+        await create_objects_index(context, es_uri, objects_index_name) # UPDATE ME
 
         href = feed.seed
         while href:
