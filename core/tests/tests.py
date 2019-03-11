@@ -623,16 +623,6 @@ class TestApplication(TestBase):
             for line in es_bulk_content.split(b'\n')[0:-1]
         ]
 
-        self.assertEqual(self.feed_requested[0].result(
-        ).headers['Authorization'], (
-            'Hawk '
-            'mac="keUgjONtI1hLtS4DzGl+0G63o1nPFmvtIsTsZsB/NPM=", '
-            'hash="B0weSUXsMcb5UhL41FZbrUJCAotzSI3HawE1NPLRUz8=", '
-            'id="feed-some-id", '
-            'ts="1326542401", '
-            'nonce="c29tZX"'
-        ))
-
         self.assertEqual(
             es_bulk_headers['Authorization'],
             'Basic c29tZS1pZDpzb21lLXNlY3JldA==')
@@ -786,7 +776,7 @@ class TestApplication(TestBase):
 
             self.assertLessEqual(len(await fetch_es_index_names_with_alias()), 4)
             await ORIGINAL_SLEEP(2)
-            self.assertLessEqual(len(await fetch_es_index_names()), 4)
+            self.assertLessEqual(len(await fetch_es_index_names()), 7)
 
         async with aiohttp.ClientSession() as session:
             metrics_result = await session.get('http://127.0.0.1:8080/metrics')
