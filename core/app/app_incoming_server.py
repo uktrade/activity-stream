@@ -11,7 +11,7 @@ from .app_incoming_elasticsearch import (
 from .elasticsearch import (
     es_min_verification_age,
 )
-from .hawk import (
+from .app_incoming_hawk import (
     authenticate_hawk_header,
 )
 from .logger import (
