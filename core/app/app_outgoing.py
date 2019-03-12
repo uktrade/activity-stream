@@ -55,13 +55,15 @@ from .app_outgoing_redis import (
     redis_set_metrics,
     set_feed_status,
 )
+from .app_outgoing_utils import (
+    async_repeat_until_cancelled,
+    http_429_retry_after,
+)
 from .utils import (
     Context,
-    async_repeat_until_cancelled,
     cancel_non_current_tasks,
     get_child_context,
     get_common_config,
-    http_429_retry_after,
     main,
     normalise_environment,
     sleep,

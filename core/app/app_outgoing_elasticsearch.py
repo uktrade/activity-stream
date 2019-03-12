@@ -5,9 +5,11 @@ import ujson
 from .logger import (
     logged,
 )
-from .utils import (
+from .app_outgoing_utils import (
     flatten,
     flatten_generator,
+)
+from .utils import (
     random_url_safe,
 )
 from .elasticsearch import (

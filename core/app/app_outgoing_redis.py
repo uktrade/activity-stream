@@ -5,8 +5,10 @@ import aioredis
 from .logger import (
     logged,
 )
-from .utils import (
+from .app_outgoing_utils import (
     async_repeat_until_cancelled,
+)
+from .utils import (
     get_child_context,
     sleep,
 )
