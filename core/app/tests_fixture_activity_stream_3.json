@@ -17,15 +17,15 @@
       "dit:application": "CMS",
       "id": "dit:CMS:Article:49863:Create",
       "object": {
+        "heading": "Advice",
         "id": "dit:CMS:Article:49863",
+        "introduction": "Lorem ipsum",
+        "title": "Article title 1",
         "type": [
           "Document",
           "dit:CMS:Article"
         ],
-        "url": "www.great.gov.uk/article",
-        "heading": "Advice",
-        "title": "Article title 1",
-        "introduction": "Lorem ipsum"
+        "url": "www.great.gov.uk/article"
       },
       "published": "2018-04-12T12:48:13+00:00",
       "type": "Create"
@@ -41,15 +41,15 @@
       "dit:application": "CMS",
       "id": "dit:CMS:Article:49864:Create",
       "object": {
+        "heading": "Advice",
         "id": "dit:CMS:Article:49864",
+        "introduction": "Lorem ipsum",
+        "title": "Article title 2",
         "type": [
           "Document",
           "dit:CMS:Article"
         ],
-        "url": "www.great.gov.uk/article",
-        "heading": "Advice",
-        "title": "Article title 2",
-        "introduction": "Lorem ipsum"
+        "url": "www.great.gov.uk/article"
       },
       "published": "2018-04-12T12:48:13+00:00",
       "type": "Create"
@@ -65,15 +65,15 @@
       "dit:application": "CMS",
       "id": "dit:CMS:Article:49865:Create",
       "object": {
+        "heading": "Advice",
         "id": "dit:CMS:Article:49865",
+        "introduction": "Lorem ipsum",
+        "title": "Article title 3",
         "type": [
           "Document",
           "dit:CMS:Article"
         ],
-        "url": "www.great.gov.uk/article",
-        "heading": "Advice",
-        "title": "Article title 3",
-        "introduction": "Lorem ipsum"
+        "url": "www.great.gov.uk/article"
       },
       "published": "2018-04-12T12:48:13+00:00",
       "type": "Create"
@@ -89,15 +89,15 @@
       "dit:application": "CMS",
       "id": "dit:CMS:Article:49866:Create",
       "object": {
+        "heading": "Advice",
         "id": "dit:CMS:Article:49866",
+        "introduction": "Lorem ipsum",
+        "title": "Article title 4",
         "type": [
           "Document",
           "dit:CMS:Article"
         ],
-        "url": "www.great.gov.uk/article",
-        "heading": "Advice",
-        "title": "Article title 4",
-        "introduction": "Lorem ipsum"
+        "url": "www.great.gov.uk/article"
       },
       "published": "2018-04-12T12:48:13+00:00",
       "type": "Create"
@@ -113,15 +113,15 @@
       "dit:application": "CMS",
       "id": "dit:CMS:Article:49867:Create",
       "object": {
+        "heading": "Advice",
         "id": "dit:CMS:Article:49867",
+        "introduction": "Lorem ipsum",
+        "title": "Article title 5",
         "type": [
           "Document",
           "dit:CMS:Article"
         ],
-        "url": "www.great.gov.uk/article",
-        "heading": "Advice",
-        "title": "Article title 5",
-        "introduction": "Lorem ipsum"
+        "url": "www.great.gov.uk/article"
       },
       "published": "2018-03-23T17:06:53+00:00",
       "type": "Create"

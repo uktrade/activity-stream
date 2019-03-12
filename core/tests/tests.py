@@ -674,12 +674,13 @@ class TestApplication(TestBase):
         # -- Setup --
         # Source feed has 5 objects;
         # read from this and put them in Elasticsearch
-        
-        source_feed = "tests_fixture_activity_stream_3.json"
+
+        source_feed = 'tests_fixture_activity_stream_3.json'
 
         def read_specific_file(_):
-                with open(os.path.dirname(os.path.abspath(__file__)) + '/' + source_feed, 'rb') as file:
-                    return file.read().decode('utf-8')
+            with open(os.path.dirname(os.path.abspath(__file__)) +
+                      '/' + source_feed, 'rb') as file:
+                return file.read().decode('utf-8')
 
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_specific_file,
@@ -688,7 +689,7 @@ class TestApplication(TestBase):
             await fetch_all_es_data_until(has_at_least(2))
 
         # -- Helpers --
-        
+
         # Performs authorised GET request to given URL
         async def _get(url, query):
             url = 'http://127.0.0.1:8080' + url
@@ -700,25 +701,25 @@ class TestApplication(TestBase):
             )
 
             result, status, headers = await get(url, auth, x_forwarded_for, query)
-            return { 'status': status, 'result': result, 'headers': headers }
+            return {'status': status, 'result': result, 'headers': headers}
 
         # -- Test --
 
         # Perform a search for "Article"
-        response = await _get('/v1/', query={ 
-            "query": { 
-                "multi_match": { 
-                    "query": "Article",
-                    "fields": ["object.heading",
-                               "object.title",
-                               "object.url",
-                               "object.introduction"]
+        response = await _get('/v1/', query={
+            'query': {
+                'multi_match': {
+                    'query': 'Article',
+                    'fields': ['object.heading',
+                               'object.title',
+                               'object.url',
+                               'object.introduction']
                 }
             },
-            "_source": ["object.heading",
-                        "object.title",
-                        "object.url",
-                        "object.introduction"],
+            '_source': ['object.heading',
+                        'object.title',
+                        'object.url',
+                        'object.introduction'],
         })
 
         # Response has: status: 200, type: application/json, 5 results
@@ -726,15 +727,15 @@ class TestApplication(TestBase):
         self.assertEqual(200, response['status'])
         self.assertEqual('application/json; charset=utf-8',
                          response['headers']['Content-Type'])
-        results =  json.loads(response['result'])['orderedItems']
+        results = json.loads(response['result'])['orderedItems']
         self.assertEqual(5, len(results))
         first_result = results[0]['object']
         self.assertEqual(first_result,
                          {
-                            'heading':      'Advice',
-                            'title':        'Article title 1',
-                            'url':          'www.great.gov.uk/article',
-                            'introduction': 'Lorem ipsum'
+                             'heading':      'Advice',
+                             'title':        'Article title 1',
+                             'url':          'www.great.gov.uk/article',
+                             'introduction': 'Lorem ipsum'
                          })
 
     @async_test
