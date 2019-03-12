@@ -43,8 +43,10 @@ from .metrics import (
 from .raven import (
     get_raven_client,
 )
-from .app_outgoing_redis import (
+from .redis import (
     redis_get_client,
+)
+from .app_outgoing_redis import (
     acquire_and_keep_lock,
     set_feed_updates_seed_url_init,
     set_feed_updates_seed_url,

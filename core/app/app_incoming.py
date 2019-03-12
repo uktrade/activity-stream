@@ -34,7 +34,7 @@ from .app_incoming_server import (
     raven_reporter,
     server_logger,
 )
-from .app_incoming_redis import (
+from .redis import (
     redis_get_client,
 )
 from .utils import (
