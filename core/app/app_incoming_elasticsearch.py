@@ -3,7 +3,7 @@ from aiohttp.web import (
 )
 import ujson
 
-from .redis import (
+from .app_incoming_redis import (
     get_private_scroll_id,
 )
 

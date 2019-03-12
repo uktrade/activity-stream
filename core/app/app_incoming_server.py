@@ -22,7 +22,7 @@ from .utils import (
     get_child_context,
     random_url_safe,
 )
-from .redis import (
+from .app_incoming_redis import (
     set_private_scroll_id,
     redis_get_metrics,
     get_feeds_status,
