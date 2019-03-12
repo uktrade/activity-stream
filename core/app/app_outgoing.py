@@ -14,7 +14,6 @@ from .app_outgoing_elasticsearch import (
     es_feed_activities_total,
     es_searchable_total,
     es_nonsearchable_total,
-    es_min_verification_age,
     create_index,
     get_new_index_name,
     get_old_index_names,
@@ -23,6 +22,9 @@ from .app_outgoing_elasticsearch import (
     add_remove_aliases_atomically,
     delete_indexes,
     refresh_index,
+)
+from .elasticsearch import (
+    es_min_verification_age,
 )
 
 from .feeds import (

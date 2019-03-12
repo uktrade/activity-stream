@@ -7,6 +7,8 @@ from .app_incoming_elasticsearch import (
     es_search,
     es_search_existing_scroll,
     es_search_new_scroll,
+)
+from .elasticsearch import (
     es_min_verification_age,
 )
 from .hawk import (
