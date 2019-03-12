@@ -9,7 +9,7 @@ from .hawk import (
     get_payload_hash,
 )
 
-from .redis import (
+from .app_incoming_redis import (
     set_nonce_nx,
 )
 
