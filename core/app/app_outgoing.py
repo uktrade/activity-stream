@@ -8,7 +8,7 @@ from prometheus_client import (
 )
 import ujson
 
-from .elasticsearch import (
+from .app_outgoing_elasticsearch import (
     ESMetricsUnavailable,
     es_bulk,
     es_feed_activities_total,
