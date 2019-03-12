@@ -51,7 +51,7 @@ class TestBase(unittest.TestCase):
         await delete_all_es_data()
         await delete_all_redis_data()
 
-        os_environ_patcher = patch.dict(os.environ, env)
+        os_environ_patcher = patch.dict(os.environ, env, clear=True)
         os_environ_patcher.start()
         self.addCleanup(os_environ_patcher.stop)
 
