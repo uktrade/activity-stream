@@ -17,6 +17,7 @@ from .utils import (
     flatten_generator,
     random_url_safe,
 )
+from . import settings
 
 ALIAS = 'activities'
 
@@ -60,11 +61,10 @@ def indexes_matching_no_feeds(index_names, feed_unique_ids):
     ]
 
 
-async def get_old_index_names(context, es_uri):
+async def get_old_index_names(context):
     with logged(context.logger, 'Finding existing index names', []):
         results = await es_request_non_200_exception(
             context=context,
-            uri=es_uri,
             method='GET',
             path=f'/_aliases',
             query={},
@@ -88,8 +88,7 @@ async def get_old_index_names(context, es_uri):
         return names
 
 
-async def add_remove_aliases_atomically(context, es_uri, index_name,
-                                        feed_unique_id):
+async def add_remove_aliases_atomically(context, index_name, feed_unique_id):
     with logged(context.logger, 'Atomically flipping {ALIAS} alias to (%s)',
                 [feed_unique_id]):
         remove_pattern = f'{ALIAS}__feed_id_{feed_unique_id}__*'
@@ -102,7 +101,6 @@ async def add_remove_aliases_atomically(context, es_uri, index_name,
 
         await es_request_non_200_exception(
             context=context,
-            uri=es_uri,
             method='POST',
             path=f'/_aliases',
             query={},
@@ -111,12 +109,11 @@ async def add_remove_aliases_atomically(context, es_uri, index_name,
         )
 
 
-async def delete_indexes(context, es_uri, index_names):
+async def delete_indexes(context, index_names):
     with logged(context.logger, 'Deleting indexes (%s)', [index_names]):
         for index_name in index_names:
             await es_request_non_200_exception(
                 context=context,
-                uri=es_uri,
                 method='DELETE',
                 path=f'/{index_name}',
                 query={},
@@ -125,7 +122,7 @@ async def delete_indexes(context, es_uri, index_names):
             )
 
 
-async def create_index(context, es_uri, index_name):
+async def create_index(context, index_name):
     with logged(context.logger, 'Creating index (%s)', [index_name]):
         index_definition = ujson.dumps({
             'settings': {
@@ -153,7 +150,6 @@ async def create_index(context, es_uri, index_name):
         }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
         await es_request_non_200_exception(
             context=context,
-            uri=es_uri,
             method='PUT',
             path=f'/{index_name}',
             query={},
@@ -162,11 +158,10 @@ async def create_index(context, es_uri, index_name):
         )
 
 
-async def refresh_index(context, es_uri, index_name):
+async def refresh_index(context, index_name):
     with logged(context.logger, 'Refreshing index (%s)', [index_name]):
         await es_request_non_200_exception(
             context=context,
-            uri=es_uri,
             method='POST',
             path=f'/{index_name}/_refresh',
             query={'ignore_unavailable': 'true'},
@@ -198,10 +193,9 @@ async def es_search_existing_scroll(context, match_info, _):
     }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
 
 
-async def es_search(context, es_uri, path, query, body, headers, to_public_scroll_url):
+async def es_search(context, path, query, body, headers, to_public_scroll_url):
     results = await es_request(
         context=context,
-        uri=es_uri,
         method='GET',
         path=path,
         query=query,
@@ -237,7 +231,7 @@ async def activities(elasticsearch_reponse, to_public_scroll_url):
     }, **next_dict}
 
 
-async def es_bulk(context, es_uri, items):
+async def es_bulk(context, items):
     with logged(context.logger, 'Pushing (%s) items into Elasticsearch', [len(items)]):
         if not items:
             return
@@ -255,16 +249,15 @@ async def es_bulk(context, es_uri, items):
 
         with logged(context.logger, 'POSTing bulk ingest to Elasticsearch', []):
             await es_request_non_200_exception(
-                context=context, uri=es_uri, method='POST', path='/_bulk', query={},
+                context=context, method='POST', path='/_bulk', query={},
                 headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,
             )
 
 
-async def es_searchable_total(context, es_uri):
+async def es_searchable_total(context):
     # This metric is expected to be available
     searchable_result = await es_request_non_200_exception(
         context=context,
-        uri=es_uri,
         method='GET',
         path=f'/{ALIAS}/_count',
         query={'ignore_unavailable': 'true'},
@@ -274,10 +267,9 @@ async def es_searchable_total(context, es_uri):
     return (ujson.loads(await searchable_result.text()))['count']
 
 
-async def es_nonsearchable_total(context, es_uri):
+async def es_nonsearchable_total(context):
     nonsearchable_result = await es_maybe_unvailable_metrics(
         context=context,
-        uri=es_uri,
         method='GET',
         path=f'/{ALIAS}_*,-*{ALIAS}/_count',
         query={'ignore_unavailable': 'true'},
@@ -287,10 +279,9 @@ async def es_nonsearchable_total(context, es_uri):
     return ujson.loads(await nonsearchable_result.text())['count']
 
 
-async def es_feed_activities_total(context, es_uri, feed_id):
+async def es_feed_activities_total(context, feed_id):
     nonsearchable_result = await es_maybe_unvailable_metrics(
         context=context,
-        uri=es_uri,
         method='GET',
         path=f'/{ALIAS}__feed_id_{feed_id}__*,-*{ALIAS}/_count',
         query={'ignore_unavailable': 'true'},
@@ -301,7 +292,6 @@ async def es_feed_activities_total(context, es_uri, feed_id):
 
     total_result = await es_maybe_unvailable_metrics(
         context=context,
-        uri=es_uri,
         method='GET',
         path=f'/{ALIAS}__feed_id_{feed_id}__*/_count',
         query={'ignore_unavailable': 'true'},
@@ -313,7 +303,7 @@ async def es_feed_activities_total(context, es_uri, feed_id):
     return searchable, nonsearchable
 
 
-async def es_min_verification_age(context, es_uri):
+async def es_min_verification_age(context):
     payload = ujson.dumps({
         'size': 0,
         'aggs': {
@@ -335,7 +325,6 @@ async def es_min_verification_age(context, es_uri):
     }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
     result = await es_request_non_200_exception(
         context=context,
-        uri=es_uri,
         method='GET',
         path=f'/{ALIAS}/_search',
         query={'ignore_unavailable': 'true'},
@@ -354,16 +343,16 @@ async def es_min_verification_age(context, es_uri):
     return age
 
 
-async def es_request_non_200_exception(context, uri, method, path, query, headers, payload):
-    results = await es_request(context, uri, method, path, query, headers, payload)
+async def es_request_non_200_exception(context, method, path, query, headers, payload):
+    results = await es_request(context, method, path, query, headers, payload)
     if results.status != 200:
         raise Exception(await results.text())
     return results
 
 
-async def es_maybe_unvailable_metrics(context, uri, method, path, query, headers, payload):
+async def es_maybe_unvailable_metrics(context, method, path, query, headers, payload):
     ''' Some metrics may be unavailable since they query newly created indexes '''
-    results = await es_request(context, uri, method, path, query, headers, payload)
+    results = await es_request(context, method, path, query, headers, payload)
     if results.status == 503:
         raise ESMetricsUnavailable()
     if results.status != 200:
@@ -371,14 +360,14 @@ async def es_maybe_unvailable_metrics(context, uri, method, path, query, headers
     return results
 
 
-async def es_request(context, uri, method, path, query, headers, payload):
+async def es_request(context, method, path, query, headers, payload):
     with logged(
         context.logger, 'Elasticsearch request (%s) (%s) (%s) (%s)',
-        [uri, method, path, query],
+        [settings.ES_URI, method, path, query],
     ):
         query_string = '&'.join([key + '=' + query[key] for key in query.keys()])
         async with context.session.request(
-            method, uri + path + (('?' + query_string) if query_string != '' else ''),
+            method, settings.ES_URI + path + (('?' + query_string) if query_string != '' else ''),
             data=payload, headers=headers,
         ) as result:
             # Without this, after some number of requests, they end up hanging
