@@ -3,7 +3,7 @@ import time
 
 from aiohttp import web
 
-from .elasticsearch import (
+from .app_incoming_elasticsearch import (
     es_search,
     es_search_existing_scroll,
     es_search_new_scroll,
