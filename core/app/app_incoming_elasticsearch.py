@@ -36,7 +36,7 @@ async def es_search_existing_scroll(context, match_info, _):
     }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
 
 
-async def es_search_activities(context, path, query, body, headers, to_public_scroll_url):
+async def es_search_activities(context, path, query, body, headers, to_scroll_url):
     results = await es_request(
         context=context,
         method='GET',
@@ -48,15 +48,15 @@ async def es_search_activities(context, path, query, body, headers, to_public_sc
 
     response = await results.json()
     return \
-        (await activities(response, to_public_scroll_url), 200) if results.status == 200 else \
+        (await activities(context, response, to_scroll_url), 200) if results.status == 200 else \
         (response, results.status)
 
 
-async def activities(elasticsearch_reponse, to_public_scroll_url):
+async def activities(context, elasticsearch_reponse, to_public_scroll_url):
     elasticsearch_hits = elasticsearch_reponse['hits'].get('hits', [])
     private_scroll_id = elasticsearch_reponse['_scroll_id']
     next_dict = {
-        'next': await to_public_scroll_url(private_scroll_id)
+        'next': await to_public_scroll_url(context, private_scroll_id)
     } if elasticsearch_hits else {}
 
     return {**{

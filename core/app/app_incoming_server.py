@@ -155,7 +155,7 @@ def handle_get_new(context):
         path, query, body = await es_search_new_scroll(
             context, request.match_info, incoming_body)
 
-        async def to_public_scroll_url(private_scroll_id):
+        async def to_public_scroll_url(context, private_scroll_id):
             public_scroll_id = random_url_safe(8)
             await set_private_scroll_id(context, public_scroll_id, private_scroll_id)
             url_with_correct_scheme = request.url.with_scheme(
@@ -180,7 +180,7 @@ def handle_get_existing(context):
         path, query, body = await es_search_existing_scroll(
             context, request.match_info, incoming_body)
 
-        async def to_public_scroll_url(private_scroll_id):
+        async def to_public_scroll_url(context, private_scroll_id):
             public_scroll_id = random_url_safe(8)
             await set_private_scroll_id(context, public_scroll_id, private_scroll_id)
             url_with_correct_scheme = request.url.with_scheme(
