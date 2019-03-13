@@ -503,7 +503,7 @@ class TestApplication(TestBase):
         result_1_json = json.loads(result_1)
         url_2 = result_1_json['next']
 
-        await asyncio.sleep(1)
+        await ORIGINAL_SLEEP(1)
 
         auth_2 = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url_2,
