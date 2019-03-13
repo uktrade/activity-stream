@@ -4,7 +4,7 @@ import time
 from aiohttp import web
 
 from .app_incoming_elasticsearch import (
-    es_search,
+    es_search_activities,
     es_search_existing_scroll,
     es_search_new_scroll,
 )
@@ -172,9 +172,9 @@ def _handle_get(context, get_path_query):
                 request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)
             ))
 
-        results, status = await es_search(context, path, query, body,
-                                          {'Content-Type': request.headers['Content-Type']},
-                                          to_public_scroll_url)
+        results, status = await es_search_activities(
+            context, path, query, body, {'Content-Type': request.headers['Content-Type']},
+            to_public_scroll_url)
 
         return json_response(results, status=status)
 

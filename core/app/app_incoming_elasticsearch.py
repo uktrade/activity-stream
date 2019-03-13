@@ -36,7 +36,7 @@ async def es_search_existing_scroll(context, match_info, _):
     }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
 
 
-async def es_search(context, path, query, body, headers, to_public_scroll_url):
+async def es_search_activities(context, path, query, body, headers, to_public_scroll_url):
     results = await es_request(
         context=context,
         method='GET',
