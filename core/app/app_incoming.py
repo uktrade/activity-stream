@@ -47,7 +47,6 @@ from .utils import (
 from . import settings
 
 NONCE_EXPIRE = 120
-PAGINATION_EXPIRE = 10
 
 
 async def run_incoming_application():
@@ -119,11 +118,11 @@ async def create_incoming_application(
         web.post('/', handle_post),
         web.get(
             '/',
-            handle_get_new(context, PAGINATION_EXPIRE)
+            handle_get_new(context)
         ),
         web.get(
             '/{public_scroll_id}',
-            handle_get_existing(context, PAGINATION_EXPIRE),
+            handle_get_existing(context),
             name='scroll',
         ),
     ])

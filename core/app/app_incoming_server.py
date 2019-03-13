@@ -149,23 +149,22 @@ async def handle_post(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
-def handle_get_new(context, pagination_expire):
-    return _handle_get(context, pagination_expire, es_search_new_scroll)
+def handle_get_new(context):
+    return _handle_get(context, es_search_new_scroll)
 
 
-def handle_get_existing(context, pagination_expire):
-    return _handle_get(context, pagination_expire, es_search_existing_scroll)
+def handle_get_existing(context):
+    return _handle_get(context, es_search_existing_scroll)
 
 
-def _handle_get(context, pagination_expire, get_path_query):
+def _handle_get(context, get_path_query):
     async def handle(request):
         incoming_body = await request.read()
         path, query, body = await get_path_query(context, request.match_info, incoming_body)
 
         async def to_public_scroll_url(private_scroll_id):
             public_scroll_id = random_url_safe(8)
-            await set_private_scroll_id(context, public_scroll_id, private_scroll_id,
-                                        pagination_expire)
+            await set_private_scroll_id(context, public_scroll_id, private_scroll_id)
             url_with_correct_scheme = request.url.with_scheme(
                 request.headers['X-Forwarded-Proto'],
             )

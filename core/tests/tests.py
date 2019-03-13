@@ -481,7 +481,7 @@ class TestApplication(TestBase):
     @async_test
     async def test_pagination_expiry(self):
         with \
-                patch('core.app.app_incoming.PAGINATION_EXPIRE', 1), \
+                patch('core.app.settings.PAGINATION_EXPIRE', 1), \
                 patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                     mock_feed_status=lambda: 200, mock_headers=lambda: {})
