@@ -4,7 +4,7 @@ import time
 from aiohttp import web
 
 from .app_incoming_elasticsearch import (
-    es_search_activities,
+    es_request,
     es_search_existing_scroll,
     es_search_new_scroll,
 )
@@ -157,7 +157,7 @@ def handle_get_new(context):
 
         results, status = await es_search_activities(
             context, path, query, body, {'Content-Type': request.headers['Content-Type']},
-            request, to_public_scroll_url)
+            request)
 
         return json_response(results, status=status)
 
@@ -172,11 +172,49 @@ def handle_get_existing(context):
 
         results, status = await es_search_activities(
             context, path, query, body, {'Content-Type': request.headers['Content-Type']},
-            request, to_public_scroll_url)
+            request)
 
         return json_response(results, status=status)
 
     return handle
+
+
+async def es_search_activities(context, path, query, body, headers, request):
+    results = await es_request(
+        context=context,
+        method='GET',
+        path=path,
+        query=query,
+        headers=headers,
+        payload=body,
+    )
+
+    response = await results.json()
+    return \
+        (await activities(context, response, request), 200) if results.status == 200 else \
+        (response, results.status)
+
+
+async def activities(context, elasticsearch_reponse, request):
+    elasticsearch_hits = elasticsearch_reponse['hits'].get('hits', [])
+    private_scroll_id = elasticsearch_reponse['_scroll_id']
+    next_dict = {
+        'next': await to_public_scroll_url(context, request, private_scroll_id)
+    } if elasticsearch_hits else {}
+
+    return {**{
+        '@context': [
+            'https://www.w3.org/ns/activitystreams',
+            {
+                'dit': 'https://www.trade.gov.uk/ns/activitystreams/v1',
+            }
+        ],
+        'orderedItems': [
+            item['_source']
+            for item in elasticsearch_hits
+        ],
+        'type': 'Collection',
+    }, **next_dict}
 
 
 async def to_public_scroll_url(context, request, private_scroll_id):
