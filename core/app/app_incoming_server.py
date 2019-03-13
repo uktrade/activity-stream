@@ -155,7 +155,7 @@ def handle_get_new(context):
         path, query, body = await es_search_new_scroll(
             context, request.match_info, incoming_body)
 
-        async def to_public_scroll_url(context, private_scroll_id):
+        async def to_public_scroll_url(context, request, private_scroll_id):
             public_scroll_id = random_url_safe(8)
             await set_private_scroll_id(context, public_scroll_id, private_scroll_id)
             url_with_correct_scheme = request.url.with_scheme(
@@ -167,7 +167,7 @@ def handle_get_new(context):
 
         results, status = await es_search_activities(
             context, path, query, body, {'Content-Type': request.headers['Content-Type']},
-            to_public_scroll_url)
+            request, to_public_scroll_url)
 
         return json_response(results, status=status)
 
@@ -180,7 +180,7 @@ def handle_get_existing(context):
         path, query, body = await es_search_existing_scroll(
             context, request.match_info, incoming_body)
 
-        async def to_public_scroll_url(context, private_scroll_id):
+        async def to_public_scroll_url(context, request, private_scroll_id):
             public_scroll_id = random_url_safe(8)
             await set_private_scroll_id(context, public_scroll_id, private_scroll_id)
             url_with_correct_scheme = request.url.with_scheme(
@@ -192,7 +192,7 @@ def handle_get_existing(context):
 
         results, status = await es_search_activities(
             context, path, query, body, {'Content-Type': request.headers['Content-Type']},
-            to_public_scroll_url)
+            request, to_public_scroll_url)
 
         return json_response(results, status=status)
 
