@@ -59,7 +59,7 @@ class ActivityStreamFeed:
         }
 
     @classmethod
-    def convert_to_bulk_es(cls, feed, index_names):
+    def convert_to_bulk_es(cls, feed, activity_index_names, object_index_names):
         return [
             {
                 'action_and_metadata': {
@@ -72,7 +72,20 @@ class ActivityStreamFeed:
                 'source': item
             }
             for item in feed['orderedItems']
-            for index_name in index_names
+            for index_name in activity_index_names
+        ] + [
+            {
+                'action_and_metadata': {
+                    'index': {
+                        '_id': item['object']['id'],
+                        '_index': index_name,
+                        '_type': '_doc',
+                    }
+                },
+                'source': item['object']
+            }
+            for item in feed['orderedItems']
+            for index_name in object_index_names
         ]
 
 
@@ -113,7 +126,7 @@ class ZendeskFeed:
         }
 
     @classmethod
-    def convert_to_bulk_es(cls, page, index_names):
+    def convert_to_bulk_es(cls, page, activity_index_names, object_index_names):
         def company_numbers(description):
             match = re.search(cls.company_number_regex, description)
             return [match[1]] if match else []
@@ -135,7 +148,30 @@ class ZendeskFeed:
             for ticket in page['tickets']
             for company_number in company_numbers(ticket['description'])
             for activity_id in ['dit:zendesk:Ticket:' + str(ticket['id']) + ':Create']
-            for index_name in index_names
+            for index_name in activity_index_names
+        ] + [
+            {
+                'action_and_metadata': {
+                    'index': {
+                        '_index': index_name,
+                        '_type': '_doc',
+                        '_id': activity_id,
+                    },
+                },
+                'source': _source(
+                    activity_id=activity_id,
+                    activity_type='Create',
+                    object_id='dit:zendesk:Ticket:' + str(ticket['id']),
+                    published_date=ticket['created_at'],
+                    dit_application='zendesk',
+                    object_type='dit:zendesk:Ticket',
+                    actor=_company_actor(companies_house_number=company_number)
+                )['object']
+            }
+            for ticket in page['tickets']
+            for company_number in company_numbers(ticket['description'])
+            for activity_id in ['dit:zendesk:Ticket:' + str(ticket['id']) + ':Create']
+            for index_name in object_index_names
         ]
 
 
