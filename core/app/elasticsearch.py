@@ -453,5 +453,19 @@ async def es_request(context, uri, method, path, query, headers, payload):
             return result
 
 
+async def es_search_request(context, uri, method, path, headers, payload):
+    with logged(
+        context.logger, 'Elasticsearch request (%s) (%s) (%s)',
+        [uri, method, path],
+    ):
+        async with context.session.request(
+            method, uri + path,
+            data=payload, headers=headers,
+        ) as result:
+            # Without this, after some number of requests, they end up hanging
+            await result.read()
+            return result
+
+
 class ESMetricsUnavailable(Exception):
     pass

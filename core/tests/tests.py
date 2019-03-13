@@ -660,7 +660,7 @@ class TestApplication(TestBase):
         self.assertEqual(es_bulk_request_dicts[3]['actor']['dit:companiesHouseNumber'], '82312')
 
 
-    # Performs search to /v1/search and expects JSON response in format
+    # Performs search to /v1/objects and expects JSON response in format
     # [
     #   {
     #     heading: String
@@ -692,46 +692,33 @@ class TestApplication(TestBase):
         # -- Helpers --
 
         # Performs authorised GET request to given URL
-        async def _get(url, query):
+        async def _get(url):
             url = 'http://127.0.0.1:8080' + url
-            query = json.dumps(query).encode('utf-8')
             x_forwarded_for = '1.2.3.4, 127.0.0.0'
             auth = hawk_auth_header(
                 'incoming-some-id-3', 'incoming-some-secret-3', url,
-                'GET', query, 'application/json',
+                'GET', '', 'application/json',
             )
 
-            result, status, headers = await get(url, auth, x_forwarded_for, query)
+            result, status, headers = await get(url, auth, x_forwarded_for, '')
             return {'status': status, 'result': result, 'headers': headers}
 
         # -- Test --
 
         # Perform a search for "Article"
-        response = await _get('/v1/', query={
-            'query': {
-                'multi_match': {
-                    'query': 'Article',
-                    'fields': ['object.heading',
-                               'object.title',
-                               'object.url',
-                               'object.introduction']
-                }
-            },
-            '_source': ['object.heading',
-                        'object.title',
-                        'object.url',
-                        'object.introduction'],
-        })
+        response = await _get('/v1/objects?q=Article')
 
         # Response has: status: 200, type: application/json, 5 results
         # First results has: header, title, url and introduction
         self.assertEqual(200, response['status'])
         self.assertEqual('application/json; charset=utf-8',
                          response['headers']['Content-Type'])
-        results = json.loads(response['result'])['orderedItems']
+        results = json.loads(response['result'])
         self.assertEqual(5, len(results))
-        first_result = results[0]['object']
-        self.assertEqual(first_result,
+        article_1 = next(
+            result for result in results if result["title"] == "Article title 1"
+        )
+        self.assertEqual(article_1,
                          {
                              'heading':      'Advice',
                              'title':        'Article title 1',

@@ -1,14 +1,18 @@
 import hmac
 import time
+import json
 
 from aiohttp import web
 
 from .elasticsearch import (
     es_search,
+    es_request,
+    es_search_request,
     es_search_existing_scroll,
     es_search_new_scroll,
     es_min_verification_age,
-    ALIAS_OBJECTS
+    ALIAS_OBJECTS,
+    ALIAS_ACTIVITIES
 )
 from .hawk import (
     authenticate_hawk_header,
@@ -245,15 +249,37 @@ def handle_get_metrics(context):
 
 def handle_get_search(context, es_uri):
     async def handle(request):
-        path = f'/{ALIAS_OBJECTS}/_search'
-        query = ''
-        body = request.body
-        results, status = await es_search(context, es_uri, path, query, body,
-                                          {'Content-Type': request.headers['Content-Type']},
-                                          to_public_scroll_url)
+        query = request.rel_url.query['q'] or ''
+        body = json.dumps({
+            'query': {
+                'multi_match': {
+                    'query': query,
+                    'fields': ['heading',
+                               'title',
+                               'url',
+                               'introduction']
+                }
+            },
+            '_source': ['heading',
+                        'title',
+                        'url',
+                        'introduction']
+        })
+        results = await es_search_request(
+            context=context,
+            uri=es_uri,
+            method='GET',
+            path=f'/{ALIAS_OBJECTS}/_search',
+            headers={'Content-Type': request.headers['Content-Type']},
+            payload=body,
+        )
+        response = await results.json()
+        response = json.dumps(
+            list(map(lambda x: x['_source'], response['hits']['hits']))
+        )
 
-        return web.Response(body=results, status=200, headers={
-            'Content-Type': 'text/plain; charset=utf-8',
+        return web.Response(body=response, status=200, headers={
+            'Content-Type': 'application/json; charset=utf-8',
         })
 
     return handle
