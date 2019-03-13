@@ -155,16 +155,6 @@ def handle_get_new(context):
         path, query, body = await es_search_new_scroll(
             context, request.match_info, incoming_body)
 
-        async def to_public_scroll_url(context, request, private_scroll_id):
-            public_scroll_id = random_url_safe(8)
-            await set_private_scroll_id(context, public_scroll_id, private_scroll_id)
-            url_with_correct_scheme = request.url.with_scheme(
-                request.headers['X-Forwarded-Proto'],
-            )
-            return str(url_with_correct_scheme.join(
-                request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)
-            ))
-
         results, status = await es_search_activities(
             context, path, query, body, {'Content-Type': request.headers['Content-Type']},
             request, to_public_scroll_url)
@@ -180,16 +170,6 @@ def handle_get_existing(context):
         path, query, body = await es_search_existing_scroll(
             context, request.match_info, incoming_body)
 
-        async def to_public_scroll_url(context, request, private_scroll_id):
-            public_scroll_id = random_url_safe(8)
-            await set_private_scroll_id(context, public_scroll_id, private_scroll_id)
-            url_with_correct_scheme = request.url.with_scheme(
-                request.headers['X-Forwarded-Proto'],
-            )
-            return str(url_with_correct_scheme.join(
-                request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)
-            ))
-
         results, status = await es_search_activities(
             context, path, query, body, {'Content-Type': request.headers['Content-Type']},
             request, to_public_scroll_url)
@@ -197,6 +177,17 @@ def handle_get_existing(context):
         return json_response(results, status=status)
 
     return handle
+
+
+async def to_public_scroll_url(context, request, private_scroll_id):
+    public_scroll_id = random_url_safe(8)
+    await set_private_scroll_id(context, public_scroll_id, private_scroll_id)
+    url_with_correct_scheme = request.url.with_scheme(
+        request.headers['X-Forwarded-Proto'],
+    )
+    return str(url_with_correct_scheme.join(
+        request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)
+    ))
 
 
 def handle_get_check(parent_context, feed_endpoints):
