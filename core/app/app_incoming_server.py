@@ -5,8 +5,8 @@ from aiohttp import web
 
 from .app_incoming_elasticsearch import (
     es_request,
-    es_search_existing_scroll,
-    es_search_new_scroll,
+    es_search_query_existing_scroll,
+    es_search_query_new_scroll,
 )
 from .elasticsearch import (
     es_min_verification_age,
@@ -152,7 +152,7 @@ async def handle_post(_):
 def handle_get_new(context):
     async def handle(request):
         incoming_body = await request.read()
-        path, query, body = await es_search_new_scroll(
+        path, query, body = await es_search_query_new_scroll(
             context, request.match_info, incoming_body)
 
         results, status = await es_search_activities(
@@ -167,7 +167,7 @@ def handle_get_new(context):
 def handle_get_existing(context):
     async def handle(request):
         incoming_body = await request.read()
-        path, query, body = await es_search_existing_scroll(
+        path, query, body = await es_search_query_existing_scroll(
             context, request.match_info, incoming_body)
 
         results, status = await es_search_activities(

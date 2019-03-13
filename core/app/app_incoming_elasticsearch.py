@@ -13,11 +13,11 @@ from .elasticsearch import (
 )
 
 
-async def es_search_new_scroll(_, __, query):
+async def es_search_query_new_scroll(_, __, query):
     return f'/{ALIAS}/_search', {'scroll': '15s'}, query
 
 
-async def es_search_existing_scroll(context, match_info, _):
+async def es_search_query_existing_scroll(context, match_info, _):
     # This is not wrapped in a try/except. This function should only be
     # called if public_scroll_id is in match_info, and there is some server
     # error if this isn't present, and so bubbling up and resulting in a 500
