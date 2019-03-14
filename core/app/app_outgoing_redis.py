@@ -1,7 +1,5 @@
 import asyncio
 
-import aioredis
-
 from .logger import (
     logged,
 )
@@ -18,10 +16,6 @@ from .utils import (
 FEED_UPDATE_URL_EXPIRE = 60 * 60 * 24 * 31
 NOT_EXISTS = b'__NOT_EXISTS__'
 SHOW_FEED_AS_RED_IF_NO_REQUEST_IN_SECONDS = 10
-
-
-async def redis_get_client(redis_uri):
-    return await aioredis.create_redis_pool(redis_uri, minsize=3, maxsize=3)
 
 
 async def acquire_and_keep_lock(parent_context, exception_intervals, key):
