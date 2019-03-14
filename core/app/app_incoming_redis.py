@@ -1,3 +1,5 @@
+from . import settings
+
 # So the latest URL for feeds don't hang around in Redis for
 # ever if the feed is turned off
 FEED_UPDATE_URL_EXPIRE = 60 * 60 * 24 * 31
@@ -5,9 +7,9 @@ NOT_EXISTS = b'__NOT_EXISTS__'
 SHOW_FEED_AS_RED_IF_NO_REQUEST_IN_SECONDS = 10
 
 
-async def set_private_scroll_id(context, public_scroll_id, private_scroll_id, expire):
+async def set_private_scroll_id(context, public_scroll_id, private_scroll_id):
     await context.redis_client.execute('SET', f'private-scroll-id-{public_scroll_id}',
-                                       private_scroll_id, 'EX', expire)
+                                       private_scroll_id, 'EX', settings.PAGINATION_EXPIRE)
 
 
 async def get_private_scroll_id(context, public_scroll_id):

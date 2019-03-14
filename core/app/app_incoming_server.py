@@ -4,9 +4,9 @@ import time
 from aiohttp import web
 
 from .app_incoming_elasticsearch import (
-    es_search,
-    es_search_existing_scroll,
-    es_search_new_scroll,
+    es_request,
+    es_search_query_existing_scroll,
+    es_search_query_new_scroll,
 )
 from .elasticsearch import (
     es_min_verification_age,
@@ -149,37 +149,83 @@ async def handle_post(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
-def handle_get_new(context, pagination_expire):
-    return _handle_get(context, pagination_expire, es_search_new_scroll)
-
-
-def handle_get_existing(context, pagination_expire):
-    return _handle_get(context, pagination_expire, es_search_existing_scroll)
-
-
-def _handle_get(context, pagination_expire, get_path_query):
+def handle_get_new(context):
     async def handle(request):
         incoming_body = await request.read()
-        path, query, body = await get_path_query(context, request.match_info, incoming_body)
+        path, query, body = await es_search_query_new_scroll(
+            context, request.match_info, incoming_body)
 
-        async def to_public_scroll_url(private_scroll_id):
-            public_scroll_id = random_url_safe(8)
-            await set_private_scroll_id(context, public_scroll_id, private_scroll_id,
-                                        pagination_expire)
-            url_with_correct_scheme = request.url.with_scheme(
-                request.headers['X-Forwarded-Proto'],
-            )
-            return str(url_with_correct_scheme.join(
-                request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)
-            ))
-
-        results, status = await es_search(context, path, query, body,
-                                          {'Content-Type': request.headers['Content-Type']},
-                                          to_public_scroll_url)
+        results, status = await es_search_activities(
+            context, path, query, body, {'Content-Type': request.headers['Content-Type']},
+            request)
 
         return json_response(results, status=status)
 
     return handle
+
+
+def handle_get_existing(context):
+    async def handle(request):
+        incoming_body = await request.read()
+        path, query, body = await es_search_query_existing_scroll(
+            context, request.match_info, incoming_body)
+
+        results, status = await es_search_activities(
+            context, path, query, body, {'Content-Type': request.headers['Content-Type']},
+            request)
+
+        return json_response(results, status=status)
+
+    return handle
+
+
+async def es_search_activities(context, path, query, body, headers, request):
+    results = await es_request(
+        context=context,
+        method='GET',
+        path=path,
+        query=query,
+        headers=headers,
+        payload=body,
+    )
+
+    response = await results.json()
+    return \
+        (await activities(context, response, request), 200) if results.status == 200 else \
+        (response, results.status)
+
+
+async def activities(context, elasticsearch_reponse, request):
+    elasticsearch_hits = elasticsearch_reponse['hits'].get('hits', [])
+    private_scroll_id = elasticsearch_reponse['_scroll_id']
+    next_dict = {
+        'next': await to_public_scroll_url(context, request, private_scroll_id)
+    } if elasticsearch_hits else {}
+
+    return {**{
+        '@context': [
+            'https://www.w3.org/ns/activitystreams',
+            {
+                'dit': 'https://www.trade.gov.uk/ns/activitystreams/v1',
+            }
+        ],
+        'orderedItems': [
+            item['_source']
+            for item in elasticsearch_hits
+        ],
+        'type': 'Collection',
+    }, **next_dict}
+
+
+async def to_public_scroll_url(context, request, private_scroll_id):
+    public_scroll_id = random_url_safe(8)
+    await set_private_scroll_id(context, public_scroll_id, private_scroll_id)
+    url_with_correct_scheme = request.url.with_scheme(
+        request.headers['X-Forwarded-Proto'],
+    )
+    return str(url_with_correct_scheme.join(
+        request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)
+    ))
 
 
 def handle_get_check(parent_context, feed_endpoints):
