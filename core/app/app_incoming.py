@@ -20,7 +20,7 @@ from .metrics import (
 from .raven import (
     get_raven_client,
 )
-from .server import (
+from .app_incoming_server import (
     INCORRECT,
     authenticate_by_ip,
     authenticator,
@@ -45,9 +45,9 @@ from .utils import (
     main,
     normalise_environment,
 )
+from . import settings
 
 NONCE_EXPIRE = 120
-PAGINATION_EXPIRE = 10
 
 
 async def run_incoming_application():
@@ -65,6 +65,7 @@ async def run_incoming_application():
         } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
         ip_whitelist = env['INCOMING_IP_WHITELIST']
 
+    settings.ES_URI = es_uri
     conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
     session = aiohttp.ClientSession(
         connector=conn,
@@ -83,8 +84,7 @@ async def run_incoming_application():
 
     with logged(context.logger, 'Creating listening web application', []):
         runner = await create_incoming_application(
-            context, port, ip_whitelist, incoming_key_pairs,
-            es_uri, feed_endpoints,
+            context, port, ip_whitelist, incoming_key_pairs, feed_endpoints,
         )
 
     async def cleanup():
@@ -102,8 +102,7 @@ async def run_incoming_application():
 
 
 async def create_incoming_application(
-        context, port, ip_whitelist, incoming_key_pairs,
-        es_uri, feed_endpoints):
+        context, port, ip_whitelist, incoming_key_pairs, feed_endpoints):
 
     app = web.Application(middlewares=[
         server_logger(context.logger),
@@ -119,30 +118,30 @@ async def create_incoming_application(
     private_app.add_routes([
         web.get(
             '/objects',
-            handle_get_search(context, es_uri)
+            handle_get_search(context)
         ),
         web.get(
             '/activities',
-             handle_get_new(context, PAGINATION_EXPIRE, es_uri)
+             handle_get_new(context)
          ),
          web.get(
             '/activities/{public_scroll_id}',
-            handle_get_existing(context, PAGINATION_EXPIRE, es_uri),
+            handle_get_existing(context),
             name='scroll',
         ),
         web.post('/', handle_post),
         web.get(
             '/',
-            handle_get_new(context, PAGINATION_EXPIRE, es_uri)
+            handle_get_new(context)
         ),
         web.get(
             '/{public_scroll_id}',
-            handle_get_existing(context, PAGINATION_EXPIRE, es_uri)
-        )
+            handle_get_existing(context),
+        ),
     ])
     app.add_subapp('/v1/', private_app)
     app.add_routes([
-        web.get('/check', handle_get_check(context, es_uri, feed_endpoints)),
+        web.get('/check', handle_get_check(context, feed_endpoints)),
         web.get('/metrics', handle_get_metrics(context)),
     ])
 

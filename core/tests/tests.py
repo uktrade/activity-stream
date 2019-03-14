@@ -51,7 +51,7 @@ class TestBase(unittest.TestCase):
         await delete_all_es_data()
         await delete_all_redis_data()
 
-        os_environ_patcher = patch.dict(os.environ, env)
+        os_environ_patcher = patch.dict(os.environ, env, clear=True)
         os_environ_patcher.start()
         self.addCleanup(os_environ_patcher.stop)
 
@@ -481,35 +481,36 @@ class TestApplication(TestBase):
     @async_test
     async def test_pagination_expiry(self):
         with \
-                patch('core.app.app_incoming.PAGINATION_EXPIRE', 1), \
+                patch('core.app.settings.PAGINATION_EXPIRE', 1), \
                 patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                     mock_feed_status=lambda: 200, mock_headers=lambda: {})
             await wait_until_get_working()
 
-        url_1 = 'http://127.0.0.1:8080/v1/'
-        x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        await get_until(url_1, x_forwarded_for, has_at_least_ordered_items(2))
+            url_1 = 'http://127.0.0.1:8080/v1/'
+            x_forwarded_for = '1.2.3.4, 127.0.0.0'
+            await get_until(url_1, x_forwarded_for, has_at_least_ordered_items(2))
 
-        query = json.dumps({
-            'size': '1',
-        }).encode('utf-8')
+            query = json.dumps({
+                'size': '1',
+            }).encode('utf-8')
 
-        auth = hawk_auth_header(
-            'incoming-some-id-3', 'incoming-some-secret-3', url_1,
-            'GET', query, 'application/json',
-        )
-        result_1, _, _ = await get(url_1, auth, x_forwarded_for, query)
-        result_1_json = json.loads(result_1)
-        url_2 = result_1_json['next']
+            auth = hawk_auth_header(
+                'incoming-some-id-3', 'incoming-some-secret-3', url_1,
+                'GET', query, 'application/json',
+            )
+            result_1, _, _ = await get(url_1, auth, x_forwarded_for, query)
+            result_1_json = json.loads(result_1)
+            url_2 = result_1_json['next']
 
-        await asyncio.sleep(1)
+            await ORIGINAL_SLEEP(1)
 
-        auth_2 = hawk_auth_header(
-            'incoming-some-id-3', 'incoming-some-secret-3', url_2,
-            'GET', b'', 'application/json',
-        )
-        result_2, status_2, _ = await get(url_2, auth_2, x_forwarded_for, b'')
+            auth_2 = hawk_auth_header(
+                'incoming-some-id-3', 'incoming-some-secret-3', url_2,
+                'GET', b'', 'application/json',
+            )
+            result_2, status_2, _ = await get(url_2, auth_2, x_forwarded_for, b'')
+
         self.assertEqual(json.loads(result_2)['details'], 'Scroll ID not found.')
         self.assertEqual(status_2, 404)
 

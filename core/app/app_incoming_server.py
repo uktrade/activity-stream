@@ -4,17 +4,18 @@ import json
 
 from aiohttp import web
 
-from .elasticsearch import (
-    es_search,
+from .app_incoming_elasticsearch import (
     es_request,
     es_search_request,
-    es_search_existing_scroll,
-    es_search_new_scroll,
+    es_search_query_existing_scroll,
+    es_search_query_new_scroll,
+)
+from .elasticsearch import (
     es_min_verification_age,
     ALIAS_OBJECTS,
     ALIAS_ACTIVITIES
 )
-from .hawk import (
+from .app_incoming_hawk import (
     authenticate_hawk_header,
 )
 from .logger import (
@@ -25,7 +26,7 @@ from .utils import (
     get_child_context,
     random_url_safe,
 )
-from .redis import (
+from .app_incoming_redis import (
     set_private_scroll_id,
     redis_get_metrics,
     get_feeds_status,
@@ -152,40 +153,86 @@ async def handle_post(_):
     return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
-def handle_get_new(context, pagination_expire, es_uri):
-    return _handle_get(context, pagination_expire, es_uri, es_search_new_scroll)
-
-
-def handle_get_existing(context, pagination_expire, es_uri):
-    return _handle_get(context, pagination_expire, es_uri, es_search_existing_scroll)
-
-
-def _handle_get(context, pagination_expire, es_uri, get_path_query):
+def handle_get_new(context):
     async def handle(request):
         incoming_body = await request.read()
-        path, query, body = await get_path_query(context, request.match_info, incoming_body)
+        path, query, body = await es_search_query_new_scroll(
+            context, request.match_info, incoming_body)
 
-        async def to_public_scroll_url(private_scroll_id):
-            public_scroll_id = random_url_safe(8)
-            await set_private_scroll_id(context, public_scroll_id, private_scroll_id,
-                                        pagination_expire)
-            url_with_correct_scheme = request.url.with_scheme(
-                request.headers['X-Forwarded-Proto'],
-            )
-            return str(url_with_correct_scheme.join(
-                request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)
-            ))
-
-        results, status = await es_search(context, es_uri, path, query, body,
-                                          {'Content-Type': request.headers['Content-Type']},
-                                          to_public_scroll_url)
+        results, status = await es_search_activities(
+            context, path, query, body, {'Content-Type': request.headers['Content-Type']},
+            request)
 
         return json_response(results, status=status)
 
     return handle
 
 
-def handle_get_check(parent_context, es_uri, feed_endpoints):
+def handle_get_existing(context):
+    async def handle(request):
+        incoming_body = await request.read()
+        path, query, body = await es_search_query_existing_scroll(
+            context, request.match_info, incoming_body)
+
+        results, status = await es_search_activities(
+            context, path, query, body, {'Content-Type': request.headers['Content-Type']},
+            request)
+
+        return json_response(results, status=status)
+
+    return handle
+
+
+async def es_search_activities(context, path, query, body, headers, request):
+    results = await es_request(
+        context=context,
+        method='GET',
+        path=path,
+        query=query,
+        headers=headers,
+        payload=body,
+    )
+
+    response = await results.json()
+    return \
+        (await activities(context, response, request), 200) if results.status == 200 else \
+        (response, results.status)
+
+
+async def activities(context, elasticsearch_reponse, request):
+    elasticsearch_hits = elasticsearch_reponse['hits'].get('hits', [])
+    private_scroll_id = elasticsearch_reponse['_scroll_id']
+    next_dict = {
+        'next': await to_public_scroll_url(context, request, private_scroll_id)
+    } if elasticsearch_hits else {}
+
+    return {**{
+        '@context': [
+            'https://www.w3.org/ns/activitystreams',
+            {
+                'dit': 'https://www.trade.gov.uk/ns/activitystreams/v1',
+            }
+        ],
+        'orderedItems': [
+            item['_source']
+            for item in elasticsearch_hits
+        ],
+        'type': 'Collection',
+    }, **next_dict}
+
+
+async def to_public_scroll_url(context, request, private_scroll_id):
+    public_scroll_id = random_url_safe(8)
+    await set_private_scroll_id(context, public_scroll_id, private_scroll_id)
+    url_with_correct_scheme = request.url.with_scheme(
+        request.headers['X-Forwarded-Proto'],
+    )
+    return str(url_with_correct_scheme.join(
+        request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)
+    ))
+
+
+def handle_get_check(parent_context, feed_endpoints):
     start_counter = time.perf_counter()
 
     # Grace period after uptime to allow new feeds to start reporting
@@ -200,7 +247,7 @@ def handle_get_check(parent_context, es_uri, feed_endpoints):
             redis_result = await context.redis_client.execute('GET', 'redis-check')
             is_redis_green = redis_result == b'GREEN'
 
-            min_age = await es_min_verification_age(context, es_uri)
+            min_age = await es_min_verification_age(context)
             is_elasticsearch_green = min_age < 60
 
             uptime = time.perf_counter() - start_counter
@@ -247,13 +294,12 @@ def handle_get_metrics(context):
     return handle
 
 
-def handle_get_search(context, es_uri):
+def handle_get_search(context):
     async def handle(request):
         body = await request.read()
 
         results = await es_search_request(
             context=context,
-            uri=es_uri,
             method='GET',
             path=f'/{ALIAS_OBJECTS}/_search',
             headers={'Content-Type': request.headers['Content-Type']},

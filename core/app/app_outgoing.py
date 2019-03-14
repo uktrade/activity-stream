@@ -8,7 +8,7 @@ from prometheus_client import (
 )
 import ujson
 
-from .elasticsearch import (
+from .app_outgoing_elasticsearch import (
     ESMetricsUnavailable,
     es_bulk,
     es_feed_activities_total,
@@ -25,6 +25,9 @@ from .elasticsearch import (
     add_remove_aliases_atomically,
     delete_indexes,
     refresh_index,
+)
+from .elasticsearch import (
+    es_min_verification_age,
 )
 
 from .feeds import (
@@ -45,6 +48,8 @@ from .raven import (
 )
 from .redis import (
     redis_get_client,
+)
+from .app_outgoing_redis import (
     acquire_and_keep_lock,
     set_feed_updates_seed_url_init,
     set_feed_updates_seed_url,
@@ -53,17 +58,20 @@ from .redis import (
     redis_set_metrics,
     set_feed_status,
 )
+from .app_outgoing_utils import (
+    async_repeat_until_cancelled,
+    http_429_retry_after,
+)
 from .utils import (
     Context,
-    async_repeat_until_cancelled,
     cancel_non_current_tasks,
     get_child_context,
     get_common_config,
-    http_429_retry_after,
     main,
     normalise_environment,
     sleep,
 )
+from . import settings
 
 EXCEPTION_INTERVALS = [1, 2, 4, 8, 16, 32, 64]
 METRICS_INTERVAL = 1
@@ -79,6 +87,7 @@ async def run_outgoing_application():
         es_uri, redis_uri, sentry = get_common_config(env)
         feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
+    settings.ES_URI = es_uri
     conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
     session = aiohttp.ClientSession(
         connector=conn,
@@ -96,9 +105,9 @@ async def run_outgoing_application():
         raven_client=raven_client, redis_client=redis_client, session=session)
 
     await acquire_and_keep_lock(context, EXCEPTION_INTERVALS, 'lock')
-    await create_outgoing_application(context, feed_endpoints, es_uri)
+    await create_outgoing_application(context, feed_endpoints)
     await create_metrics_application(
-        context, metrics_registry, feed_endpoints, es_uri,
+        context, metrics_registry, feed_endpoints,
     )
 
     async def cleanup():
@@ -114,28 +123,28 @@ async def run_outgoing_application():
     return cleanup
 
 
-async def create_outgoing_application(context, feed_endpoints, es_uri):
+async def create_outgoing_application(context, feed_endpoints):
     async def ingester():
-        await ingest_feeds(context, feed_endpoints, es_uri)
+        await ingest_feeds(context, feed_endpoints)
 
     asyncio.get_event_loop().create_task(
         async_repeat_until_cancelled(context, EXCEPTION_INTERVALS, ingester)
     )
 
 
-async def ingest_feeds(context, feed_endpoints, es_uri):
+async def ingest_feeds(context, feed_endpoints):
     all_feed_ids = feed_unique_ids(feed_endpoints)
-    indexes_without_alias, indexes_with_alias = await get_old_index_names(context, es_uri)
+    indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
 
     indexes_to_delete = indexes_matching_no_feeds(
         indexes_without_alias + indexes_with_alias, all_feed_ids)
     await delete_indexes(
-        get_child_context(context, 'initial-delete'), es_uri, indexes_to_delete,
+        get_child_context(context, 'initial-delete'), indexes_to_delete,
     )
 
     def feed_ingester(ingest_type_context, feed_lock, feed_endpoint, ingest_func):
         async def _feed_ingester():
-            await ingest_func(ingest_type_context, feed_lock, feed_endpoint, es_uri)
+            await ingest_func(ingest_type_context, feed_lock, feed_endpoint)
         return _feed_ingester
 
     await asyncio.gather(*[
@@ -154,7 +163,7 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-async def ingest_feed_full(context, feed_lock, feed, es_uri):
+async def ingest_feed_full(context, feed_lock, feed,):
     metrics = context.metrics
     with \
             logged(context.logger, 'Full ingest', []), \
@@ -163,38 +172,38 @@ async def ingest_feed_full(context, feed_lock, feed, es_uri):
 
         await set_feed_updates_seed_url_init(context, feed.unique_id)
 
-        indexes_without_alias, _ = await get_old_index_names(context, es_uri)
+        indexes_without_alias, _ = await get_old_index_names(context)
         indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
-        await delete_indexes(context, es_uri, indexes_to_delete)
+        await delete_indexes(context, indexes_to_delete)
 
         activities_index_name, objects_index_name = get_new_index_names(feed.unique_id)
-        await create_activities_index(context, es_uri, activities_index_name)
-        await create_objects_index(context, es_uri, objects_index_name) # UPDATE ME
+        await create_activities_index(context, activities_index_name)
+        await create_objects_index(context, objects_index_name)
 
         href = feed.seed
         while href:
             updates_href = href
             href = await ingest_feed_page(
-                context, 'full', feed_lock, feed, es_uri,
+                context, 'full', feed_lock, feed,
                 [activities_index_name], [objects_index_name], href,
             )
             await sleep(context, feed.full_ingest_page_interval)
 
-        await refresh_index(context, es_uri, activities_index_name)
-        await refresh_index(context, es_uri, objects_index_name)
+        await refresh_index(context, activities_index_name)
+        await refresh_index(context, objects_index_name)
         await add_remove_aliases_atomically(
-            context, es_uri, activities_index_name, objects_index_name, feed.unique_id)
+            context, activities_index_name, objects_index_name, feed.unique_id)
         await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
 
 
-async def ingest_feed_updates(context, feed_lock, feed, es_uri):
+async def ingest_feed_updates(context, feed_lock, feed):
     metrics = context.metrics
     with \
             logged(context.logger, 'Updates ingest', []), \
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'updates']):
 
         href = await get_feed_updates_url(context, feed.unique_id)
-        indexes_without_alias, indexes_with_alias = await get_old_index_names(context, es_uri)
+        indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
 
         # We deliberatly ingest into both the live and ingesting indexes
         indexes_to_ingest_into = indexes_matching_feeds(
@@ -204,17 +213,17 @@ async def ingest_feed_updates(context, feed_lock, feed, es_uri):
 
         while href:
             updates_href = href
-            href = await ingest_feed_page(context, 'updates', feed_lock, feed, es_uri,
+            href = await ingest_feed_page(context, 'updates', feed_lock, feed,
                                           activities_index_names, objects_index_names, href)
 
         for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
-            await refresh_index(context, es_uri, index_name)
+            await refresh_index(context, index_name)
         await set_feed_updates_url(context, feed.unique_id, updates_href)
 
     await sleep(context, feed.updates_page_interval)
 
 
-async def ingest_feed_page(context, ingest_type, feed_lock, feed, es_uri,
+async def ingest_feed_page(context, ingest_type, feed_lock, feed,
                            activity_index_names, objects_index_names, href):
     with \
             logged(context.logger, 'Polling/pushing page', []), \
@@ -243,7 +252,7 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed, es_uri,
                              [feed.unique_id, ingest_type, 'push']), \
                 metric_counter(context.metrics['ingest_activities_nonunique_total'],
                                [feed.unique_id], len(es_bulk_items)):
-            await es_bulk(context, es_uri, es_bulk_items)
+            await es_bulk(context, es_bulk_items)
 
         assumed_max_es_ingest_time = 10
         max_interval = \
@@ -261,32 +270,31 @@ async def get_feed_contents(context, href, headers, **_):
         return await result.read()
 
 
-async def create_metrics_application(parent_context, metrics_registry, feed_endpoints,
-                                     es_uri):
+async def create_metrics_application(parent_context, metrics_registry, feed_endpoints):
     context = get_child_context(parent_context, 'metrics')
     metrics = context.metrics
 
     async def poll_metrics():
         with logged(context.logger, 'Polling', []):
-            searchable = await es_searchable_total(context, es_uri)
+            searchable = await es_searchable_total(context)
             metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
 
             await set_metric_if_can(
                 metrics['elasticsearch_activities_total'],
                 ['nonsearchable'],
-                es_nonsearchable_total(context, es_uri),
+                es_nonsearchable_total(context),
             )
             await set_metric_if_can(
                 metrics['elasticsearch_activities_age_minimum_seconds'],
                 ['verification'],
-                es_min_verification_age(context, es_uri),
+                es_min_verification_age(context),
             )
 
             feed_ids = feed_unique_ids(feed_endpoints)
             for feed_id in feed_ids:
                 try:
                     searchable, nonsearchable = await es_feed_activities_total(
-                        context, es_uri, feed_id)
+                        context, feed_id)
                     metrics['elasticsearch_feed_activities_total'].labels(
                         feed_id, 'searchable').set(searchable)
                     metrics['elasticsearch_feed_activities_total'].labels(

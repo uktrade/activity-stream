@@ -59,10 +59,10 @@ class TestProcess(unittest.TestCase):
             }, stdout=asyncio.subprocess.PIPE)
         server_out = await asyncio.create_subprocess_exec(
             *[sys.executable, '-m', 'core.app.app_outgoing'],
-            env=env, stdout=asyncio.subprocess.PIPE)
+            env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
         server_inc = await asyncio.create_subprocess_exec(
             *[sys.executable, '-m', 'core.app.app_incoming'],
-            env=env, stdout=asyncio.subprocess.PIPE)
+            env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
 
         stdout_out = [None]
         stdout_inc = [None]
