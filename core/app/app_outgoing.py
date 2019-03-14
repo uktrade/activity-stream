@@ -8,13 +8,12 @@ from prometheus_client import (
 )
 import ujson
 
-from .elasticsearch import (
+from .app_outgoing_elasticsearch import (
     ESMetricsUnavailable,
     es_bulk,
     es_feed_activities_total,
     es_searchable_total,
     es_nonsearchable_total,
-    es_min_verification_age,
     create_index,
     get_new_index_name,
     get_old_index_names,
@@ -23,6 +22,9 @@ from .elasticsearch import (
     add_remove_aliases_atomically,
     delete_indexes,
     refresh_index,
+)
+from .elasticsearch import (
+    es_min_verification_age,
 )
 
 from .feeds import (
@@ -43,6 +45,8 @@ from .raven import (
 )
 from .redis import (
     redis_get_client,
+)
+from .app_outgoing_redis import (
     acquire_and_keep_lock,
     set_feed_updates_seed_url_init,
     set_feed_updates_seed_url,
@@ -51,13 +55,15 @@ from .redis import (
     redis_set_metrics,
     set_feed_status,
 )
+from .app_outgoing_utils import (
+    async_repeat_until_cancelled,
+    http_429_retry_after,
+)
 from .utils import (
     Context,
-    async_repeat_until_cancelled,
     cancel_non_current_tasks,
     get_child_context,
     get_common_config,
-    http_429_retry_after,
     main,
     normalise_environment,
     sleep,
