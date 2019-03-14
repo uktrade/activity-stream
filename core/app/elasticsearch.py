@@ -53,7 +53,7 @@ async def es_min_verification_age(context):
 
 async def es_request_non_200_exception(context, method, path, query, headers, payload):
     results = await es_request(context, method, path, query, headers, payload)
-    if results.status != 200:
+    if results.status not in [200, 201]:
         raise Exception(await results.text())
     return results
 
