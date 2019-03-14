@@ -692,21 +692,37 @@ class TestApplication(TestBase):
         # -- Helpers --
 
         # Performs authorised GET request to given URL
-        async def _get(url):
+        async def _get(url, body):
             url = 'http://127.0.0.1:8080' + url
             x_forwarded_for = '1.2.3.4, 127.0.0.0'
             auth = hawk_auth_header(
                 'incoming-some-id-3', 'incoming-some-secret-3', url,
-                'GET', '', 'application/json',
+                'GET', body, 'application/json',
             )
 
-            result, status, headers = await get(url, auth, x_forwarded_for, '')
+            result, status, headers = await get(url, auth, x_forwarded_for, body)
             return {'status': status, 'result': result, 'headers': headers}
 
         # -- Test --
 
         # Perform a search for "Article"
-        response = await _get('/v1/objects?q=Article')
+        body = json.dumps({
+            'query': {
+                'multi_match': {
+                    'query': "Article",
+                    'fields': ['heading',
+                               'title',
+                               'url',
+                               'introduction']
+                }
+            },
+            '_source': ['heading',
+                        'title',
+                        'url',
+                        'introduction']
+        })
+
+        response = await _get('/v1/objects', body)
 
         # Response has: status: 200, type: application/json, 5 results
         # First results has: header, title, url and introduction

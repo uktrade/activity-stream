@@ -249,22 +249,8 @@ def handle_get_metrics(context):
 
 def handle_get_search(context, es_uri):
     async def handle(request):
-        query = request.rel_url.query['q'] or ''
-        body = json.dumps({
-            'query': {
-                'multi_match': {
-                    'query': query,
-                    'fields': ['heading',
-                               'title',
-                               'url',
-                               'introduction']
-                }
-            },
-            '_source': ['heading',
-                        'title',
-                        'url',
-                        'introduction']
-        })
+        body = await request.read()
+
         results = await es_search_request(
             context=context,
             uri=es_uri,
