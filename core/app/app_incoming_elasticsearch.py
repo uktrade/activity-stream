@@ -6,13 +6,17 @@ import ujson
 from .app_incoming_redis import (
     get_private_scroll_id,
 )
-
+from .utils import (
+    random_url_safe,
+)
 from .elasticsearch import (
     ALIAS_ACTIVITIES,
     ALIAS_OBJECTS,
     es_request,
 )
-
+from .app_incoming_redis import (
+    set_private_scroll_id,
+)
 
 async def es_search_query_new_scroll(_, __, query):
     return f'/{ALIAS_ACTIVITIES}/_search', {'scroll': '15s'}, query
@@ -37,7 +41,41 @@ async def es_search_query_existing_scroll(context, match_info, _):
     }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
 
 
-async def es_search_activities(context, path, query, body, headers, request, to_scroll_url):
+async def es_search_activities(context, path, query, body, headers, request):
+    
+    async def activities(context, elasticsearch_reponse, request):
+        
+        async def to_public_scroll_url(context, request, private_scroll_id):
+            public_scroll_id = random_url_safe(8)
+            await set_private_scroll_id(context, public_scroll_id, private_scroll_id)
+            url_with_correct_scheme = request.url.with_scheme(
+                request.headers['X-Forwarded-Proto'],
+            )
+            return str(url_with_correct_scheme.join(
+                request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)
+            ))
+            
+        elasticsearch_hits = elasticsearch_reponse['hits'].get('hits', [])
+        private_scroll_id = elasticsearch_reponse['_scroll_id']
+        next_dict = {
+            'next': await to_public_scroll_url(context, request, private_scroll_id)
+        } if elasticsearch_hits else {}
+
+        return {**{
+            '@context': [
+                'https://www.w3.org/ns/activitystreams',
+                {
+                    'dit': 'https://www.trade.gov.uk/ns/activitystreams/v1',
+                }
+            ],
+            'orderedItems': [
+                item['_source']
+                for item in elasticsearch_hits
+            ],
+            'type': 'Collection',
+        }, **next_dict}
+
+
     results = await es_request(
         context=context,
         method='GET',
@@ -49,42 +87,6 @@ async def es_search_activities(context, path, query, body, headers, request, to_
 
     response = await results.json()
     return \
-        (await activities(context, response, request, to_scroll_url), 200) \
-        if results.status == 200 else \
+        (await activities(context, response, request), 200) if results.status == 200 else \
         (response, results.status)
 
-
-async def es_search_request(context, uri, method, path, headers, payload):
-    with logged(
-        context.logger, 'Elasticsearch request (%s) (%s) (%s)',
-        [uri, method, path],
-    ):
-        async with context.session.request(
-            method, uri + path,
-            data=payload, headers=headers,
-        ) as result:
-            # Without this, after some number of requests, they end up hanging
-            await result.read()
-            return result
-
-
-async def activities(elasticsearch_reponse, to_public_scroll_url):
-    elasticsearch_hits = elasticsearch_reponse['hits'].get('hits', [])
-    private_scroll_id = elasticsearch_reponse['_scroll_id']
-    next_dict = {
-        'next': await to_public_scroll_url(private_scroll_id)
-    } if elasticsearch_hits else {}
-
-    return {**{
-        '@context': [
-            'https://www.w3.org/ns/activitystreams',
-            {
-                'dit': 'https://www.trade.gov.uk/ns/activitystreams/v1',
-            }
-        ],
-        'orderedItems': [
-            item['_source']
-            for item in elasticsearch_hits
-        ],
-        'type': 'Collection',
-    }, **next_dict}
