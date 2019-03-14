@@ -20,7 +20,7 @@ from .metrics import (
 from .raven import (
     get_raven_client,
 )
-from .server import (
+from .app_incoming_server import (
     INCORRECT,
     authenticate_by_ip,
     authenticator,
