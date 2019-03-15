@@ -21,8 +21,6 @@ jobs:
           name: Install dependencies
           command: |
             pip install --cache-dir /root/cache/pip -r core/requirements_test.txt
-            pip install --cache-dir /root/cache/pip pre-commit==1.8.2
-            pre-commit install --install-hooks
             curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
             chmod +x ./cc-test-reporter
       - save_cache:
