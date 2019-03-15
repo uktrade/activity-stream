@@ -660,7 +660,6 @@ class TestApplication(TestBase):
                          ['type'][1], 'dit:exportOpportunities:Enquiry')
         self.assertEqual(es_bulk_request_dicts[3]['actor']['dit:companiesHouseNumber'], '82312')
 
-
     # Performs search to /v1/objects and expects JSON response in format
     # [
     #   {
@@ -710,7 +709,7 @@ class TestApplication(TestBase):
         body = json.dumps({
             'query': {
                 'multi_match': {
-                    'query': "Article",
+                    'query': 'Article',
                     'fields': ['heading',
                                'title',
                                'url',
@@ -733,16 +732,14 @@ class TestApplication(TestBase):
         results = json.loads(response['result'])['hits']['hits']
         self.assertEqual(5, len(results))
         article_1 = next(
-            result for result in results if result["_source"]["title"] == "Article title 1"
+            result for result in results if result['_source']['title'] == 'Article title 1'
         )
-        self.assertEqual(article_1["_source"],
-                         {
-                             'heading':      'Advice',
-                             'title':        'Article title 1',
-                             'url':          'www.great.gov.uk/article',
-                             'introduction': 'Lorem ipsum'
-                         })
-
+        self.assertEqual(article_1['_source'], {
+            'heading':      'Advice',
+            'title':        'Article title 1',
+            'url':          'www.great.gov.uk/article',
+            'introduction': 'Lorem ipsum'
+        })
 
     @async_test
     async def test_es_auth(self):

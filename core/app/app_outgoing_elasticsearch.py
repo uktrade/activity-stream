@@ -45,7 +45,6 @@ def get_new_index_names(feed_unique_id):
     )
 
 
-
 def indexes_matching_feeds(index_names, feed_unique_ids):
     return flatten([
         indexes_matching_feed(index_names, feed_unique_id)
@@ -356,4 +355,3 @@ async def es_min_verification_age(context):
         # If there aren't any activities yet, don't error
         raise ESMetricsUnavailable()
     return age
-

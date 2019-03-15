@@ -122,9 +122,9 @@ async def create_incoming_application(
         ),
         web.get(
             '/activities',
-             handle_get_new(context)
-         ),
-         web.get(
+            handle_get_new(context)
+        ),
+        web.get(
             '/activities/{public_scroll_id}',
             handle_get_existing(context),
             name='scroll',

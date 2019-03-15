@@ -14,7 +14,6 @@ from .app_outgoing_elasticsearch import (
     es_feed_activities_total,
     es_searchable_total,
     es_nonsearchable_total,
-    es_min_verification_age,
     create_activities_index,
     create_objects_index,
     get_new_index_names,
@@ -245,7 +244,6 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed,
         with logged(context.logger, 'Converting to bulk Elasticsearch items', []):
             es_bulk_items = feed.convert_to_bulk_es(
                 feed_parsed, activity_index_names, objects_index_names)
-
 
         with \
                 metric_timer(context.metrics['ingest_page_duration_seconds'],

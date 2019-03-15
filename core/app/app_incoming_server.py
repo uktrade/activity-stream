@@ -12,8 +12,7 @@ from .app_incoming_elasticsearch import (
 )
 from .elasticsearch import (
     es_min_verification_age,
-    ALIAS_OBJECTS,
-    ALIAS_ACTIVITIES
+    ALIAS_OBJECTS
 )
 from .app_incoming_hawk import (
     authenticate_hawk_header,

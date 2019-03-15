@@ -11,12 +11,12 @@ from .utils import (
 )
 from .elasticsearch import (
     ALIAS_ACTIVITIES,
-    ALIAS_OBJECTS,
     es_request,
 )
 from .app_incoming_redis import (
     set_private_scroll_id,
 )
+
 
 async def es_search_query_new_scroll(_, __, query):
     return f'/{ALIAS_ACTIVITIES}/_search', {'scroll': '15s'}, query
@@ -42,9 +42,9 @@ async def es_search_query_existing_scroll(context, match_info, _):
 
 
 async def es_search_activities(context, path, query, body, headers, request):
-    
+
     async def activities(context, elasticsearch_reponse, request):
-        
+
         async def to_public_scroll_url(context, request, private_scroll_id):
             public_scroll_id = random_url_safe(8)
             await set_private_scroll_id(context, public_scroll_id, private_scroll_id)
@@ -54,7 +54,7 @@ async def es_search_activities(context, path, query, body, headers, request):
             return str(url_with_correct_scheme.join(
                 request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)
             ))
-            
+
         elasticsearch_hits = elasticsearch_reponse['hits'].get('hits', [])
         private_scroll_id = elasticsearch_reponse['_scroll_id']
         next_dict = {
@@ -75,7 +75,6 @@ async def es_search_activities(context, path, query, body, headers, request):
             'type': 'Collection',
         }, **next_dict}
 
-
     results = await es_request(
         context=context,
         method='GET',
@@ -89,4 +88,3 @@ async def es_search_activities(context, path, query, body, headers, request):
     return \
         (await activities(context, response, request), 200) if results.status == 200 else \
         (response, results.status)
-
