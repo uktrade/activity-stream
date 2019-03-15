@@ -1,5 +1,6 @@
 import hmac
 import time
+import json
 
 from aiohttp import web
 
@@ -7,9 +8,11 @@ from .app_incoming_elasticsearch import (
     es_request,
     es_search_query_existing_scroll,
     es_search_query_new_scroll,
+    es_search_activities
 )
 from .elasticsearch import (
     es_min_verification_age,
+    ALIAS_OBJECTS
 )
 from .app_incoming_hawk import (
     authenticate_hawk_header,
@@ -23,7 +26,6 @@ from .utils import (
     random_url_safe,
 )
 from .app_incoming_redis import (
-    set_private_scroll_id,
     redis_get_metrics,
     get_feeds_status,
 )
@@ -179,55 +181,6 @@ def handle_get_existing(context):
     return handle
 
 
-async def es_search_activities(context, path, query, body, headers, request):
-    results = await es_request(
-        context=context,
-        method='GET',
-        path=path,
-        query=query,
-        headers=headers,
-        payload=body,
-    )
-
-    response = await results.json()
-    return \
-        (await activities(context, response, request), 200) if results.status == 200 else \
-        (response, results.status)
-
-
-async def activities(context, elasticsearch_reponse, request):
-    elasticsearch_hits = elasticsearch_reponse['hits'].get('hits', [])
-    private_scroll_id = elasticsearch_reponse['_scroll_id']
-    next_dict = {
-        'next': await to_public_scroll_url(context, request, private_scroll_id)
-    } if elasticsearch_hits else {}
-
-    return {**{
-        '@context': [
-            'https://www.w3.org/ns/activitystreams',
-            {
-                'dit': 'https://www.trade.gov.uk/ns/activitystreams/v1',
-            }
-        ],
-        'orderedItems': [
-            item['_source']
-            for item in elasticsearch_hits
-        ],
-        'type': 'Collection',
-    }, **next_dict}
-
-
-async def to_public_scroll_url(context, request, private_scroll_id):
-    public_scroll_id = random_url_safe(8)
-    await set_private_scroll_id(context, public_scroll_id, private_scroll_id)
-    url_with_correct_scheme = request.url.with_scheme(
-        request.headers['X-Forwarded-Proto'],
-    )
-    return str(url_with_correct_scheme.join(
-        request.app.router['scroll'].url_for(public_scroll_id=public_scroll_id)
-    ))
-
-
 def handle_get_check(parent_context, feed_endpoints):
     start_counter = time.perf_counter()
 
@@ -285,6 +238,27 @@ def handle_get_metrics(context):
     async def handle(_):
         return web.Response(body=await redis_get_metrics(context), status=200, headers={
             'Content-Type': 'text/plain; charset=utf-8',
+        })
+
+    return handle
+
+
+def handle_get_search(context):
+    async def handle(request):
+        body = await request.read()
+
+        results = await es_request(
+            context=context,
+            method='GET',
+            path=f'/{ALIAS_OBJECTS}/_search',
+            query={},
+            headers={'Content-Type': request.headers['Content-Type']},
+            payload=body,
+        )
+        response = await results.json()
+
+        return web.Response(body=json.dumps(response), status=200, headers={
+            'Content-Type': 'application/json; charset=utf-8',
         })
 
     return handle

@@ -8,7 +8,8 @@ from .logger import (
 
 from . import settings
 
-ALIAS = 'activities'
+ALIAS_ACTIVITIES = 'activities'
+ALIAS_OBJECTS = 'objects'
 
 
 async def es_min_verification_age(context):
@@ -34,7 +35,7 @@ async def es_min_verification_age(context):
     result = await es_request_non_200_exception(
         context=context,
         method='GET',
-        path=f'/{ALIAS}/_search',
+        path=f'/{ALIAS_ACTIVITIES}/_search',
         query={'ignore_unavailable': 'true'},
         headers={'Content-Type': 'application/json'},
         payload=payload,

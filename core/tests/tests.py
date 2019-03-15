@@ -660,6 +660,87 @@ class TestApplication(TestBase):
                          ['type'][1], 'dit:exportOpportunities:Enquiry')
         self.assertEqual(es_bulk_request_dicts[3]['actor']['dit:companiesHouseNumber'], '82312')
 
+    # Performs search to /v1/objects and expects JSON response in format
+    # [
+    #   {
+    #     heading: String
+    #     title: String
+    #     link: String
+    #     introduction: String
+    #   }, ...
+    # ]
+    #
+    @async_test
+    async def test_get_search(self):
+        # -- Setup --
+        # Source feed has 5 objects;
+        # read from this and put them in Elasticsearch
+
+        source_feed = 'tests_fixture_activity_stream_3.json'
+
+        def read_specific_file(_):
+            with open(os.path.dirname(os.path.abspath(__file__)) +
+                      '/' + source_feed, 'rb') as file:
+                return file.read().decode('utf-8')
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=mock_env(), mock_feed=read_specific_file,
+                                    mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await fetch_all_es_data_until(has_at_least(2))
+
+        # -- Helpers --
+
+        # Performs authorised GET request to given URL
+        async def _get(url, body):
+            url = 'http://127.0.0.1:8080' + url
+            x_forwarded_for = '1.2.3.4, 127.0.0.0'
+            auth = hawk_auth_header(
+                'incoming-some-id-3', 'incoming-some-secret-3', url,
+                'GET', body, 'application/json',
+            )
+
+            result, status, headers = await get(url, auth, x_forwarded_for, body)
+            return {'status': status, 'result': result, 'headers': headers}
+
+        # -- Test --
+
+        # Perform a search for "Article"
+        body = json.dumps({
+            'query': {
+                'multi_match': {
+                    'query': 'Article',
+                    'fields': ['heading',
+                               'title',
+                               'url',
+                               'introduction']
+                }
+            },
+            '_source': ['heading',
+                        'title',
+                        'url',
+                        'introduction']
+        })
+
+        response = await _get('/v1/objects', body)
+
+        # Response has: status: 200, type: application/json, 5 results
+        # First results has: header, title, url and introduction
+        self.assertEqual(200, response['status'])
+        self.assertEqual('application/json; charset=utf-8',
+                         response['headers']['Content-Type'])
+        results = json.loads(response['result'])['hits']['hits']
+        self.assertEqual(5, len(results))
+        article_1 = next(
+            result for result in results if result['_source']['title'] == 'Article title 1'
+        )
+        self.assertEqual(article_1['_source'], {
+            'heading':      'Advice',
+            'title':        'Article title 1',
+            'url':          'www.great.gov.uk/article',
+            'introduction': 'Lorem ipsum'
+        })
+
     @async_test
     async def test_es_auth(self):
         get_es_once, append_es = append_until(lambda results: len(results) == 1)
@@ -785,9 +866,9 @@ class TestApplication(TestBase):
                 'dit:exportOpportunities:Enquiry:49863:Create',
             })
 
-            self.assertLessEqual(len(await fetch_es_index_names_with_alias()), 2)
+            self.assertLessEqual(len(await fetch_es_index_names_with_alias()), 4)
             await ORIGINAL_SLEEP(2)
-            self.assertLessEqual(len(await fetch_es_index_names()), 2)
+            self.assertLessEqual(len(await fetch_es_index_names()), 7)
 
         async with aiohttp.ClientSession() as session:
             metrics_result = await session.get('http://127.0.0.1:8080/metrics')

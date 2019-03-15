@@ -30,6 +30,7 @@ from .app_incoming_server import (
     handle_get_existing,
     handle_get_metrics,
     handle_get_new,
+    handle_get_search,
     handle_post,
     raven_reporter,
     server_logger,
@@ -115,6 +116,19 @@ async def create_incoming_application(
         authorizer(),
     ])
     private_app.add_routes([
+        web.get(
+            '/objects',
+            handle_get_search(context)
+        ),
+        web.get(
+            '/activities',
+            handle_get_new(context)
+        ),
+        web.get(
+            '/activities/{public_scroll_id}',
+            handle_get_existing(context),
+            name='scroll',
+        ),
         web.post('/', handle_post),
         web.get(
             '/',
@@ -123,7 +137,6 @@ async def create_incoming_application(
         web.get(
             '/{public_scroll_id}',
             handle_get_existing(context),
-            name='scroll',
         ),
     ])
     app.add_subapp('/v1/', private_app)

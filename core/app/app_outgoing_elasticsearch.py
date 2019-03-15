@@ -1,4 +1,5 @@
 import datetime
+import time
 
 import ujson
 
@@ -13,26 +14,35 @@ from .utils import (
     random_url_safe,
 )
 from .elasticsearch import (
-    ALIAS,
+    ALIAS_ACTIVITIES,
+    ALIAS_OBJECTS,
     ESMetricsUnavailable,
     es_request,
     es_request_non_200_exception,
 )
 
 
-def get_new_index_name(feed_unique_id):
+def get_new_index_names(feed_unique_id):
     today = datetime.date.today().isoformat()
     now = str(datetime.datetime.now().timestamp()).split('.')[0]
     unique = random_url_safe(8)
 
     # Storing metadata in index name allows operations to match on
     # them, both by elasticsearch itself, and by regex in Python
-    return '' \
-        f'{ALIAS}__' \
-        f'feed_id_{feed_unique_id}__' \
-        f'date_{today}__' \
-        f'timestamp_{now}__' \
+    return (
+        ''
+        f'{ALIAS_ACTIVITIES}__'
+        f'feed_id_{feed_unique_id}__'
+        f'date_{today}__'
+        f'timestamp_{now}__'
+        f'batch_id_{unique}__',
+        ''
+        f'{ALIAS_OBJECTS}__'
+        f'feed_id_{feed_unique_id}__'
+        f'date_{today}__'
+        f'timestamp_{now}__'
         f'batch_id_{unique}__'
+    )
 
 
 def indexes_matching_feeds(index_names, feed_unique_ids):
@@ -46,7 +56,10 @@ def indexes_matching_feed(index_names, feed_unique_id):
     return [
         index_name
         for index_name in index_names
-        if f'{ALIAS}__feed_id_{feed_unique_id}__' in index_name
+        if (
+            f'{ALIAS_ACTIVITIES}__feed_id_{feed_unique_id}__' in index_name or
+            f'{ALIAS_OBJECTS}__feed_id_{feed_unique_id}__' in index_name
+        )
     ]
 
 
@@ -59,7 +72,21 @@ def indexes_matching_no_feeds(index_names, feed_unique_ids):
     ]
 
 
+def split_index_names(index_names):
+    return [
+        index_name for index_name in index_names if index_name.startswith(f'{ALIAS_ACTIVITIES}_')
+    ], [
+        index_name for index_name in index_names if index_name.startswith(f'{ALIAS_OBJECTS}_')
+    ]
+
+
 async def get_old_index_names(context):
+    def is_activity_stream_index(index_name):
+        return (
+            index_name.startswith(f'{ALIAS_ACTIVITIES}_') or
+            index_name.startswith(f'{ALIAS_OBJECTS}_')
+        )
+
     with logged(context.logger, 'Finding existing index names', []):
         results = await es_request_non_200_exception(
             context=context,
@@ -74,26 +101,30 @@ async def get_old_index_names(context):
         without_alias = [
             index_name
             for index_name, index_details in indexes.items()
-            if index_name.startswith(f'{ALIAS}_') and not index_details['aliases']
+            if is_activity_stream_index(index_name) and not index_details['aliases']
         ]
         with_alias = [
             index_name
             for index_name, index_details in indexes.items()
-            if index_name.startswith(f'{ALIAS}_') and index_details['aliases']
+            if is_activity_stream_index(index_name) and index_details['aliases']
         ]
         names = without_alias, with_alias
         context.logger.debug('Finding existing index names... (%s)', names)
         return names
 
 
-async def add_remove_aliases_atomically(context, index_name, feed_unique_id):
-    with logged(context.logger, 'Atomically flipping {ALIAS} alias to (%s)',
+async def add_remove_aliases_atomically(context, activity_index_name, object_index_name,
+                                        feed_unique_id):
+    with logged(context.logger, 'Atomically flipping {ALIAS_ACTIVITIES} alias to (%s)',
                 [feed_unique_id]):
-        remove_pattern = f'{ALIAS}__feed_id_{feed_unique_id}__*'
+        activities_remove_pattern = f'{ALIAS_ACTIVITIES}__feed_id_{feed_unique_id}__*'
+        objects_remove_pattern = f'{ALIAS_OBJECTS}__feed_id_{feed_unique_id}__*'
         actions = ujson.dumps({
             'actions': [
-                {'remove': {'index': remove_pattern, 'alias': ALIAS}},
-                {'add': {'index': index_name, 'alias': ALIAS}}
+                {'remove': {'index': activities_remove_pattern, 'alias': ALIAS_ACTIVITIES}},
+                {'remove': {'index': objects_remove_pattern, 'alias': ALIAS_OBJECTS}},
+                {'add': {'index': activity_index_name, 'alias': ALIAS_ACTIVITIES}},
+                {'add': {'index': object_index_name, 'alias': ALIAS_OBJECTS}},
             ]
         }).encode('utf-8')
 
@@ -120,7 +151,43 @@ async def delete_indexes(context, index_names):
             )
 
 
-async def create_index(context, index_name):
+async def create_activities_index(context, index_name):
+    with logged(context.logger, 'Creating index (%s)', [index_name]):
+        index_definition = ujson.dumps({
+            'settings': {
+                'index': {
+                    'number_of_shards': 4,
+                    'number_of_replicas': 1,
+                    'refresh_interval': '-1',
+                }
+            },
+            'mappings': {
+                '_doc': {
+                    'properties': {
+                        'published_date': {
+                            'type': 'date',
+                        },
+                        'type': {
+                            'type': 'keyword',
+                        },
+                        'object.type': {
+                            'type': 'keyword',
+                        },
+                    },
+                },
+            },
+        }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
+        await es_request_non_200_exception(
+            context=context,
+            method='PUT',
+            path=f'/{index_name}',
+            query={},
+            headers={'Content-Type': 'application/json'},
+            payload=index_definition,
+        )
+
+
+async def create_objects_index(context, index_name):
     with logged(context.logger, 'Creating index (%s)', [index_name]):
         index_definition = ujson.dumps({
             'settings': {
@@ -196,7 +263,7 @@ async def es_searchable_total(context):
     searchable_result = await es_request_non_200_exception(
         context=context,
         method='GET',
-        path=f'/{ALIAS}/_count',
+        path=f'/{ALIAS_ACTIVITIES}/_count',
         query={'ignore_unavailable': 'true'},
         headers={'Content-Type': 'application/json'},
         payload=b'',
@@ -208,7 +275,7 @@ async def es_nonsearchable_total(context):
     nonsearchable_result = await es_maybe_unvailable_metrics(
         context=context,
         method='GET',
-        path=f'/{ALIAS}_*,-*{ALIAS}/_count',
+        path=f'/{ALIAS_ACTIVITIES}_*,-*{ALIAS_ACTIVITIES}/_count',
         query={'ignore_unavailable': 'true'},
         headers={'Content-Type': 'application/json'},
         payload=b'',
@@ -220,7 +287,7 @@ async def es_feed_activities_total(context, feed_id):
     nonsearchable_result = await es_maybe_unvailable_metrics(
         context=context,
         method='GET',
-        path=f'/{ALIAS}__feed_id_{feed_id}__*,-*{ALIAS}/_count',
+        path=f'/{ALIAS_ACTIVITIES}__feed_id_{feed_id}__*,-*{ALIAS_ACTIVITIES}/_count',
         query={'ignore_unavailable': 'true'},
         headers={'Content-Type': 'application/json'},
         payload=b'',
@@ -230,7 +297,7 @@ async def es_feed_activities_total(context, feed_id):
     total_result = await es_maybe_unvailable_metrics(
         context=context,
         method='GET',
-        path=f'/{ALIAS}__feed_id_{feed_id}__*/_count',
+        path=f'/{ALIAS_ACTIVITIES}__feed_id_{feed_id}__*/_count',
         query={'ignore_unavailable': 'true'},
         headers={'Content-Type': 'application/json'},
         payload=b'',
@@ -248,3 +315,43 @@ async def es_maybe_unvailable_metrics(context, method, path, query, headers, pay
     if results.status != 200:
         raise Exception(await results.text())
     return results
+
+
+async def es_min_verification_age(context):
+    payload = ujson.dumps({
+        'size': 0,
+        'aggs': {
+            'verifier_activities': {
+                'filter': {
+                    'term': {
+                        'object.type': 'dit:activityStreamVerificationFeed:Verifier'
+                    }
+                },
+                'aggs': {
+                    'max_published': {
+                        'max': {
+                            'field': 'published'
+                        }
+                    }
+                }
+            }
+        }
+    }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
+    result = await es_request_non_200_exception(
+        context=context,
+        method='GET',
+        path=f'/{ALIAS_ACTIVITIES}/_search',
+        query={'ignore_unavailable': 'true'},
+        headers={'Content-Type': 'application/json'},
+        payload=payload,
+    )
+    result_dict = ujson.loads(await result.text())
+    try:
+        max_published = int(result_dict['aggregations']
+                            ['verifier_activities']['max_published']['value'] / 1000)
+        now = int(time.time())
+        age = now - max_published
+    except (KeyError, TypeError):
+        # If there aren't any activities yet, don't error
+        raise ESMetricsUnavailable()
+    return age
