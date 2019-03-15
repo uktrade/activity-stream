@@ -257,11 +257,8 @@ def handle_get_search(context):
             payload=body,
         )
         response = await results.json()
-        response = json.dumps(
-            list(map(lambda x: x['_source'], response['hits']['hits']))
-        )
 
-        return web.Response(body=response, status=200, headers={
+        return web.Response(body=json.dumps(response), status=200, headers={
             'Content-Type': 'application/json; charset=utf-8',
         })
 

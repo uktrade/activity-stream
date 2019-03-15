@@ -730,12 +730,12 @@ class TestApplication(TestBase):
         self.assertEqual(200, response['status'])
         self.assertEqual('application/json; charset=utf-8',
                          response['headers']['Content-Type'])
-        results = json.loads(response['result'])
+        results = json.loads(response['result'])['hits']['hits']
         self.assertEqual(5, len(results))
         article_1 = next(
-            result for result in results if result["title"] == "Article title 1"
+            result for result in results if result["_source"]["title"] == "Article title 1"
         )
-        self.assertEqual(article_1,
+        self.assertEqual(article_1["_source"],
                          {
                              'heading':      'Advice',
                              'title':        'Article title 1',
