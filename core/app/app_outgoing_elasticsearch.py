@@ -1,5 +1,4 @@
 import datetime
-import time
 
 import ujson
 
@@ -315,43 +314,3 @@ async def es_maybe_unvailable_metrics(context, method, path, query, headers, pay
     if results.status != 200:
         raise Exception(await results.text())
     return results
-
-
-async def es_min_verification_age(context):
-    payload = ujson.dumps({
-        'size': 0,
-        'aggs': {
-            'verifier_activities': {
-                'filter': {
-                    'term': {
-                        'object.type': 'dit:activityStreamVerificationFeed:Verifier'
-                    }
-                },
-                'aggs': {
-                    'max_published': {
-                        'max': {
-                            'field': 'published'
-                        }
-                    }
-                }
-            }
-        }
-    }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
-    result = await es_request_non_200_exception(
-        context=context,
-        method='GET',
-        path=f'/{ALIAS_ACTIVITIES}/_search',
-        query={'ignore_unavailable': 'true'},
-        headers={'Content-Type': 'application/json'},
-        payload=payload,
-    )
-    result_dict = ujson.loads(await result.text())
-    try:
-        max_published = int(result_dict['aggregations']
-                            ['verifier_activities']['max_published']['value'] / 1000)
-        now = int(time.time())
-        age = now - max_published
-    except (KeyError, TypeError):
-        # If there aren't any activities yet, don't error
-        raise ESMetricsUnavailable()
-    return age
