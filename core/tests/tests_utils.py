@@ -242,7 +242,7 @@ async def run_feed_application(feed, status, headers, feed_requested_callback, p
         asyncio.get_event_loop().call_soon(feed_requested_callback, request)
         return web.Response(text=feed(path), status=status(), headers=headers())
 
-    routes = [web.get('/{feed}', handle)]
+    routes = [web.get('/{feed}', handle), web.post('/{feed}', handle)]
     return await _web_application(port=port, routes=routes)
 
 

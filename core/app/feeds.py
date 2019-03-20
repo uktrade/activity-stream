@@ -1,4 +1,6 @@
 import asyncio
+import datetime
+import json
 import re
 
 import aiohttp
@@ -7,6 +9,9 @@ import yarl
 from .hawk import (
     get_hawk_header,
 )
+from .logger import (
+    logged,
+)
 from .utils import sub_dict_lower
 
 
@@ -14,12 +19,14 @@ def parse_feed_config(feed_config):
     by_feed_type = {
         'activity_stream': ActivityStreamFeed,
         'zendesk': ZendeskFeed,
+        'aventri': EventFeed,
     }
     return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
 
 class ActivityStreamFeed:
 
+    full_ingest_interval = 0
     full_ingest_page_interval = 0.25
     updates_page_interval = 1
     exception_intervals = [1, 2, 4, 8, 16, 32, 64]
@@ -43,7 +50,7 @@ class ActivityStreamFeed:
     def next_href(feed):
         return feed.get('next', None)
 
-    def auth_headers(self, url):
+    async def auth_headers(self, _, url):
         parsed_url = yarl.URL(url)
         return {
             'Authorization': get_hawk_header(
@@ -59,7 +66,7 @@ class ActivityStreamFeed:
         }
 
     @classmethod
-    def convert_to_bulk_es(cls, feed, activity_index_names, object_index_names):
+    async def convert_to_bulk_es(cls, _, feed, activity_index_names, object_index_names):
         return [
             {
                 'action_and_metadata': {
@@ -93,6 +100,7 @@ class ZendeskFeed:
 
     # The staging API is severely rate limited
     # Could be higher on prod, but KISS
+    full_ingest_interval = 0
     full_ingest_page_interval = 30
     updates_page_interval = 120
     exception_intervals = [120, 180, 240, 300]
@@ -117,7 +125,7 @@ class ZendeskFeed:
     def next_href(feed):
         return feed['next_page']
 
-    def auth_headers(self, _):
+    async def auth_headers(self, _, __):
         return {
             'Authorization': aiohttp.helpers.BasicAuth(
                 login=self.api_email + '/token',
@@ -126,7 +134,7 @@ class ZendeskFeed:
         }
 
     @classmethod
-    def convert_to_bulk_es(cls, page, activity_index_names, object_index_names):
+    async def convert_to_bulk_es(cls, _, page, activity_index_names, object_index_names):
         def company_numbers(description):
             match = re.search(cls.company_number_regex, description)
             return [match[1]] if match else []
@@ -173,6 +181,131 @@ class ZendeskFeed:
             for activity_id in ['dit:zendesk:Ticket:' + str(ticket['id']) + ':Create']
             for index_name in object_index_names
         ]
+
+
+class EventFeed:
+
+    full_ingest_interval = 60 * 60
+    full_ingest_page_interval = 0
+    updates_page_interval = 60 * 60 * 24 * 30
+
+    exception_intervals = [120, 180, 240, 300]
+    INTERNAL_EVENTS_AVENTRI_FOLDER = 'internal aventri'
+
+    @classmethod
+    def parse_config(cls, config):
+        return cls(**sub_dict_lower(
+            config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL', 'EVENT_URL']))
+
+    def __init__(self, unique_id, seed, account_id, api_key, auth_url, event_url):
+        self.unique_id = unique_id
+        self.seed = seed
+        self.account_id = account_id
+        self.api_key = api_key
+        self.auth_url = auth_url
+        self.event_url = event_url
+        self.accesstoken = None
+
+    @staticmethod
+    def get_lock():
+        return asyncio.Lock()
+
+    @staticmethod
+    def next_href(_):
+        """ aventri API does not support pagination
+            returns (None)
+        """
+        return None
+
+    async def auth_headers(self, context, __):
+        async with \
+                context.session.post(
+                    self.auth_url,
+                    data={'accountid': self.account_id, 'key': self.api_key}) as result:
+            result.raise_for_status()
+            response_bytes = await result.read()
+
+        self.accesstoken = json.loads(response_bytes.decode('utf-8'))['accesstoken']
+        return {
+            'accesstoken': self.accesstoken,
+        }
+
+    async def convert_to_bulk_es(self, context, page, activity_index_names, _):
+        async def get_event(event_id):
+            await asyncio.sleep(3)
+            url = self.event_url.format(event_id=event_id)
+
+            with logged(context.logger, 'Fetching event (%s)', [url]):
+                async with \
+                    context.session.get(
+                        url,
+                        headers={'accesstoken': self.accesstoken}) as result:
+                    result.raise_for_status()
+                    response_bytes = await result.read()
+
+            return json.loads(response_bytes.decode('utf-8'))
+
+        return [
+            {
+                'action_and_metadata': _action_and_metadata(
+                    index_name=index_name,
+                    activity_id='dit:aventri:Event:' + str(event['eventid']) + ':Create'),
+                'source': {
+                    'id': 'dit:aventri:Event:' + str(event['eventid']) + ':Create',
+                    'type': 'Search',
+                    'eventid': event['eventid'],
+                    'dit:application': 'aventri',
+                    'object': {
+                        'type': [
+                            'Document',
+                            'dit:aventri:Event',
+                        ],
+                        'id': 'dit:aventri:Event:' + event['eventid'],
+                        'name': event['name'],
+                        'url': event['url'],
+                        'description': event['description'],
+                        'startdate': event['startdate'],
+                        'enddate': event['enddate'],
+                        'foldername': event['foldername'],
+                        'location': event['location'],
+                        'language': event['defaultlanguage'],
+                        'timezone': event['timezone'],
+                        'currency': event['standardcurrency'],
+                        'price_type': event['price_type'],
+                        'price': event['pricepoints']
+                    },
+
+                }
+            }
+            for page_event in page
+            for index_name in activity_index_names
+            for event in [await get_event(page_event['eventid'])]
+            if self.should_include(event)
+        ]
+
+    def should_include(self, event):
+        # event must be not deleted
+        # startdate should be >= today and not null
+        # enddate should be >= startdate and not null
+        # folderid or foldername should be != internal events folder
+        # name, url, description should be not null
+
+        now = datetime.datetime.today().strftime('%Y-%m-%d')
+        try:
+            should_include = (
+                event['eventid'] is not None and
+                event['deleted'] != 0 and
+                event['enddate'] > event['startdate'] > now and
+                event['foldername'] != self.INTERNAL_EVENTS_AVENTRI_FOLDER and
+                event['name'] is not None and
+                event['url'] is not None and
+                event['description'] is not None
+            )
+
+        except KeyError:
+            should_include = False
+
+        return should_include
 
 
 def _action_and_metadata(
