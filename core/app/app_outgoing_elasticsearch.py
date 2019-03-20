@@ -244,26 +244,32 @@ async def refresh_index(context, index_name):
 
 
 async def es_bulk(context, items):
+    max_chunk_size = 500
+
     with logged(context.logger, 'Pushing (%s) items into Elasticsearch', [len(items)]):
-        if not items:
-            return
+        chunked_items = (
+            items[pos:pos + max_chunk_size]
+            for pos in range(0, len(items), max_chunk_size)
+        )
 
-        with logged(context.logger, 'Converting to Elasticsearch bulk ingest commands', []):
-            es_bulk_contents = ''.join(flatten_generator(
-                [ujson.dumps(item['action_and_metadata'], sort_keys=True,
-                             escape_forward_slashes=False, ensure_ascii=False),
-                 '\n',
-                 ujson.dumps(item['source'], sort_keys=True,
-                             escape_forward_slashes=False, ensure_ascii=False),
-                 '\n']
-                for item in items
-            )).encode('utf-8')
+        for chunk in chunked_items:
+            message = 'Converting (%s) items to Elasticsearch bulk ingest commands'
+            with logged(context.logger, message, [len(chunk)]):
+                es_bulk_contents = ''.join(flatten_generator(
+                    [ujson.dumps(item['action_and_metadata'], sort_keys=True,
+                                 escape_forward_slashes=False, ensure_ascii=False),
+                     '\n',
+                     ujson.dumps(item['source'], sort_keys=True,
+                                 escape_forward_slashes=False, ensure_ascii=False),
+                     '\n']
+                    for item in chunk
+                )).encode('utf-8')
 
-        with logged(context.logger, 'POSTing bulk ingest to Elasticsearch', []):
-            await es_request_non_200_exception(
-                context=context, method='POST', path='/_bulk', query={},
-                headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,
-            )
+            with logged(context.logger, 'POSTing bulk ingest to Elasticsearch', []):
+                await es_request_non_200_exception(
+                    context=context, method='POST', path='/_bulk', query={},
+                    headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,
+                )
 
 
 async def es_searchable_total(context):
