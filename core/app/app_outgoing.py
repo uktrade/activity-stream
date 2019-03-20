@@ -255,11 +255,8 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed,
                                [feed.unique_id], len(es_bulk_items)):
             await es_bulk(context, es_bulk_items)
 
-        assumed_max_es_ingest_time = 10
-        max_interval = \
-            max(feed.full_ingest_page_interval, feed.updates_page_interval) + \
-            assumed_max_es_ingest_time
-        asyncio.ensure_future(set_feed_status(context, feed.unique_id, max_interval, b'GREEN'))
+        asyncio.ensure_future(set_feed_status(
+            context, feed.unique_id, feed.max_interval_before_reporting_down, b'GREEN'))
 
         return feed.next_href(feed_parsed)
 
