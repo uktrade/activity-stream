@@ -194,6 +194,8 @@ async def ingest_feed_full(context, feed_lock, feed,):
             context, activities_index_name, objects_index_name, feed.unique_id)
         await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
 
+        await sleep(context, feed.full_ingest_interval)
+
 
 async def ingest_feed_updates(context, feed_lock, feed):
     metrics = context.metrics
@@ -235,15 +237,16 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed,
                     logged(context.logger, 'Polling page (%s)', [href]), \
                     metric_timer(context.metrics['ingest_page_duration_seconds'],
                                  [feed.unique_id, ingest_type, 'pull']):
-                feed_contents = await get_feed_contents(context, href, feed.auth_headers(href),
-                                                        _http_429_retry_after_context=context)
+                feed_contents = await get_feed_contents(
+                    context, href, await feed.auth_headers(context, href),
+                    _http_429_retry_after_context=context)
 
         with logged(context.logger, 'Parsing JSON', []):
             feed_parsed = ujson.loads(feed_contents)
 
         with logged(context.logger, 'Converting to bulk Elasticsearch items', []):
-            es_bulk_items = feed.convert_to_bulk_es(
-                feed_parsed, activity_index_names, objects_index_names)
+            es_bulk_items = await feed.convert_to_bulk_es(
+                context, feed_parsed, activity_index_names, objects_index_names)
 
         with \
                 metric_timer(context.metrics['ingest_page_duration_seconds'],

@@ -11,6 +11,10 @@ from aiohttp import web
 import aioredis
 from freezegun import freeze_time
 
+from ..app.feeds import (
+    EventFeed,
+)
+
 from .tests_utils import (
     ORIGINAL_SLEEP,
     append_until,
@@ -747,7 +751,6 @@ class TestApplication(TestBase):
 
         async def return_200_and_callback(request):
             content, headers = (await request.content.read(), request.headers)
-            print('headers', headers)
             if content == b'{}':
                 asyncio.get_event_loop().call_soon(append_es, (content, headers))
             return await respond_http('{"hits":{},"_scroll_id":{}}', 200)(request)
@@ -1157,6 +1160,116 @@ class TestApplication(TestBase):
         self.assertIn('"dit:zendesk:Ticket:3"', results)
         self.assertIn('"dit:zendesk:Ticket:3:Create"', results)
         self.assertIn('"2011-04-12T12:48:13+00:00"', results)
+
+    @async_test
+    async def test_aventri(self):
+        def aventri_base_fetch(results):
+            if 'hits' not in results or 'hits' not in results['hits']:
+                return False
+
+            elif str(results).find('aventri') != -1:
+                return True
+
+            return False
+
+        env = {
+            **mock_env(),
+            'FEEDS__1__UNIQUE_ID': 'aventri',
+            'FEEDS__1__API_EMAIL': 'some@email.com',
+            'FEEDS__1__ACCOUNT_ID': '1234',
+            'FEEDS__1__API_KEY': '5678',
+            'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_aventri_list.json',
+            'FEEDS__1__TYPE': 'aventri',
+            'FEEDS__1__AUTH_URL':
+                'http://localhost:8081/tests_fixture_aventri_auth.json',
+            'FEEDS__1__EVENT_URL': 'http://localhost:8081/tests_fixture_aventri_{event_id}.json',
+        }
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_file, mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+
+        results_dict = await fetch_all_es_data_until(aventri_base_fetch)
+        self.assertEqual(
+            results_dict['hits']['hits'][0]['_source']['object']['id'],
+            'dit:aventri:Event:1')
+
+    def test_base_event_should_include(self):
+        json_null_event = {}
+        actual = EventFeed(
+            unique_id='aventri',
+            seed='https://api-emea.eventscloud.com/api/v2/global/listEvents.json',
+            account_id='something',
+            api_key='else',
+            auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
+            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
+            .should_include(json_null_event)
+        self.assertFalse(actual, 'filter_events should return empty for null event')
+
+    def test_single_event_filter(self):
+        json_single_event = {
+            'eventid': '200183890', 'accountid': '200008108', 'folderid': '200090383',
+            'name': 'test event1', 'code': '', 'department': '0', 'division': '0',
+            'businessunit': '0', 'city': '', 'startdate': '2020-02-19', 'enddate': '2020-02-20',
+            'include_calendar': '1', 'include_internal_calendar': None, 'timezoneid': '27',
+            'dateformat': 'l, j F Y', 'timeformat': 'g:i a', 'currency_dec_point': '.',
+            'currency_thousands_sep': ',', 'approval_status': None, 'status': 'Archived',
+            'event_type': None, 'description': '<p>Click through to learn more.</p>',
+            'programmanager': '', 'languages': 'a:1:{s:3:"eng";s:7:"English";}',
+            'defaultlanguage': 'eng', 'createdby': '200045907', 'deleted': '0',
+            'useehomepage': None, 'ePlanning': None, 'eRFP': None, 'eBudget': None,
+            'eProject': None, 'eScheduler': None, 'eWiki': None, 'eHome': None, 'eMobile': '0',
+            'eReg': '1', 'eConnect': None, 'eSocial': '0', 'eSeating': None, 'eBooth': None,
+            'calendar_country': '', 'country': '', 'use_template': None, 'revenue_status': None,
+            'wrapservices': None, 'callcenter': None, 'event_setup_hours': None,
+            'event_setup_date': None, 'modifiedby': 't.money@t.g.uk', 'live_date': None,
+            'domainid': None, 'api_trigger_url': None, 'locationname': '', 'state': '',
+            'eSelect': '0', 'api_trigger_type': None, 'ipreoid': '0', 'emailSuffixes': None,
+            'blackListFailureMessage': None, 'clonedfrom': None,
+            'url': 'https://eu.eventscloud.com/200183890', 'max_reg': '0',
+            'statusmessage': None, 'clientcontact': '', 'lodgingnotes': '',
+            'location': {
+                'name': '', 'address1': '', 'address2': '', 'address3': '', 'city': '',
+                'state': '', 'postcode': '', 'country': '', 'phone': '', 'email': '', 'map': ''},
+            'starttime': '09:00:00', 'endtime': '17:00:00', 'closedate': '0000-00-00',
+            'closetime': None, 'timezonedescription': None, 'homepage': '',
+            'linktohomepage': None,
+            'timeoutlinktohomepage': None, 'logolinktohomepage': None,
+            'tellafriendlinktohomepage': None, 'contactinfo': 'a:1:{s:3:"eng";s:0:"";}',
+            'adminemails': None, 'force_agenda_selection_min': None,
+            'force_agenda_selection_max': None, 'force_option_selection': None,
+            'nolodgingrequired': None, 'pricepoints': None, 'use_account_codes': None,
+            'viral_ticketing': None, 'standardcurrency': 'Sterling', 'cardacceptance': None,
+            'logoalign': None, 'logo_textid': None, 'allow_other_fonts': None,
+            'approval_required': None, 'scansettings': None, 'headercustomcode': None,
+            'footercustomcode': None, 'customstats': None, 'emailSuffixData': None,
+            'facebook_eventid': None, 'allowedEmailSuffixes': None, 'line_item_tax': '0',
+            'taxid': None, 'tax_rounding': None, 'customhtml': None, 'price_type': None,
+            'foldername': 'DIT HQ events and sites', 'eventclosemessage': '',
+            'timezone': '[GMT] Greenwich Mean Time: Dublin, Edinburgh, Lisbon, London',
+            'createddatetime': '2018-10-30 06:06:26', 'modifieddatetime': '2019-03-04 03:46:23',
+            'login1': 'email', 'login2': 'attendeeid'}
+        actual = EventFeed(
+            unique_id='aventri',
+            seed='https://api-emea.eventscloud.com/api/v2/global/listEvents.json',
+            account_id='something',
+            api_key='else',
+            auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
+            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
+            .should_include(json_single_event)
+        self.assertTrue(actual, 'filter_events should return the event with formatted fields')
+
+    def test_single_invalid_event(self):
+        json_single_invalid_event = {'deleted': '0', }
+        actual = EventFeed(
+            unique_id='aventri',
+            seed='https://api-emea.eventscloud.com/api/v2/global/listEvents.json',
+            account_id='something',
+            api_key='else',
+            auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
+            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
+            .should_include(json_single_invalid_event)
+        self.assertFalse(actual, 'filter_events should return empty for invalid event')
 
     @async_test
     async def test_on_bad_json_retries(self):
