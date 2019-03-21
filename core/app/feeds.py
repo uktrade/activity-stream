@@ -9,6 +9,9 @@ import yarl
 from .hawk import (
     get_hawk_header,
 )
+from .http import (
+    http_make_request,
+)
 from .logger import (
     logged,
 )
@@ -224,14 +227,12 @@ class EventFeed:
         return None
 
     async def auth_headers(self, context, __):
-        async with \
-                context.session.post(
-                    self.auth_url,
-                    data={'accountid': self.account_id, 'key': self.api_key}) as result:
-            result.raise_for_status()
-            response_bytes = await result.read()
+        result, result_bytes = await http_make_request(context, 'POST', self.auth_url, data={
+            'accountid': self.account_id, 'key': self.api_key,
+        }, headers={})
+        result.raise_for_status()
 
-        self.accesstoken = json.loads(response_bytes.decode('utf-8'))['accesstoken']
+        self.accesstoken = json.loads(result_bytes.decode('utf-8'))['accesstoken']
         return {
             'accesstoken': self.accesstoken,
         }
