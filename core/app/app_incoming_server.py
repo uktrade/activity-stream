@@ -1,6 +1,5 @@
 import hmac
 import time
-import json
 
 from aiohttp import web
 
@@ -247,7 +246,7 @@ def handle_get_search(context):
     async def handle(request):
         body = await request.read()
 
-        results = await es_request(
+        _, results_bytes = await es_request(
             context=context,
             method='GET',
             path=f'/{ALIAS_OBJECTS}/_search',
@@ -255,9 +254,8 @@ def handle_get_search(context):
             headers={'Content-Type': request.headers['Content-Type']},
             payload=body,
         )
-        response = await results.json()
 
-        return web.Response(body=json.dumps(response), status=200, headers={
+        return web.Response(body=results_bytes, status=200, headers={
             'Content-Type': 'application/json; charset=utf-8',
         })
 

@@ -87,7 +87,7 @@ async def get_old_index_names(context):
         )
 
     with logged(context.logger, 'Finding existing index names', []):
-        results = await es_request_non_200_exception(
+        _, results_bytes = await es_request_non_200_exception(
             context=context,
             method='GET',
             path=f'/_aliases',
@@ -95,7 +95,7 @@ async def get_old_index_names(context):
             headers={'Content-Type': 'application/json'},
             payload=b'',
         )
-        indexes = await results.json()
+        indexes = ujson.loads(results_bytes.decode('utf-8'))
 
         without_alias = [
             index_name
@@ -268,7 +268,7 @@ async def es_bulk(context, items):
 
 async def es_searchable_total(context):
     # This metric is expected to be available
-    searchable_result = await es_request_non_200_exception(
+    _, searchable_result_bytes = await es_request_non_200_exception(
         context=context,
         method='GET',
         path=f'/{ALIAS_ACTIVITIES}/_count',
@@ -276,11 +276,11 @@ async def es_searchable_total(context):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    return (ujson.loads(await searchable_result.text()))['count']
+    return (ujson.loads(searchable_result_bytes.decode('utf-8')))['count']
 
 
 async def es_nonsearchable_total(context):
-    nonsearchable_result = await es_maybe_unvailable_metrics(
+    _, nonsearchable_result_bytes = await es_maybe_unvailable_metrics(
         context=context,
         method='GET',
         path=f'/{ALIAS_ACTIVITIES}_*,-*{ALIAS_ACTIVITIES}/_count',
@@ -288,11 +288,11 @@ async def es_nonsearchable_total(context):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    return ujson.loads(await nonsearchable_result.text())['count']
+    return ujson.loads(nonsearchable_result_bytes.decode('utf-8'))['count']
 
 
 async def es_feed_activities_total(context, feed_id):
-    nonsearchable_result = await es_maybe_unvailable_metrics(
+    _, nonsearchable_result_bytes = await es_maybe_unvailable_metrics(
         context=context,
         method='GET',
         path=f'/{ALIAS_ACTIVITIES}__feed_id_{feed_id}__*,-*{ALIAS_ACTIVITIES}/_count',
@@ -300,9 +300,9 @@ async def es_feed_activities_total(context, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    nonsearchable = ujson.loads(await nonsearchable_result.text())['count']
+    nonsearchable = ujson.loads(nonsearchable_result_bytes.decode('utf-8'))['count']
 
-    total_result = await es_maybe_unvailable_metrics(
+    _, total_results_bytes = await es_maybe_unvailable_metrics(
         context=context,
         method='GET',
         path=f'/{ALIAS_ACTIVITIES}__feed_id_{feed_id}__*/_count',
@@ -310,16 +310,16 @@ async def es_feed_activities_total(context, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    searchable = max(ujson.loads(await total_result.text())['count'] - nonsearchable, 0)
+    searchable = max(ujson.loads(total_results_bytes.decode('utf-8'))['count'] - nonsearchable, 0)
 
     return searchable, nonsearchable
 
 
 async def es_maybe_unvailable_metrics(context, method, path, query, headers, payload):
     ''' Some metrics may be unavailable since they query newly created indexes '''
-    results = await es_request(context, method, path, query, headers, payload)
+    results, results_bytes = await es_request(context, method, path, query, headers, payload)
     if results.status == 503:
         raise ESMetricsUnavailable()
     if results.status != 200:
         raise Exception(await results.text())
-    return results
+    return results, results_bytes
