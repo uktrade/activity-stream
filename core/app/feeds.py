@@ -289,39 +289,39 @@ class EventFeed:
             for event in [await get_event(page_event['eventid'])]
             if self.should_include(event)
         ] + [
-        {
-            'action_and_metadata': {
-                'index': {
-                    '_index': index_name,
-                    '_type': '_doc',
-                    '_id':  'dit:aventri:Event:' + str(event['eventid']) + ':Create',
+            {
+                'action_and_metadata': {
+                    'index': {
+                        '_index': index_name,
+                        '_type': '_doc',
+                        '_id':  'dit:aventri:Event:' + str(event['eventid']) + ':Create',
+                    },
                 },
-            },
-            'source': {
-                'type': [
-                    'Document',
-                    'dit:aventri:Event',
-                ],
-                'id': 'dit:aventri:Event:' + str(event['eventid']),
-                'name': event['name'],
-                'url': event['url'],
-                'description': event['description'],
-                'startdate': event['startdate'],
-                'enddate': event['enddate'],
-                'foldername': event['foldername'],
-                'location': event['location'],
-                'language': event['defaultlanguage'],
-                'timezone': event['timezone'],
-                'currency': event['standardcurrency'],
-                'price_type': event['price_type'],
-                'price': event['pricepoints'],
-            },
-        }
-        for page_event in page
-        for index_name in object_index_names
-        for event in [await get_event(page_event['eventid'])]
-        if self.should_include(event)
-    ]
+                'source': {
+                    'type': [
+                        'Document',
+                        'dit:aventri:Event',
+                    ],
+                    'id': 'dit:aventri:Event:' + str(event['eventid']),
+                    'name': event['name'],
+                    'url': event['url'],
+                    'description': event['description'],
+                    'startdate': event['startdate'],
+                    'enddate': event['enddate'],
+                    'foldername': event['foldername'],
+                    'location': event['location'],
+                    'language': event['defaultlanguage'],
+                    'timezone': event['timezone'],
+                    'currency': event['standardcurrency'],
+                    'price_type': event['price_type'],
+                    'price': event['pricepoints'],
+                },
+            }
+            for page_event in page
+            for index_name in object_index_names
+            for event in [await get_event(page_event['eventid'])]
+            if self.should_include(event)
+        ]
 
     def should_include(self, event):
         # event must be not deleted
