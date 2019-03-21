@@ -2,7 +2,6 @@ import asyncio
 import datetime
 import json
 import re
-import os
 import aiohttp
 import yarl
 
@@ -200,9 +199,11 @@ class EventFeed:
     @classmethod
     def parse_config(cls, config):
         return cls(**sub_dict_lower(
-            config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL', 'EVENT_URL', 'WHITELISTED_FOLDERS']))
+            config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL', 'EVENT_URL',
+                     'WHITELISTED_FOLDERS']))
 
-    def __init__(self, unique_id, seed, account_id, api_key, auth_url, event_url, whitelisted_folders):
+    def __init__(self, unique_id, seed, account_id, api_key, auth_url, event_url,
+                 whitelisted_folders):
         self.unique_id = unique_id
         self.seed = seed
         self.account_id = account_id
