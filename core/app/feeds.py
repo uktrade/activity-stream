@@ -200,9 +200,9 @@ class EventFeed:
     @classmethod
     def parse_config(cls, config):
         return cls(**sub_dict_lower(
-            config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL', 'EVENT_URL']))
+            config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL', 'EVENT_URL', 'WHITELISTED_FOLDERS']))
 
-    def __init__(self, unique_id, seed, account_id, api_key, auth_url, event_url):
+    def __init__(self, unique_id, seed, account_id, api_key, auth_url, event_url, whitelisted_folders):
         self.unique_id = unique_id
         self.seed = seed
         self.account_id = account_id
@@ -210,6 +210,7 @@ class EventFeed:
         self.auth_url = auth_url
         self.event_url = event_url
         self.accesstoken = None
+        self.whitelisted_folders = whitelisted_folders
 
     @staticmethod
     def get_lock():
@@ -321,7 +322,6 @@ class EventFeed:
         if self.should_include(event)
     ]
 
-    @staticmethod
     def should_include(self, event):
         # event must be not deleted
         # startdate should be >= today and not null
@@ -329,7 +329,7 @@ class EventFeed:
         # folderid or foldername should be != internal events folder
         # name, url, description should be not null
 
-        allowed_folders = os.getenv('WHITELISTED_FOLDERS').split(',')
+        allowed_folders = self.whitelisted_folders.split(',')
         now = datetime.datetime.today().strftime('%Y-%m-%d')
         try:
             should_include = (

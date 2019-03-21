@@ -1184,6 +1184,7 @@ class TestApplication(TestBase):
             'FEEDS__1__AUTH_URL':
                 'http://localhost:8081/tests_fixture_aventri_auth.json',
             'FEEDS__1__EVENT_URL': 'http://localhost:8081/tests_fixture_aventri_{event_id}.json',
+            'FEEDS__1__WHITELISTED_FOLDERS': 'Archive',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
