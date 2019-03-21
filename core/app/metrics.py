@@ -35,6 +35,8 @@ METRICS_CONF = [
     (Summary, 'http_request_duration_seconds',
      'Time to make a http request',
      ['host', 'status']),
+    (Counter, 'http_request_completed_total',
+     'The number of HTTP requests completed', ['host', 'code']),
 ]
 
 
