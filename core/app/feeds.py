@@ -321,7 +321,7 @@ class EventFeed:
         if self.should_include(event)
     ]
 
-    def should_include(self, event):
+    def should_include(event):
         # event must be not deleted
         # startdate should be >= today and not null
         # enddate should be >= startdate and not null
@@ -338,7 +338,9 @@ class EventFeed:
                 event['name'] is not None and
                 event['url'] is not None and
                 event['description'] is not None and
-                event['include_calendar'] == '1' and event['status'] == 'Live' and event['foldername'] in allowed_folders
+                event['include_calendar'] == '1' and
+                event['status'] == 'Live' and
+                event['foldername'] in allowed_folders
             )
 
         except KeyError:
