@@ -95,12 +95,11 @@ async def run_outgoing_application():
         connector=conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
     )
-    raven_client = get_raven_client(sentry, session)
-
     redis_client = await redis_get_client(redis_uri)
 
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
+    raven_client = get_raven_client(sentry, session, metrics)
 
     context = Context(
         logger=logger, metrics=metrics,
