@@ -2,6 +2,9 @@ import time
 
 import ujson
 
+from .http import (
+    http_make_request,
+)
 from .logger import (
     logged,
 )
@@ -65,13 +68,11 @@ async def es_request(context, method, path, query, headers, payload):
         [settings.ES_URI, method, path, query],
     ):
         query_string = '&'.join([key + '=' + query[key] for key in query.keys()])
-        async with context.session.request(
-            method, settings.ES_URI + path + (('?' + query_string) if query_string != '' else ''),
+        return await http_make_request(
+            context, method,
+            settings.ES_URI + path + (('?' + query_string) if query_string != '' else ''),
             data=payload, headers=headers,
-        ) as result:
-            # Without this, after some number of requests, they end up hanging
-            await result.read()
-            return result
+        )
 
 
 class ESMetricsUnavailable(Exception):
