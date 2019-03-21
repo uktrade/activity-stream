@@ -1253,12 +1253,12 @@ class TestApplication(TestBase):
             'createddatetime': '2018-10-30 06:06:26', 'modifieddatetime': '2019-03-04 03:46:23',
             'login1': 'email', 'login2': 'attendeeid'}
         actual = EventFeed(
-            whitelisted_folders='Archive',
             unique_id='aventri',
             seed='https://api-emea.eventscloud.com/api/v2/global/listEvents.json',
             account_id='something',
             api_key='else',
             auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
+            whitelisted_folders='Archive',
             event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
             .should_include(json_single_event)
         self.assertTrue(actual, 'filter_events should return the event with formatted fields')
@@ -1266,12 +1266,12 @@ class TestApplication(TestBase):
     def test_single_invalid_event(self):
         json_single_invalid_event = {'deleted': '0', }
         actual = EventFeed(
-            whitelisted_folders='Archive',
             unique_id='aventri',
             seed='https://api-emea.eventscloud.com/api/v2/global/listEvents.json',
             account_id='something',
             api_key='else',
             auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
+            whitelisted_folders='Archive',
             event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
             .should_include(json_single_invalid_event)
         self.assertFalse(actual, 'filter_events should return empty for invalid event')
