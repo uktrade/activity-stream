@@ -243,14 +243,12 @@ class EventFeed:
             url = self.event_url.format(event_id=event_id)
 
             with logged(context.logger, 'Fetching event (%s)', [url]):
-                async with \
-                    context.session.get(
-                        url,
-                        headers={'accesstoken': self.accesstoken}) as result:
-                    result.raise_for_status()
-                    response_bytes = await result.read()
+                result, result_bytes = await http_make_request(
+                    context, 'GET', url, data=b'',
+                    headers={'accesstoken': self.accesstoken})
+                result.raise_for_status()
 
-            return json.loads(response_bytes.decode('utf-8'))
+            return json.loads(result_bytes.decode('utf-8'))
 
         return [
             {
