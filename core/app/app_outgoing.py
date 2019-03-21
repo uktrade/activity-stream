@@ -263,7 +263,7 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed,
 
 @http_429_retry_after
 async def get_feed_contents(context, href, headers, **_):
-    async with context.session.get(href, headers=headers) as result:
+    async with context.session.request('GET', href, headers=headers) as result:
         result.raise_for_status()
         return await result.read()
 
