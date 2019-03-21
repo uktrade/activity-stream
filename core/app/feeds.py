@@ -321,7 +321,8 @@ class EventFeed:
         if self.should_include(event)
     ]
 
-    def should_include(event):
+    @staticmethod
+    def should_include(self, event):
         # event must be not deleted
         # startdate should be >= today and not null
         # enddate should be >= startdate and not null
