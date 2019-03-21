@@ -32,6 +32,9 @@ METRICS_CONF = [
     (Gauge, 'elasticsearch_activities_age_minimum_seconds',
      'The minimum age of activites from a feed stored in Elasticsearch in seconds',
      ['feed_unique_id']),
+    (Summary, 'http_request_duration_seconds',
+     'Time to make a http request',
+     ['host', 'status']),
 ]
 
 
