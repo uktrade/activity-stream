@@ -9,6 +9,9 @@ import yarl
 from .hawk import (
     get_hawk_header,
 )
+from .http import (
+    http_make_request,
+)
 from .logger import (
     logged,
 )
@@ -224,14 +227,13 @@ class EventFeed:
         return None
 
     async def auth_headers(self, context, __):
-        async with \
-                context.session.post(
-                    self.auth_url,
-                    data={'accountid': self.account_id, 'key': self.api_key}) as result:
-            result.raise_for_status()
-            response_bytes = await result.read()
+        result = await http_make_request(
+            context.session, context.metrics, 'POST', self.auth_url, data={
+                'accountid': self.account_id, 'key': self.api_key,
+            }, headers={})
+        result.raise_for_status()
 
-        self.accesstoken = json.loads(response_bytes.decode('utf-8'))['accesstoken']
+        self.accesstoken = json.loads(result._body.decode('utf-8'))['accesstoken']
         return {
             'accesstoken': self.accesstoken,
         }
@@ -242,14 +244,12 @@ class EventFeed:
             url = self.event_url.format(event_id=event_id)
 
             with logged(context.logger, 'Fetching event (%s)', [url]):
-                async with \
-                    context.session.get(
-                        url,
-                        headers={'accesstoken': self.accesstoken}) as result:
-                    result.raise_for_status()
-                    response_bytes = await result.read()
+                result = await http_make_request(
+                    context.session, context.metrics, 'GET', url, data=b'',
+                    headers={'accesstoken': self.accesstoken})
+                result.raise_for_status()
 
-            return json.loads(response_bytes.decode('utf-8'))
+            return json.loads(result._body.decode('utf-8'))
 
         return [
             {

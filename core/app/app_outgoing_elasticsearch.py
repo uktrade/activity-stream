@@ -95,7 +95,7 @@ async def get_old_index_names(context):
             headers={'Content-Type': 'application/json'},
             payload=b'',
         )
-        indexes = await results.json()
+        indexes = ujson.loads(results._body.decode('utf-8'))
 
         without_alias = [
             index_name
@@ -150,7 +150,9 @@ async def delete_indexes(context, index_names):
                     payload=b'',
                 )
             except BaseException as exception:
-                if 'Cannot delete indices that are being snapshotted' in exception.args[0]:
+                if \
+                        exception.args and \
+                        'Cannot delete indices that are being snapshotted' in exception.args[0]:
                     context.logger.debug(
                         'Attempted to delete indices being snapshotted (%s)', [exception.args[0]])
                 else:
@@ -274,7 +276,7 @@ async def es_searchable_total(context):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    return (ujson.loads(await searchable_result.text()))['count']
+    return (ujson.loads(searchable_result._body.decode('utf-8')))['count']
 
 
 async def es_nonsearchable_total(context):
@@ -286,7 +288,7 @@ async def es_nonsearchable_total(context):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    return ujson.loads(await nonsearchable_result.text())['count']
+    return ujson.loads(nonsearchable_result._body.decode('utf-8'))['count']
 
 
 async def es_feed_activities_total(context, feed_id):
@@ -298,9 +300,9 @@ async def es_feed_activities_total(context, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    nonsearchable = ujson.loads(await nonsearchable_result.text())['count']
+    nonsearchable = ujson.loads(nonsearchable_result._body.decode('utf-8'))['count']
 
-    total_result = await es_maybe_unvailable_metrics(
+    total_results = await es_maybe_unvailable_metrics(
         context=context,
         method='GET',
         path=f'/{ALIAS_ACTIVITIES}__feed_id_{feed_id}__*/_count',
@@ -308,7 +310,7 @@ async def es_feed_activities_total(context, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    searchable = max(ujson.loads(await total_result.text())['count'] - nonsearchable, 0)
+    searchable = max(ujson.loads(total_results._body.decode('utf-8'))['count'] - nonsearchable, 0)
 
     return searchable, nonsearchable
 
@@ -319,5 +321,5 @@ async def es_maybe_unvailable_metrics(context, method, path, query, headers, pay
     if results.status == 503:
         raise ESMetricsUnavailable()
     if results.status != 200:
-        raise Exception(await results.text())
+        raise Exception(results._body.decode('utf-8'))
     return results
