@@ -69,7 +69,7 @@ async def es_request(context, method, path, query, headers, payload):
     ):
         query_string = '&'.join([key + '=' + query[key] for key in query.keys()])
         return await http_make_request(
-            context, method,
+            context.session, context.metrics, method,
             settings.ES_URI + path + (('?' + query_string) if query_string != '' else ''),
             data=payload, headers=headers,
         )

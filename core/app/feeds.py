@@ -227,9 +227,10 @@ class EventFeed:
         return None
 
     async def auth_headers(self, context, __):
-        result, result_bytes = await http_make_request(context, 'POST', self.auth_url, data={
-            'accountid': self.account_id, 'key': self.api_key,
-        }, headers={})
+        result, result_bytes = await http_make_request(
+            context.session, context.metrics, 'POST', self.auth_url, data={
+                'accountid': self.account_id, 'key': self.api_key,
+            }, headers={})
         result.raise_for_status()
 
         self.accesstoken = json.loads(result_bytes.decode('utf-8'))['accesstoken']
@@ -244,7 +245,7 @@ class EventFeed:
 
             with logged(context.logger, 'Fetching event (%s)', [url]):
                 result, result_bytes = await http_make_request(
-                    context, 'GET', url, data=b'',
+                    context.session, context.metrics, 'GET', url, data=b'',
                     headers={'accesstoken': self.accesstoken})
                 result.raise_for_status()
 

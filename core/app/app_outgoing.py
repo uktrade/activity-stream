@@ -266,7 +266,8 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed,
 
 @http_429_retry_after
 async def get_feed_contents(context, href, headers, **_):
-    result, result_bytes = await http_make_request(context, 'GET', href, data=b'', headers=headers)
+    result, result_bytes = await http_make_request(
+        context.session, context.metrics, 'GET', href, data=b'', headers=headers)
     result.raise_for_status()
     return result_bytes
 
