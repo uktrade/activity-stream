@@ -150,7 +150,9 @@ async def delete_indexes(context, index_names):
                     payload=b'',
                 )
             except BaseException as exception:
-                if 'Cannot delete indices that are being snapshotted' in exception.args[0]:
+                if \
+                        exception.args and \
+                        'Cannot delete indices that are being snapshotted' in exception.args[0]:
                     context.logger.debug(
                         'Attempted to delete indices being snapshotted (%s)', [exception.args[0]])
                 else:
