@@ -32,6 +32,9 @@ from .elasticsearch import (
 from .feeds import (
     parse_feed_config,
 )
+from .http import (
+    http_make_request,
+)
 from .logger import (
     get_root_logger,
     logged,
@@ -263,10 +266,9 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed,
 
 @http_429_retry_after
 async def get_feed_contents(context, href, headers, **_):
-    async with context.session.request('GET', href, data=b'', headers=headers) as result:
-        result_bytes = await result.read()
-        result.raise_for_status()
-        return result_bytes
+    result, result_bytes = await http_make_request(context, 'GET', href, data=b'', headers=headers)
+    result.raise_for_status()
+    return result_bytes
 
 
 async def create_metrics_application(parent_context, metrics_registry, feed_endpoints):
