@@ -50,7 +50,7 @@ def leaky_queue():
 
 async def send(session, metrics, url, data, headers, success_cb, failure_cb):
     try:
-        response, _ = await http_make_request(
+        response = await http_make_request(
             session, metrics, 'POST', url, data=data, headers=headers)
         message = response.headers.get('x-sentry-error', 'NO_ERROR_MESSAGE')
         retry_after = int(response.headers.get('retry-after', '0'))

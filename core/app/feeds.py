@@ -227,13 +227,13 @@ class EventFeed:
         return None
 
     async def auth_headers(self, context, __):
-        result, result_bytes = await http_make_request(
+        result = await http_make_request(
             context.session, context.metrics, 'POST', self.auth_url, data={
                 'accountid': self.account_id, 'key': self.api_key,
             }, headers={})
         result.raise_for_status()
 
-        self.accesstoken = json.loads(result_bytes.decode('utf-8'))['accesstoken']
+        self.accesstoken = json.loads(result._body.decode('utf-8'))['accesstoken']
         return {
             'accesstoken': self.accesstoken,
         }
@@ -244,12 +244,12 @@ class EventFeed:
             url = self.event_url.format(event_id=event_id)
 
             with logged(context.logger, 'Fetching event (%s)', [url]):
-                result, result_bytes = await http_make_request(
+                result = await http_make_request(
                     context.session, context.metrics, 'GET', url, data=b'',
                     headers={'accesstoken': self.accesstoken})
                 result.raise_for_status()
 
-            return json.loads(result_bytes.decode('utf-8'))
+            return json.loads(result._body.decode('utf-8'))
 
         return [
             {

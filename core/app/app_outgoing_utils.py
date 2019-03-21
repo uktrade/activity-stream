@@ -29,7 +29,7 @@ async def async_repeat_until_cancelled(context, exception_intervals, coroutine):
             interval_index = min(num_exceptions_in_chain, len(exception_intervals) - 1)
             exception_interval = exception_intervals[interval_index]
             num_exceptions_in_chain += 1
-            context.logger.error(
+            context.logger.exception(
                 'Raised exception in async_repeat_until_cancelled. '
                 'Waiting %s seconds until looping.', exception_interval)
             context.raven_client.captureException()

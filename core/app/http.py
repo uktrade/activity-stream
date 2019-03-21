@@ -11,8 +11,9 @@ async def http_make_request(session, metrics, method, url, data, headers):
 
     with metric_timer(metrics['http_request_duration_seconds'], [host]):
         async with session.request(method, url, data=data, headers=headers) as result:
-            # Without this, after some number of requests, they end up hanging
-            result_bytes = await result.read()
+            # We must read the body before the connection is closed, which can
+            # be on exit of the context manager
+            await result.read()
 
             with metric_counter(metrics['http_request_completed_total'],
                                 [host, str(result.status)], 1):
@@ -20,4 +21,4 @@ async def http_make_request(session, metrics, method, url, data, headers):
                 # to wrap, we just want to increment the counter
                 pass
 
-            return result, result_bytes
+            return result

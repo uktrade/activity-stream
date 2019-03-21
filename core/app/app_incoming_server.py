@@ -246,7 +246,7 @@ def handle_get_search(context):
     async def handle(request):
         body = await request.read()
 
-        _, results_bytes = await es_request(
+        results = await es_request(
             context=context,
             method='GET',
             path=f'/{ALIAS_OBJECTS}/_search',
@@ -255,7 +255,7 @@ def handle_get_search(context):
             payload=body,
         )
 
-        return web.Response(body=results_bytes, status=200, headers={
+        return web.Response(body=results._body, status=200, headers={
             'Content-Type': 'application/json; charset=utf-8',
         })
 

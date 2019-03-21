@@ -35,7 +35,7 @@ async def es_min_verification_age(context):
             }
         }
     }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
-    _, result_bytes = await es_request_non_200_exception(
+    result = await es_request_non_200_exception(
         context=context,
         method='GET',
         path=f'/{ALIAS_ACTIVITIES}/_search',
@@ -43,7 +43,7 @@ async def es_min_verification_age(context):
         headers={'Content-Type': 'application/json'},
         payload=payload,
     )
-    result_dict = ujson.loads(result_bytes.decode('utf-8'))
+    result_dict = ujson.loads(result._body.decode('utf-8'))
     try:
         max_published = int(result_dict['aggregations']
                             ['verifier_activities']['max_published']['value'] / 1000)
@@ -56,10 +56,10 @@ async def es_min_verification_age(context):
 
 
 async def es_request_non_200_exception(context, method, path, query, headers, payload):
-    results, results_bytes = await es_request(context, method, path, query, headers, payload)
+    results = await es_request(context, method, path, query, headers, payload)
     if results.status not in [200, 201]:
-        raise Exception(results_bytes.decode('utf-8'))
-    return results, results_bytes
+        raise Exception(results._body.decode('utf-8'))
+    return results
 
 
 async def es_request(context, method, path, query, headers, payload):

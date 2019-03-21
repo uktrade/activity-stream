@@ -75,7 +75,7 @@ async def es_search_activities(context, path, query, body, headers, request):
             'type': 'Collection',
         }, **next_dict}
 
-    results, results_bytes = await es_request(
+    results = await es_request(
         context=context,
         method='GET',
         path=path,
@@ -84,7 +84,7 @@ async def es_search_activities(context, path, query, body, headers, request):
         payload=body,
     )
 
-    response = ujson.loads(results_bytes.decode('utf-8'))
+    response = ujson.loads(results._body.decode('utf-8'))
     return \
         (await activities(context, response, request), 200) if results.status == 200 else \
         (response, results.status)
