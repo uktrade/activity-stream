@@ -1162,7 +1162,6 @@ class TestApplication(TestBase):
         self.assertIn('"2011-04-12T12:48:13+00:00"', results)
 
     @async_test
-    @patch.dict(os.environ, {'ALLOWED_FOLDERS': 'Archive'})
     async def test_aventri(self):
         def aventri_base_fetch(results):
             if 'hits' not in results or 'hits' not in results['hits']:

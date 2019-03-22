@@ -1,3 +1,6 @@
 {
-  "something": "invalid"
+  "foldername": "Archive",
+  "include_internal_calendar": "1",
+  "something": "invalid",
+  "status": "Live"
 }
