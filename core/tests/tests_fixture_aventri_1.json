@@ -64,7 +64,7 @@
   "force_option_selection": null,
   "headercustomcode": null,
   "homepage": "",
-  "include_calendar": "0",
+  "include_calendar": "1",
   "include_internal_calendar": "1",
   "ipreoid": "0",
   "languages": "a:1:{s:3:\"eng\";s:7:\"English\";}",
