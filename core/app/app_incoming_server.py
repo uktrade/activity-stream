@@ -38,7 +38,7 @@ NOT_AUTHORIZED = 'You are not authorized to perform this action.'
 UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
-def authenticator(context, incoming_key_pairs, nonce_expire):
+def authenticator(context, incoming_key_pairs):
 
     def _lookup_credentials(passed_access_key_id):
         return lookup_credentials(incoming_key_pairs, passed_access_key_id)
@@ -59,7 +59,6 @@ def authenticator(context, incoming_key_pairs, nonce_expire):
 
         is_authentic, private_error_message, credentials = await authenticate_hawk_header(
             context=context,
-            nonce_expire=nonce_expire,
             lookup_credentials=_lookup_credentials,
             header=request.headers['Authorization'],
             method=request.method,

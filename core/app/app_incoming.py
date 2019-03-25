@@ -47,8 +47,6 @@ from .utils import (
 )
 from . import settings
 
-NONCE_EXPIRE = 120
-
 
 async def run_incoming_application():
     logger = get_root_logger('incoming')
@@ -111,7 +109,7 @@ async def create_incoming_application(
 
     private_app = web.Application(middlewares=[
         authenticate_by_ip(INCORRECT, ip_whitelist),
-        authenticator(context, incoming_key_pairs, NONCE_EXPIRE),
+        authenticator(context, incoming_key_pairs),
         authorizer(),
     ])
     private_app.add_routes([

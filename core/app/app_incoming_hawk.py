@@ -14,7 +14,7 @@ from .app_incoming_redis import (
 )
 
 
-async def authenticate_hawk_header(context, nonce_expire, lookup_credentials,
+async def authenticate_hawk_header(context, lookup_credentials,
                                    header, method, host, port, path, content_type, content):
 
     is_valid_header = re.match(r'^Hawk (((?<="), )?[a-z]+="[^"]*")*$', header)
@@ -59,15 +59,14 @@ async def authenticate_hawk_header(context, nonce_expire, lookup_credentials,
     if not hmac.compare_digest(correct_mac, parsed_header['mac']):
         return False, 'Invalid mac', None
 
-    if not await is_nonce_available(context, parsed_header['nonce'], matching_credentials['id'],
-                                    nonce_expire):
+    if not await is_nonce_available(context, parsed_header['nonce'], matching_credentials['id']):
         return False, 'Invalid nonce', None
 
     return True, '', matching_credentials
 
 
-async def is_nonce_available(context, nonce, access_key_id, nonce_expire):
+async def is_nonce_available(context, nonce, access_key_id):
     nonce_key = f'nonce-{access_key_id}-{nonce}'
-    redis_response = await set_nonce_nx(context, nonce_key, nonce_expire)
+    redis_response = await set_nonce_nx(context, nonce_key)
     nonce_available = redis_response == b'OK'
     return nonce_available

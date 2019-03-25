@@ -284,7 +284,7 @@ class TestAuthentication(TestBase):
             is shorter then the allowed Hawk skew. The second request succeeding gives
             evidence that the cache of nonces was cleared.
         '''
-        with patch('core.app.app_incoming.NONCE_EXPIRE', 1):
+        with patch('core.app.settings.NONCE_EXPIRE', 1):
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                     mock_feed_status=lambda: 200, mock_headers=lambda: {})
 

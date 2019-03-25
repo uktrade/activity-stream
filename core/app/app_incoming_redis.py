@@ -20,9 +20,9 @@ async def redis_get_metrics(context):
     return await context.redis_client.execute('GET', 'metrics')
 
 
-async def set_nonce_nx(context, nonce_key, nonce_expire):
+async def set_nonce_nx(context, nonce_key):
     return await context.redis_client.execute('SET', nonce_key, '1',
-                                              'EX', nonce_expire, 'NX')
+                                              'EX', settings.NONCE_EXPIRE, 'NX')
 
 
 async def set_feed_status(context, feed_id, feed_max_interval, status):
