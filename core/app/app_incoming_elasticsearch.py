@@ -84,7 +84,7 @@ async def es_search_activities(context, path, query, body, headers, request):
         payload=body,
     )
 
-    response = await results.json()
+    response = ujson.loads(results._body.decode('utf-8'))
     return \
         (await activities(context, response, request), 200) if results.status == 200 else \
         (response, results.status)

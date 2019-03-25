@@ -1360,7 +1360,7 @@ class TestApplication(TestBase):
             await fetch_all_es_data_until(has_at_least(2))
 
         async with aiohttp.ClientSession() as session:
-            for _ in range(0, 20):
+            for _ in range(0, 90):
                 url = 'http://127.0.0.1:8080/metrics'
                 result = await session.get(url)
                 text = await result.text()

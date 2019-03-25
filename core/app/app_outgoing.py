@@ -32,6 +32,9 @@ from .elasticsearch import (
 from .feeds import (
     parse_feed_config,
 )
+from .http import (
+    http_make_request,
+)
 from .logger import (
     get_root_logger,
     logged,
@@ -92,12 +95,11 @@ async def run_outgoing_application():
         connector=conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
     )
-    raven_client = get_raven_client(sentry, session)
-
     redis_client = await redis_get_client(redis_uri)
 
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
+    raven_client = get_raven_client(sentry, session, metrics)
 
     context = Context(
         logger=logger, metrics=metrics,
@@ -263,9 +265,10 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed,
 
 @http_429_retry_after
 async def get_feed_contents(context, href, headers, **_):
-    async with context.session.get(href, headers=headers) as result:
-        result.raise_for_status()
-        return await result.read()
+    result = await http_make_request(
+        context.session, context.metrics, 'GET', href, data=b'', headers=headers)
+    result.raise_for_status()
+    return result._body
 
 
 async def create_metrics_application(parent_context, metrics_registry, feed_endpoints):
