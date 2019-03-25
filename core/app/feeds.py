@@ -2,7 +2,6 @@ import asyncio
 import datetime
 import json
 import re
-
 import aiohttp
 import yarl
 
@@ -199,14 +198,15 @@ class EventFeed:
     updates_page_interval = 60 * 60 * 24 * 30
 
     exception_intervals = [120, 180, 240, 300]
-    INTERNAL_EVENTS_AVENTRI_FOLDER = 'internal aventri'
 
     @classmethod
     def parse_config(cls, config):
         return cls(**sub_dict_lower(
-            config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL', 'EVENT_URL']))
+            config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL', 'EVENT_URL',
+                     'WHITELISTED_FOLDERS']))
 
-    def __init__(self, unique_id, seed, account_id, api_key, auth_url, event_url):
+    def __init__(self, unique_id, seed, account_id, api_key, auth_url, event_url,
+                 whitelisted_folders):
         self.unique_id = unique_id
         self.seed = seed
         self.account_id = account_id
@@ -214,6 +214,7 @@ class EventFeed:
         self.auth_url = auth_url
         self.event_url = event_url
         self.accesstoken = None
+        self.whitelisted_folders = whitelisted_folders
 
     @staticmethod
     def get_lock():
@@ -238,9 +239,8 @@ class EventFeed:
             'accesstoken': self.accesstoken,
         }
 
-    async def convert_to_bulk_es(self, context, page, activity_index_names, _):
+    async def convert_to_bulk_es(self, context, page, activity_index_names, object_index_names):
         async def get_event(event_id):
-            await asyncio.sleep(3)
             url = self.event_url.format(event_id=event_id)
 
             with logged(context.logger, 'Fetching event (%s)', [url]):
@@ -287,6 +287,39 @@ class EventFeed:
             for index_name in activity_index_names
             for event in [await get_event(page_event['eventid'])]
             if self.should_include(event)
+        ] + [
+            {
+                'action_and_metadata': {
+                    'index': {
+                        '_index': index_name,
+                        '_type': '_doc',
+                        '_id':  'dit:aventri:Event:' + str(event['eventid']) + ':Create',
+                    },
+                },
+                'source': {
+                    'type': [
+                        'Document',
+                        'dit:aventri:Event',
+                    ],
+                    'id': 'dit:aventri:Event:' + str(event['eventid']),
+                    'name': event['name'],
+                    'url': event['url'],
+                    'description': event['description'],
+                    'startdate': event['startdate'],
+                    'enddate': event['enddate'],
+                    'foldername': event['foldername'],
+                    'location': event['location'],
+                    'language': event['defaultlanguage'],
+                    'timezone': event['timezone'],
+                    'currency': event['standardcurrency'],
+                    'price_type': event['price_type'],
+                    'price': event['pricepoints'],
+                },
+            }
+            for page_event in page
+            for index_name in object_index_names
+            for event in [await get_event(page_event['eventid'])]
+            if self.should_include(event)
         ]
 
     def should_include(self, event):
@@ -296,16 +329,19 @@ class EventFeed:
         # folderid or foldername should be != internal events folder
         # name, url, description should be not null
 
+        allowed_folders = self.whitelisted_folders.split(',')
         now = datetime.datetime.today().strftime('%Y-%m-%d')
         try:
             should_include = (
                 event['eventid'] is not None and
                 event['deleted'] != 0 and
                 event['enddate'] > event['startdate'] > now and
-                event['foldername'] != self.INTERNAL_EVENTS_AVENTRI_FOLDER and
                 event['name'] is not None and
                 event['url'] is not None and
-                event['description'] is not None
+                event['description'] is not None and
+                event['include_calendar'] == '1' and
+                event['status'] == 'Live' and
+                event['foldername'] in allowed_folders
             )
 
         except KeyError:
