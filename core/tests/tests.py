@@ -1215,7 +1215,7 @@ class TestApplication(TestBase):
             'businessunit': '0', 'city': '', 'startdate': '2020-02-19', 'enddate': '2020-02-20',
             'include_calendar': '1', 'include_internal_calendar': None, 'timezoneid': '27',
             'dateformat': 'l, j F Y', 'timeformat': 'g:i a', 'currency_dec_point': '.',
-            'currency_thousands_sep': ',', 'approval_status': None, 'status': 'Archived',
+            'currency_thousands_sep': ',', 'approval_status': None, 'status': 'Live',
             'event_type': None, 'description': '<p>Click through to learn more.</p>',
             'programmanager': '', 'languages': 'a:1:{s:3:"eng";s:7:"English";}',
             'defaultlanguage': 'eng', 'createdby': '200045907', 'deleted': '0',
@@ -1247,7 +1247,7 @@ class TestApplication(TestBase):
             'footercustomcode': None, 'customstats': None, 'emailSuffixData': None,
             'facebook_eventid': None, 'allowedEmailSuffixes': None, 'line_item_tax': '0',
             'taxid': None, 'tax_rounding': None, 'customhtml': None, 'price_type': None,
-            'foldername': 'DIT HQ events and sites', 'eventclosemessage': '',
+            'foldername': 'Archive', 'eventclosemessage': '',
             'timezone': '[GMT] Greenwich Mean Time: Dublin, Edinburgh, Lisbon, London',
             'createddatetime': '2018-10-30 06:06:26', 'modifieddatetime': '2019-03-04 03:46:23',
             'login1': 'email', 'login2': 'attendeeid'}
