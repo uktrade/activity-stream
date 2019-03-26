@@ -241,6 +241,7 @@ class EventFeed:
 
     async def convert_to_bulk_es(self, context, page, activity_index_names, object_index_names):
         async def get_event(event_id):
+            await asyncio.sleep(3)
             url = self.event_url.format(event_id=event_id)
 
             with logged(context.logger, 'Fetching event (%s)', [url]):
