@@ -37,6 +37,7 @@ This algorithm has a number of nice properties that make it acceptable for an ea
 - Ingesting all the data repeatedly and indefinitely, as opposed to ingesting on some schedule, means that problems are likely to be found early and often: similar to the principles behind Chaos Engineering/Chaos Monkey.
 - Migrations, in terms of updating Elasticsearch mappings, are baked right into the algorithm, and happen on every ingest.
 - The fact that it's a single algorithm, with a single low-tech endpoint in each source, that has the above properties. It's one thing to code up, maintain and ensure is secure. This touches production data, and the team involved in this project is small.
+- The fact that 3rd party APIs are typically offered as paginated HTTP endpoints, and so can have their data integrated using the same algorithm and almost all of the same code.
 
 ### (Almost) real time updates
 
