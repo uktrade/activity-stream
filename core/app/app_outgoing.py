@@ -196,8 +196,6 @@ async def ingest_feed_full(context, feed_lock, feed,):
             context, activities_index_name, objects_index_name, feed.unique_id)
         await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
 
-        await sleep(context, feed.full_ingest_interval)
-
 
 async def ingest_feed_updates(context, feed_lock, feed):
     metrics = context.metrics
