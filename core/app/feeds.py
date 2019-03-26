@@ -191,7 +191,7 @@ class EventFeed:
 
     max_interval_before_reporting_down = 60 * 60 * 4
 
-    full_ingest_page_interval = 0
+    full_ingest_page_interval = 3
     updates_page_interval = 60 * 60 * 24 * 30
     exception_intervals = [120, 180, 240, 300]
 
