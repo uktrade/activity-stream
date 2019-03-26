@@ -30,7 +30,6 @@ class ActivityStreamFeed:
 
     max_interval_before_reporting_down = 60
 
-    full_ingest_interval = 0
     full_ingest_page_interval = 0.25
     updates_page_interval = 1
     exception_intervals = [1, 2, 4, 8, 16, 32, 64]
@@ -106,7 +105,6 @@ class ZendeskFeed:
 
     # The staging API is severely rate limited
     # Could be higher on prod, but KISS
-    full_ingest_interval = 0
     full_ingest_page_interval = 30
     updates_page_interval = 120
     exception_intervals = [120, 180, 240, 300]
@@ -191,12 +189,10 @@ class ZendeskFeed:
 
 class EventFeed:
 
-    max_interval_before_reporting_down = 60 * 60 * 2
+    max_interval_before_reporting_down = 60 * 60 * 4
 
-    full_ingest_interval = 60 * 60
-    full_ingest_page_interval = 0
+    full_ingest_page_interval = 3
     updates_page_interval = 60 * 60 * 24 * 30
-
     exception_intervals = [120, 180, 240, 300]
 
     @classmethod
@@ -241,6 +237,7 @@ class EventFeed:
 
     async def convert_to_bulk_es(self, context, page, activity_index_names, object_index_names):
         async def get_event(event_id):
+            await asyncio.sleep(3)
             url = self.event_url.format(event_id=event_id)
 
             with logged(context.logger, 'Fetching event (%s)', [url]):
