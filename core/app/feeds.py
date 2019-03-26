@@ -191,7 +191,7 @@ class ZendeskFeed:
 
 class EventFeed:
 
-    max_interval_before_reporting_down = 60 * 60 * 2
+    max_interval_before_reporting_down = 60 * 60 * 4
 
     full_ingest_interval = 60 * 60
     full_ingest_page_interval = 0
