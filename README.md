@@ -1,119 +1,109 @@
 # activity-stream [![CircleCI](https://circleci.com/gh/uktrade/activity-stream.svg?style=svg)](https://circleci.com/gh/uktrade/activity-stream) [![Maintainability](https://api.codeclimate.com/v1/badges/e0284a2cb292704bf53c/maintainability)](https://codeclimate.com/github/uktrade/activity-stream/maintainability) [![Test Coverage](https://api.codeclimate.com/v1/badges/e0284a2cb292704bf53c/test_coverage)](https://codeclimate.com/github/uktrade/activity-stream/test_coverage)
 
-Activity Stream is a collector of various interactions between people and DIT.
+Activity Stream pulls all available data from several DIT services into one ElasticsSearch Database. This data is searchable via an API and is connected to Datahub.
 
-## Services data is/will be collected from
+Data is collected from:
 
-- https://opportunities.export.great.gov.uk/
-- https://github.com/uktrade/directory-api, which backs the services
-  - https://find-a-buyer.export.great.gov.uk/
-  - https://selling-online-overseas.export.great.gov.uk/
+- Opportunities and Enquiries from the Export Opportunities project https://opportunities.export.great.gov.uk/
+- Articles from the Directory CMS project https://github.com/uktrade/directory-api, which backs the services
+  - https://find-a-buyer.export.great.gov.uk/-
+- Marketplaces from the Selling Online Overseas Project https://selling-online-overseas.export.great.gov.uk/
+- Events from the Events API
+- ZendDesk Tickets
 - https://www.datahub.trade.gov.uk/
-- ZendDesk
 
-## Architecture and algorithm
+# Installation Instructions
 
-### Full ingest of all activities
+Clone this repository
+Set up Virtual Env
+Start Virtual Env
+Add the local environment variables to Virtual Env
 
-A simple paginated HTTP endpoint is exposed in each source service, exposing data in W3C Activity 2.0 format. Concurrently for each source:
+```bash
+pip install -r core/requirements.txt
+```
 
-- (Delete any unused Elasticsearch indexes for the source)
-- A new Elasticsearch index is created with a unique name, and its mappings are set.
-- Starting from a pre-configured seed URL:
-  - the Activity Stream fetches a page of activities from the URL, and ingests them into the Elasticsearch index;
-  - the URL for the next page is given explicitly in the page;
-  - repeat until there is no next URL specified.
-- After all pages ingested, the index is aliased to `activities`, with any previous aliases for that source atomically removed.
-- Repeat indefinitely.
-- On any error, start from the beginning for that source.
 
-This algorithm has a number of nice properties that make it acceptable for an early version.
+# Running the apps locally
 
-- Historical activities are ingested with no special import step
-- It's self-correcting after downtime of either the source service, or the Activity Stream. No highly available intermediate buffer is required, and the source service does not need to keep track of what was sent to the Activity Stream.
-- It's self-correcting in terms of data: historical data can be changed at source, or even deleted, and it will be updated in the Activity Stream in the next pass. It's as GDPR-compliant as the source service is.
-- The behaviour of the source service when data is created is in no way dependant on the Activity Stream.
-- The Activity Stream can't DoS the source service: as long as each page of data isn't too large, the Activity Stream puts about one extra concurrent user's worth of load on the source service.
-- Ingesting all the data repeatedly and indefinitely, as opposed to ingesting on some schedule, means that problems are likely to be found early and often: similar to the principles behind Chaos Engineering/Chaos Monkey.
-- Migrations, in terms of updating Elasticsearch mappings, are baked right into the algorithm, and happen on every ingest.
-- The fact that it's a single algorithm, with a single low-tech endpoint in each source, that has the above properties. It's one thing to code up, maintain and ensure is secure. This touches production data, and the team involved in this project is small.
+A small separate source API application in [verification_feed](verification_feed) is provided to allow the stream to be tested. It provides a small number of activities.
 
-### (Almost) real time updates
+Add env variables:
+export FEEDS__2__UNIQUE_ID=verification_feed
+export FEEDS__2__SEED=http://localhost:8082/0
+export FEEDS__2__ACCESS_KEY_ID=feed-some-id
+export FEEDS__2__SECRET_ACCESS_KEY='?[!@$%^%'
+export FEEDS__2__TYPE=activity_stream
 
-Real time updates are done using a variation of the algorithm for full ingest. Specifically, after a full ingest has completed:
+Run app on
+`PORT=8082 python3 app.py`
 
-- The final URL used for the full ingest is saved as the seed for updates.
-- Fetch all indexes for each source, both the live one aliased to `activites`, and the one being currently the target of the full ingest.
-- Starting from the updates seed URL:
-  - the Activity Stream fetches a page of activities from the URL, and ingests them into the Elasticsearch indexes;
-  - the URL for the next page is given explicitly in the page;
-  - repeat until there is no next URL specified.
-- Once all the pages from the updates are ingested, save the final URL used as the seed for the next pass.
-- Sleep for 1 second.
-- Repeat indefinitely, but if a full ingest has completed, use its final URL as the seed for updates.
+CHANGE:
+and have a number of environment variables set: the up-to-date list of these are in the `mock_env` function defined in [tests_utils.py](core/tests_utils.py). Then to run the application that polls feeds
 
-A lock is used per feed, that ensures a single in-progress request to each source service. The rest of the behaviour is concurrent.
+    (cp -r -f shared core && cd core && python3 -m app.app_outgoing)
 
-This algorithm has a number of nice properties
+or to run the application that proxies incoming requests to Elasticsearch
 
-- The Activity Stream doesn't need to be aware of the format of the URLs. It only needs to know the seed URL.
-- The source service doesn't need to support multiple methods of fetching data: both real time updates and full ingest uses the same endpoint.
-- Once a full ingest is completed, the updates are independant of the time it takes to perform a full ingest.
-- Once activities are visible in the `activities` alias, they won't disappear due to race conditions between the full ingest and the updates ingest. This is the reason for ingesting updates into both the live and in-progress indexes.
-- This shares a fair bit of code with the full ingest. The team behind this project is small, and so this is less to maintain than other possibilities.
-- Similar to the full ingest, the behaviour of the source service when data is created is in no way dependant on the Activity Stream.
-- Similar to the full ingest, it doesn't require a highly available intermediate buffer, nor does it require the source service to keep track of what has been sent.
-- Similar to the full ingest, it is self-correcting after downtime of either the source service or the Activity Stream.
-- Data will still be changed/removed on the next full ingest pass.
+    (cp -r -f shared core && cd core && python3 -m app.app_incoming)
 
-In tests, this results in updates being available in Elasticsearch in between 1 and 4 seconds.
 
-## Source HTTP endpoints
+Run Elasticsearch and Redis using docker
 
-### Requirements
+    ./tests_es_start.sh && ./tests_redis_start.sh
 
-- Starting from a seed URL, search source HTTP endpoint must output activities in Activity Streams 2.0 JSON-LD format. Specifically, it must offer a `Collection` with the activites in the `orderedItems` key.
-- It must allow pagination, giving the full URL to the next page of results giving a full URL in the `next` key. The final page should not have a `next` key. The Activity Stream itself doesn't depend on what method is used for pagination, but care must be taken to not put too much pressure on the underlying database. For example, paginating using a simple offset/limit in a SQL query is likely to be extremely inefficient on later pages. However, pagination based on a combination of create/update timestamp and primary key, together with appropriate indexes in the database, is more likely to be suitable.
-- It should be expected that the final page, without a `next` key, will be polled for latest updates once a second. If a `next` key is later set in the results of this page, it will be paginated through until it reaches a page without the `next` key set.
-- Each activity must have an `id` field that is unique. [In the current implementation, it doesn't have to be unique accross all sources, but this should be treated as an implementation detail. It is recommend to ensure this is unique accross all sources.]
+and then to run the
 
-### Techniques for updates / deletion
 
-Each activity is ingested into Elasticsearch into a document with the `id` of the activity. As is typical with Elasticsearch, ingest of a document completely overwrites any existing one with that `id`.  This gives a method for updates or deletions:
 
-- Activities can be updated, including redaction of any private data, by ensuring an activity is output with the same `id` as the original. This does not necessarily have to wait for the next full ingest, as long as the activity appears on the page being polled for updates.
+# Running the tests
 
-Alternatively, because each full ingest is into a new index:
+You must have the dependencies specified in [core/requirements_test.txt](core/requirements_test.txt), which can be installed by
 
-- Activities can be completely deleted by making sure they do not appear on the next full ingest. The limitation of this is that this won't take effect in Elasticsearch until the next full ingest is complete.
+```bash
+pip install -r core/requirements_test.txt
+```
 
-### Duplicates
+Ensure Elasticsearch and Redis are running using docker
 
-The paginated feed can output the same activity multiple times, and as long as each has the same `id`, it won't be repeated in Elasticsearch.
+    ./tests_es_start.sh && ./tests_redis_start.sh
 
-### Rate Limiting
+and then to run the tests themselves
 
-The Activity Stream should only make a single connection to the source service at any given time, and will not follow the next page of pagination until the previous one is retrieved. The source service should be designed to be able to handle these in succession: a standard web application that can handle concurrent users would typically be sufficient.
+    ./tests.sh
 
-However, it is possible to rate limit the Activity Stream if it's necessary.
+Individual Tests
 
-- Responding with HTTP 429, containing a `Retry-After` header containing how after many seconds the Activity Stream should retry the same URL.
+Running a single test takes the format:
+`python3 -m unittest -v core.tests.tests.TestApplication.test_aventri`
 
-- Responding with a HTTP code >= 400, that isn't a 429. The Activity Stream will treat this as a failed ingestion, and start again from the seed after 1 second. The time increases exponentially with each consecutive failure, until maxing out at 64 seconds between retries. The process also occurs on general HTTP connection issues.
+## Release Process
 
-## Outgoing and incoming applications
+### Linting
 
-The core of the Activity Stream is made of two applications.
+A tool called Pre-commit is installed, which runs linting when committing.
 
-### Outgoing
+### Commit Signing
 
-This is the application that performs the above algorithm, continually making <em>outgoing</em> HTTP connections to pull data. It is not scalable, and other than during deployments, there should only be one instance running at any time. However, it has low CPU requirements, and as explained above, self-correcting after any downtime.
+Commits must be signed to be submitted to github. Use GPG Signer [FIND LINK]
 
-### Incoming
+### Deployment
 
-This is the application that features a HTTP server, accepting <em>incoming</em> HTTP requests, and passes requests for data to Elasticsearch. It converts the raw Elasticsearch format returned into a Activity Streams 2.0 compatible format. This is scalable, and multiple instances of this application can be running at any given time.
+Deploy master branch or feature branches to development, staging or production here:
+
+https://jenkins.ci.uktrade.io/job/activity-stream/
+
+## Dashboards and Metrics
+
+Due to the quantity of data, being passed, the logs (and any individual request) makes it difficult to interpret the wider picture. Thus dashboards are used as the first source of debugging and to understand if a deployment has been successful.
+
+Staging Dashboard: https://grafana.ci.uktrade.io/d/gKcrzUKmz/activity-stream?orgId=1&var-instance=activity-stream-staging.london.cloudapps.digital:443
+
+Two key graphs to use are the "Feed failures in previous minute" graph, and the "Age of youngest activity" graph. Feed Failures graph shows whether feeds are connected and active correctly, and should show zero for all feeds. The "Age of youngest activity" shows the age of the most recent activity, and generally should trend flat. If the age is going up, no activities are being consumed and this indicates that the "outgoing" script is down.
 
 ## Logging
+
+Logging is the best way.
 
 Logs are usually output in the format
 
@@ -132,9 +122,87 @@ There are potentially many separate chains of concurrent behaviour at any given 
 To view the logs, use a command such as `cf logs activity-stream-staging | grep selling_online_overseas_markets`
 
 
+## How Project Works
+
+Activity Stream has two main applications. A script called "Outgoing" collects data from each project and saves it in elasticsearch. An API called "Incoming" provides access to this data.
+
+### The "Outgoing" Script
+
+Each data type is saved in a seperate index inside Activity Stream, e.g. one index for Opportunties, one for Articles, one for Markets, and so on.
+
+In fact, each item is saved twice, first in one index for Activities and one for Objects. The difference is that the "Activities" index stores each action performed on the object ("Created, Updated") as a different item and so a given object can appear multiple times. The "Objects" index for a particular data type only stores the most up to date version of a given object, so each item in the index is a unique object.
+
+Each project to be connected to Activity Stream needs an API that the Activity Stream "Outgoing" script can crawl. For consistency the data should be presented in W3C Activity 2.0 format. Specifically, it must offer a `Collection` with the activites in the `orderedItems` key. The API in each project should provide the data as a list of all data, ordered by some attribute (e.g. date updated), one page at a time. Each "page" of data also provides a link to the next page in the chain in the key `next`, until the last page which does not have a `next` key.
+
+As it consumes an API, the Outgoing Script will create a new pair of temporary indices (one for activities and one for objects) for each source. When the script has consumed the last page of data, the current pair of indexes are deleted and replaced by the just-created temporary indices, and the process immediately begins again from the first page. The script is not polling the source on a scheduled basis, but rather continuously and repeatedly downloading the data.
+
+Repeatedly downloading the data keeps the data in Activity Stream up to date. If there are any errors in the script, it restarts. Because Activity Stream deletes any data shortly after the source does, Activity Stream is also GDPR compliant.
+
+The Outbound script does not know about the format of the data that is consumed or provided. When the format of the data changes, "Outgoing" automatically deletes the old data and replaces it with the new format data after one cycle.
+
+### The "Incoming" API
+
+The Inbound API contains an endpoint for consuming all activities that meet a certain Elasticsearch Query, which is provided at /v1/activities. Results are returned one page at a time. Also, an API for
+
+### Authentication
+
+Both "Incoming" and "Outgoing" use Hawk Authentication.
+
+### Technical Notes
+
+- Outgoing is not scalable, besides deployments there should only be one instance running.
+- Outgoing is self-correcting after any downtime of either Activity Stream or the source.
+- Each activity must have an `id` field that is unique. [In the current implementation, it doesn't have to be unique accross all sources, but this should be treated as an implementation detail. It is recommend to ensure this is unique accross all sources.]
+
+
+### Performance requirements of source APIs
+
+The Outgoing script only makes a single connection to the source service at any given time, and will not follow the next page of pagination until the previous one is retrieved. It continuously puts one extra user's worth of load on the source service. The source APIs should be able to handle concurrent users to support this.
+
+The extra user performs a database query multiple times every second. For this reason it's important to optimise the performance of the source APIs. For example, paginating using a simple offset/limit in a SQL query is extremely inefficient on later pages. Pagination based on a combination of create/update timestamp and primary key, together with appropriate indexes in the database, works well. See one of the existing projects for an example of this.
+
+It is possible to rate limit the Activity Stream if necessary. The source API should respond with HTTP 429, containing a `Retry-After` header containing how after many seconds the Activity Stream should retry the same URL.
+
+
+
+### The Update Cycle
+
+Real time updates are done using a variation of the algorithm for full ingest. Specifically, after a full ingest has completed:
+
+- The final URL used for the full ingest is saved as the seed for updates.
+- Fetch all indexes for each source, both the live one aliased to `activites`, and the one being currently the target of the full ingest.
+- Starting from the updates seed URL:
+  - the Activity Stream fetches a page of activities from the URL, and ingests them into the Elasticsearch indexes;
+  - the URL for the next page is given explicitly in the page;
+  - repeat until there is no next URL specified.
+- Once all the pages from the updates are ingested, save the final URL used as the seed for the next pass.
+- Sleep for 1 second.
+- Repeat indefinitely, but if a full ingest has completed, use its final URL as the seed for updates.
+
+A lock is used per feed, that ensures a single in-progress request to each source service. The rest of the behaviour is concurrent.
+
+In tests, this results in updates being available in Elasticsearch in between 1 and 4 seconds.
+
+
+### Techniques for updates / deletion
+
+Each activity is ingested into Elasticsearch into a document with the `id` of the activity. As is typical with Elasticsearch, ingest of a document completely overwrites any existing one with that `id`.  This gives a method for updates or deletions:
+
+- Activities can be updated, including redaction of any private data, by ensuring an activity is output with the same `id` as the original. This does not necessarily have to wait for the next full ingest, as long as the activity appears on the page being polled for updates.
+
+Alternatively, because each full ingest is into a new index:
+
+- Activities can be completely deleted by making sure they do not appear on the next full ingest. The limitation of this is that this won't take effect in Elasticsearch until the next full ingest is complete.
+
+### Duplicates
+
+The paginated feed can output the same activity multiple times, and as long as each has the same `id`, it won't be repeated in Elasticsearch.
+
+
+
+
 ## Verification Feed
 
-A small separate application in [verification_feed](verification_feed) is provided to allow the stream to be tested, even in production, without using real data. It provides a number of activities, published date of the moment the feed is queried.
 
 ## Local development environment
 
@@ -165,19 +233,6 @@ Higher-level feature tests, that assume very little over the internals of the ap
 
 ### Running locally
 
-Since the tests are fairly high level, most development should be able to be done without starting the application separately. However, if you do wish to run the application locally, you must have the dependencies specified in [core/requirements.txt](core/requirements.txt), which can be installed by
-
-```bash
-pip install -r core/requirements.txt
-```
-
-and have a number of environment variables set: the up-to-date list of these are in the `mock_env` function defined in [tests_utils.py](core/tests_utils.py). Then to run the application that polls feeds
-
-    (cp -r -f shared core && cd core && python3 -m app.app_outgoing)
-
-or to run the application that proxies incoming requests to Elasticsearch
-
-    (cp -r -f shared core && cd core && python3 -m app.app_incoming)
 
 This closely resembles how the CI pipeline builds and deploys the applications.
 
@@ -221,11 +276,3 @@ Keeping commits small, releasable, and with working tests is especially helpful 
 - Code should be designed for the _current_ behaviour in terms of inputs and outputs, and avoid anything that isn't required for this. Be _very_ self-skeptical if you're adding complexity for perceived future requirements. Minimise complexity by only adding it when it's needed, rather than just in case.
 
 These guidelines also apply to test code, since the behaviour of production code is enforced, in part, by the tests.
-
-## Deployment
-
-https://jenkins.ci.uktrade.io/job/activity-stream/
-
-## Dashboards and Metrics
-
-https://grafana.ci.uktrade.io/d/gKcrzUKmz/activity-stream?orgId=1&var-instance=activity-stream-staging.london.cloudapps.digital:443
