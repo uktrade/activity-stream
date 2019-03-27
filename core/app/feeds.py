@@ -331,7 +331,6 @@ class EventFeed:
 
         allowed_folders = self.whitelisted_folders.split(',')
         now = datetime.datetime.today().strftime('%Y-%m-%d')
-        context.logger.debug('Event data: (%s)', event)
         try:
             should_include = (
                 event['eventid'] is not None and
@@ -347,6 +346,8 @@ class EventFeed:
 
         except KeyError:
             should_include = False
+
+        context.logger.debug('Event data: (%s) should_include: (%s)', event, should_include)
 
         return should_include
 
