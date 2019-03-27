@@ -350,8 +350,8 @@ class EventFeed:
         loggable_event = {
             key: event[key]
             for key in (
-                'eventid', 'deleted', 'enddate', 'name', 'url', 'description', 'include_calendar'
-                'status', 'foldername',
+                'eventid', 'deleted', 'enddate', 'startdate', 'name', 'url', 'description',
+                'include_calendar', 'status', 'foldername',
             )
             if key in event
         }
