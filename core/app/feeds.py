@@ -248,6 +248,7 @@ class EventFeed:
 
             return json.loads(result._body.decode('utf-8'))
 
+        now = datetime.datetime.now().isoformat()
         return [
             {
                 'action_and_metadata': _action_and_metadata(
@@ -266,7 +267,7 @@ class EventFeed:
                         'id': 'dit:aventri:Event:' + event['eventid'],
                         'name': event['name'],
                         'url': event['url'],
-                        'description': event['description'],
+                        'content': event['description'],
                         'startdate': event['startdate'],
                         'enddate': event['enddate'],
                         'foldername': event['foldername'],
@@ -275,7 +276,8 @@ class EventFeed:
                         'timezone': event['timezone'],
                         'currency': event['standardcurrency'],
                         'price_type': event['price_type'],
-                        'price': event['pricepoints']
+                        'price': event['pricepoints'],
+                        'published': now
                     },
 
                 }
@@ -283,7 +285,7 @@ class EventFeed:
             for page_event in page
             for index_name in activity_index_names
             for event in [await get_event(page_event['eventid'])]
-            if self.should_include(event)
+            if self.should_include(context, event)
         ] + [
             {
                 'action_and_metadata': {
@@ -301,7 +303,7 @@ class EventFeed:
                     'id': 'dit:aventri:Event:' + str(event['eventid']),
                     'name': event['name'],
                     'url': event['url'],
-                    'description': event['description'],
+                    'content': event['description'],
                     'startdate': event['startdate'],
                     'enddate': event['enddate'],
                     'foldername': event['foldername'],
@@ -311,15 +313,16 @@ class EventFeed:
                     'currency': event['standardcurrency'],
                     'price_type': event['price_type'],
                     'price': event['pricepoints'],
+                    'published': now
                 },
             }
             for page_event in page
             for index_name in object_index_names
             for event in [await get_event(page_event['eventid'])]
-            if self.should_include(event)
+            if self.should_include(context, event)
         ]
 
-    def should_include(self, event):
+    def should_include(self, context, event):
         # event must be not deleted
         # startdate should be >= today and not null
         # enddate should be >= startdate and not null
@@ -328,6 +331,7 @@ class EventFeed:
 
         allowed_folders = self.whitelisted_folders.split(',')
         now = datetime.datetime.today().strftime('%Y-%m-%d')
+        context.logger.debug('Event data: (%)', event)
         try:
             should_include = (
                 event['eventid'] is not None and
