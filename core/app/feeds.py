@@ -331,7 +331,7 @@ class EventFeed:
 
         allowed_folders = self.whitelisted_folders.split(',')
         now = datetime.datetime.today().strftime('%Y-%m-%d')
-        context.logger.debug('Event data: (%)', event)
+        context.logger.debug('Event data: (%s)', event)
         try:
             should_include = (
                 event['eventid'] is not None and
