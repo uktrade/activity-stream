@@ -347,7 +347,16 @@ class EventFeed:
         except KeyError:
             should_include = False
 
-        context.logger.debug('Event data: (%s) should_include: (%s)', event, should_include)
+        loggable_event = {
+            key: event[key]
+            for key in (
+                'eventid', 'deleted', 'enddate', 'name', 'url', 'description', 'include_calendar'
+                'status', 'foldername',
+            )
+            if key in event
+        }
+        context.logger.debug('Event data: (%s) should_include: (%s)',
+                             loggable_event, should_include)
 
         return should_include
 
