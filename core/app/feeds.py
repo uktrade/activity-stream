@@ -335,7 +335,7 @@ class EventFeed:
             should_include = (
                 event['eventid'] is not None and
                 event['deleted'] != 0 and
-                event['enddate'] > event['startdate'] > now and
+                event['enddate'] >= event['startdate'] >= now and
                 event['name'] is not None and
                 event['url'] is not None and
                 event['description'] is not None and
