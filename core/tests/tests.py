@@ -460,6 +460,9 @@ class TestApplication(TestBase):
 
         query = json.dumps({
             'size': '1',
+            'sort': [
+                {'published': {'order': 'desc'}},
+            ]
         }).encode('utf-8')
         auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url_1,
