@@ -296,10 +296,7 @@ class EventFeed:
                     },
                 },
                 'source': {
-                    'type': [
-                        'Document',
-                        'dit:aventri:Event',
-                    ],
+                    'type': 'Event',
                     'id': 'dit:aventri:Event:' + str(event['eventid']),
                     'name': event['name'],
                     'url': event['url'],
