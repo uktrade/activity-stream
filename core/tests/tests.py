@@ -5,11 +5,14 @@ import os
 import re
 import unittest
 from unittest.mock import patch
+from unittest.mock import MagicMock
 
 import aiohttp
 from aiohttp import web
 import aioredis
 from freezegun import freeze_time
+
+from ..app.utils import Context
 
 from ..app.feeds import (
     EventFeed,
@@ -1197,6 +1200,8 @@ class TestApplication(TestBase):
 
     def test_base_event_should_include(self):
         json_null_event = {}
+        context = Context(logger=MagicMock(), metrics=MagicMock(),
+                          raven_client=MagicMock(), redis_client=MagicMock(), session=MagicMock())
         actual = EventFeed(
             unique_id='aventri',
             seed='https://api-emea.eventscloud.com/api/v2/global/listEvents.json',
@@ -1205,10 +1210,12 @@ class TestApplication(TestBase):
             auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
             whitelisted_folders='Archive',
             event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
-            .should_include(json_null_event)
+            .should_include(context, json_null_event)
         self.assertFalse(actual, 'filter_events should return empty for null event')
 
     def test_single_event_filter(self):
+        context = Context(logger=MagicMock(), metrics=MagicMock(),
+                          raven_client=MagicMock(), redis_client=MagicMock(), session=MagicMock())
         json_single_event = {
             'eventid': '200183890', 'accountid': '200008108', 'folderid': '200090383',
             'name': 'test event1', 'code': '', 'department': '0', 'division': '0',
@@ -1259,11 +1266,13 @@ class TestApplication(TestBase):
             auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
             whitelisted_folders='Archive',
             event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
-            .should_include(json_single_event)
+            .should_include(context, json_single_event)
         self.assertTrue(actual, 'filter_events should return the event with formatted fields')
 
     def test_single_invalid_event(self):
         json_single_invalid_event = {'deleted': '0', }
+        context = Context(logger=MagicMock(), metrics=MagicMock(),
+                          raven_client=MagicMock(), redis_client=MagicMock(), session=MagicMock())
         actual = EventFeed(
             unique_id='aventri',
             seed='https://api-emea.eventscloud.com/api/v2/global/listEvents.json',
@@ -1272,7 +1281,7 @@ class TestApplication(TestBase):
             auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
             whitelisted_folders='Archive',
             event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
-            .should_include(json_single_invalid_event)
+            .should_include(context, json_single_invalid_event)
         self.assertFalse(actual, 'filter_events should return empty for invalid event')
 
     @async_test

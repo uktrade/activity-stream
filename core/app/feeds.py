@@ -248,6 +248,7 @@ class EventFeed:
 
             return json.loads(result._body.decode('utf-8'))
 
+        now = datetime.datetime.now().isoformat()
         return [
             {
                 'action_and_metadata': _action_and_metadata(
@@ -266,7 +267,7 @@ class EventFeed:
                         'id': 'dit:aventri:Event:' + event['eventid'],
                         'name': event['name'],
                         'url': event['url'],
-                        'description': event['description'],
+                        'content': event['description'],
                         'startdate': event['startdate'],
                         'enddate': event['enddate'],
                         'foldername': event['foldername'],
@@ -275,7 +276,8 @@ class EventFeed:
                         'timezone': event['timezone'],
                         'currency': event['standardcurrency'],
                         'price_type': event['price_type'],
-                        'price': event['pricepoints']
+                        'price': event['pricepoints'],
+                        'published': now
                     },
 
                 }
@@ -283,7 +285,7 @@ class EventFeed:
             for page_event in page
             for index_name in activity_index_names
             for event in [await get_event(page_event['eventid'])]
-            if self.should_include(event)
+            if self.should_include(context, event)
         ] + [
             {
                 'action_and_metadata': {
@@ -294,14 +296,11 @@ class EventFeed:
                     },
                 },
                 'source': {
-                    'type': [
-                        'Document',
-                        'dit:aventri:Event',
-                    ],
+                    'type': 'Event',
                     'id': 'dit:aventri:Event:' + str(event['eventid']),
                     'name': event['name'],
                     'url': event['url'],
-                    'description': event['description'],
+                    'content': event['description'],
                     'startdate': event['startdate'],
                     'enddate': event['enddate'],
                     'foldername': event['foldername'],
@@ -311,15 +310,16 @@ class EventFeed:
                     'currency': event['standardcurrency'],
                     'price_type': event['price_type'],
                     'price': event['pricepoints'],
+                    'published': now
                 },
             }
             for page_event in page
             for index_name in object_index_names
             for event in [await get_event(page_event['eventid'])]
-            if self.should_include(event)
+            if self.should_include(context, event)
         ]
 
-    def should_include(self, event):
+    def should_include(self, context, event):
         # event must be not deleted
         # startdate should be >= today and not null
         # enddate should be >= startdate and not null
@@ -332,7 +332,7 @@ class EventFeed:
             should_include = (
                 event['eventid'] is not None and
                 event['deleted'] != 0 and
-                event['enddate'] > event['startdate'] > now and
+                event['enddate'] >= event['startdate'] >= now and
                 event['name'] is not None and
                 event['url'] is not None and
                 event['description'] is not None and
@@ -343,6 +343,17 @@ class EventFeed:
 
         except KeyError:
             should_include = False
+
+        loggable_event = {
+            key: event[key]
+            for key in (
+                'eventid', 'deleted', 'enddate', 'startdate', 'name', 'url', 'description',
+                'include_calendar', 'status', 'foldername',
+            )
+            if key in event
+        }
+        context.logger.debug('Event data: (%s) should_include: (%s)',
+                             loggable_event, should_include)
 
         return should_include
 
