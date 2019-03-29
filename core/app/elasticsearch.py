@@ -9,7 +9,6 @@ from .logger import (
     logged,
 )
 
-from . import settings
 
 ALIAS_ACTIVITIES = 'activities'
 ALIAS_OBJECTS = 'objects'
@@ -65,12 +64,12 @@ async def es_request_non_200_exception(context, method, path, query, headers, pa
 async def es_request(context, method, path, query, headers, payload):
     with logged(
         context.logger, 'Elasticsearch request (%s) (%s) (%s) (%s)',
-        [settings.ES_URI, method, path, query],
+        [context.es_uri, method, path, query],
     ):
         query_string = '&'.join([key + '=' + query[key] for key in query.keys()])
         return await http_make_request(
             context.session, context.metrics, method,
-            settings.ES_URI + path + (('?' + query_string) if query_string != '' else ''),
+            context.es_uri + path + (('?' + query_string) if query_string != '' else ''),
             data=payload, headers=headers,
         )
 

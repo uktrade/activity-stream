@@ -1203,7 +1203,7 @@ class TestApplication(TestBase):
 
     def test_base_event_should_include(self):
         json_null_event = {}
-        context = Context(logger=MagicMock(), metrics=MagicMock(),
+        context = Context(logger=MagicMock(), metrics=MagicMock(), es_uri=MagicMock(),
                           raven_client=MagicMock(), redis_client=MagicMock(), session=MagicMock())
         actual = EventFeed(
             unique_id='aventri',
@@ -1217,7 +1217,7 @@ class TestApplication(TestBase):
         self.assertFalse(actual, 'filter_events should return empty for null event')
 
     def test_single_event_filter(self):
-        context = Context(logger=MagicMock(), metrics=MagicMock(),
+        context = Context(logger=MagicMock(), metrics=MagicMock(), es_uri=MagicMock(),
                           raven_client=MagicMock(), redis_client=MagicMock(), session=MagicMock())
         json_single_event = {
             'eventid': '200183890', 'accountid': '200008108', 'folderid': '200090383',
@@ -1274,7 +1274,7 @@ class TestApplication(TestBase):
 
     def test_single_invalid_event(self):
         json_single_invalid_event = {'deleted': '0', }
-        context = Context(logger=MagicMock(), metrics=MagicMock(),
+        context = Context(logger=MagicMock(), metrics=MagicMock(), es_uri=MagicMock(),
                           raven_client=MagicMock(), redis_client=MagicMock(), session=MagicMock())
         actual = EventFeed(
             unique_id='aventri',

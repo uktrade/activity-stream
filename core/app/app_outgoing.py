@@ -72,7 +72,6 @@ from .utils import (
     normalise_environment,
     sleep,
 )
-from . import settings
 
 EXCEPTION_INTERVALS = [1, 2, 4, 8, 16, 32, 64]
 METRICS_INTERVAL = 1
@@ -88,7 +87,6 @@ async def run_outgoing_application():
         es_uri, redis_uri, sentry = get_common_config(env)
         feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
 
-    settings.ES_URI = es_uri
     conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
     session = aiohttp.ClientSession(
         connector=conn,
@@ -101,7 +99,7 @@ async def run_outgoing_application():
     raven_client = get_raven_client(sentry, session, metrics)
 
     context = Context(
-        logger=logger, metrics=metrics,
+        logger=logger, metrics=metrics, es_uri=es_uri,
         raven_client=raven_client, redis_client=redis_client, session=session)
 
     await acquire_and_keep_lock(context, EXCEPTION_INTERVALS, 'lock')

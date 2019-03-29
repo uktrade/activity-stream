@@ -15,7 +15,7 @@ from .logger import (
 
 
 Context = collections.namedtuple(
-    'Context', ['logger', 'metrics', 'raven_client', 'redis_client', 'session'],
+    'Context', ['logger', 'metrics', 'es_uri', 'raven_client', 'redis_client', 'session'],
 )
 
 

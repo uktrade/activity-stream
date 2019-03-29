@@ -45,7 +45,6 @@ from .utils import (
     main,
     normalise_environment,
 )
-from . import settings
 
 NONCE_EXPIRE = 120
 
@@ -65,7 +64,6 @@ async def run_incoming_application():
         } for key_pair in env['INCOMING_ACCESS_KEY_PAIRS']]
         ip_whitelist = env['INCOMING_IP_WHITELIST']
 
-    settings.ES_URI = es_uri
     conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
     session = aiohttp.ClientSession(
         connector=conn,
@@ -78,7 +76,7 @@ async def run_incoming_application():
     raven_client = get_raven_client(sentry, session, metrics)
 
     context = Context(
-        logger=logger, metrics=metrics,
+        logger=logger, metrics=metrics, es_uri=es_uri,
         raven_client=raven_client, redis_client=redis_client, session=session)
 
     with logged(context.logger, 'Creating listening web application', []):
