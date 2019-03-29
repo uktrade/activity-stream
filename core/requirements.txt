@@ -4,17 +4,21 @@
 #
 #    pip-compile --output-file requirements.txt requirements.in
 #
-aiodns==1.1.1
+aiodns==2.0.0
 aiohttp==3.3.2
 aioredis==1.1.0
 async-timeout==3.0.0      # via aiohttp, aioredis
 attrs==18.1.0             # via aiohttp
+cffi==1.12.2              # via pycares
 chardet==3.0.4            # via aiohttp
 hiredis==0.2.0            # via aioredis
-idna==2.6                 # via yarl
+idna-ssl==1.1.0           # via aiohttp
+idna==2.6                 # via idna-ssl, yarl
 multidict==4.3.1          # via aiohttp, yarl
 prometheus_client==0.3.0
-pycares==2.3.0            # via aiodns
+pycares==3.0.0            # via aiodns
+pycparser==2.19           # via cffi
 raven==6.9.0
+typing==3.6.6             # via aiodns
 ujson==1.35
 yarl==1.2.4               # via aiohttp
