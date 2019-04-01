@@ -40,14 +40,11 @@ class ActivityStreamFeed:
                                     ['UNIQUE_ID', 'SEED', 'ACCESS_KEY_ID', 'SECRET_ACCESS_KEY']))
 
     def __init__(self, unique_id, seed, access_key_id, secret_access_key):
+        self.lock = asyncio.Lock()
         self.unique_id = unique_id
         self.seed = seed
         self.access_key_id = access_key_id
         self.secret_access_key = secret_access_key
-
-    @staticmethod
-    def get_lock():
-        return asyncio.Lock()
 
     @staticmethod
     def next_href(feed):
@@ -116,14 +113,11 @@ class ZendeskFeed:
         return cls(**sub_dict_lower(config, ['UNIQUE_ID', 'SEED', 'API_EMAIL', 'API_KEY']))
 
     def __init__(self, unique_id, seed, api_email, api_key):
+        self.lock = asyncio.Lock()
         self.unique_id = unique_id
         self.seed = seed
         self.api_email = api_email
         self.api_key = api_key
-
-    @staticmethod
-    def get_lock():
-        return asyncio.Lock()
 
     @staticmethod
     def next_href(feed):
@@ -203,6 +197,7 @@ class EventFeed:
 
     def __init__(self, unique_id, seed, account_id, api_key, auth_url, event_url,
                  whitelisted_folders):
+        self.lock = asyncio.Lock()
         self.unique_id = unique_id
         self.seed = seed
         self.account_id = account_id
@@ -211,10 +206,6 @@ class EventFeed:
         self.event_url = event_url
         self.accesstoken = None
         self.whitelisted_folders = whitelisted_folders
-
-    @staticmethod
-    def get_lock():
-        return asyncio.Lock()
 
     @staticmethod
     def next_href(_):

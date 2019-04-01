@@ -143,19 +143,18 @@ async def ingest_feeds(context, feed_endpoints):
         get_child_context(context, 'initial-delete'), indexes_to_delete,
     )
 
-    def feed_ingester(ingest_type_context, feed_lock, feed_endpoint, ingest_func):
+    def feed_ingester(ingest_type_context, feed_endpoint, ingest_func):
         async def _feed_ingester():
-            await ingest_func(ingest_type_context, feed_lock, feed_endpoint)
+            await ingest_func(ingest_type_context, feed_endpoint)
         return _feed_ingester
 
     await asyncio.gather(*[
         async_repeat_until_cancelled(context, feed_endpoint.exception_intervals, ingester)
         for feed_endpoint in feed_endpoints
-        for feed_lock in [feed_endpoint.get_lock()]
         for feed_context in [get_child_context(context, feed_endpoint.unique_id)]
         for (feed_func, ingest_type) in [(ingest_full, 'full'), (ingest_updates, 'updates')]
         for ingest_type_logger in [get_child_context(feed_context, ingest_type)]
-        for ingester in [feed_ingester(ingest_type_logger, feed_lock, feed_endpoint, feed_func)]
+        for ingester in [feed_ingester(ingest_type_logger, feed_endpoint, feed_func)]
     ])
 
 
@@ -163,7 +162,7 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-async def ingest_full(context, feed_lock, feed):
+async def ingest_full(context, feed):
     metrics = context.metrics
     with \
             logged(context.logger, 'Full ingest', []), \
@@ -184,8 +183,7 @@ async def ingest_full(context, feed_lock, feed):
         while href:
             updates_href = href
             href = await ingest_page(
-                context, 'full', feed_lock, feed,
-                [activities_index_name], [objects_index_name], href,
+                context, 'full', feed, [activities_index_name], [objects_index_name], href,
             )
             await sleep(context, feed.full_ingest_page_interval)
 
@@ -196,7 +194,7 @@ async def ingest_full(context, feed_lock, feed):
         await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
 
 
-async def ingest_updates(context, feed_lock, feed):
+async def ingest_updates(context, feed):
     metrics = context.metrics
     with \
             logged(context.logger, 'Updates ingest', []), \
@@ -213,8 +211,9 @@ async def ingest_updates(context, feed_lock, feed):
 
         while href:
             updates_href = href
-            href = await ingest_page(context, 'updates', feed_lock, feed,
-                                     activities_index_names, objects_index_names, href)
+            href = await ingest_page(
+                context, 'updates', feed, activities_index_names, objects_index_names, href,
+            )
 
         for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
             await refresh_index(context, index_name)
@@ -223,15 +222,14 @@ async def ingest_updates(context, feed_lock, feed):
     await sleep(context, feed.updates_page_interval)
 
 
-async def ingest_page(context, ingest_type, feed_lock, feed,
-                      activity_index_names, objects_index_names, href):
+async def ingest_page(context, ingest_type, feed, activity_index_names, objects_index_names, href):
     with \
             logged(context.logger, 'Polling/pushing page', []), \
             metric_timer(context.metrics['ingest_page_duration_seconds'],
                          [feed.unique_id, ingest_type, 'total']):
 
         # Lock so there is only 1 request per feed at any given time
-        async with feed_lock:
+        async with feed.lock:
             with \
                     logged(context.logger, 'Polling page (%s)', [href]), \
                     metric_timer(context.metrics['ingest_page_duration_seconds'],
