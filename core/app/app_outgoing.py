@@ -150,8 +150,10 @@ async def ingest_feeds(context, feed_endpoints):
         )
         for feed_endpoint in feed_endpoints
         for feed_context in [get_child_context(context, feed_endpoint.unique_id)]
-        for (ingest_func, ingest_type) in [(ingest_full, 'full'), (ingest_updates, 'updates')]
-        for ingest_context in [get_child_context(feed_context, ingest_type)]
+        for (ingest_func, ingest_context) in [
+            (ingest_full, get_child_context(feed_context, 'full')),
+            (ingest_updates, get_child_context(feed_context, 'updates')),
+        ]
     ])
 
 
