@@ -153,10 +153,9 @@ async def ingest_feeds(context, feed_endpoints):
         for feed_endpoint in feed_endpoints
         for feed_lock in [feed_endpoint.get_lock()]
         for feed_context in [get_child_context(context, feed_endpoint.unique_id)]
-        for feed_func_ingest_type in [(ingest_full, 'full'), (ingest_updates, 'updates')]
-        for ingest_type_logger in [get_child_context(feed_context, feed_func_ingest_type[1])]
-        for ingester in [feed_ingester(ingest_type_logger, feed_lock, feed_endpoint,
-                                       feed_func_ingest_type[0])]
+        for (feed_func, ingest_type) in [(ingest_full, 'full'), (ingest_updates, 'updates')]
+        for ingest_type_logger in [get_child_context(feed_context, ingest_type)]
+        for ingester in [feed_ingester(ingest_type_logger, feed_lock, feed_endpoint, feed_func)]
     ])
 
 
