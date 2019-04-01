@@ -153,7 +153,7 @@ async def ingest_feeds(context, feed_endpoints):
         for feed_endpoint in feed_endpoints
         for feed_lock in [feed_endpoint.get_lock()]
         for feed_context in [get_child_context(context, feed_endpoint.unique_id)]
-        for feed_func_ingest_type in [(ingest_feed_full, 'full'), (ingest_feed_updates, 'updates')]
+        for feed_func_ingest_type in [(ingest_full, 'full'), (ingest_updates, 'updates')]
         for ingest_type_logger in [get_child_context(feed_context, feed_func_ingest_type[1])]
         for ingester in [feed_ingester(ingest_type_logger, feed_lock, feed_endpoint,
                                        feed_func_ingest_type[0])]
@@ -164,7 +164,7 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-async def ingest_feed_full(context, feed_lock, feed,):
+async def ingest_full(context, feed_lock, feed):
     metrics = context.metrics
     with \
             logged(context.logger, 'Full ingest', []), \
@@ -184,7 +184,7 @@ async def ingest_feed_full(context, feed_lock, feed,):
         href = feed.seed
         while href:
             updates_href = href
-            href = await ingest_feed_page(
+            href = await ingest_page(
                 context, 'full', feed_lock, feed,
                 [activities_index_name], [objects_index_name], href,
             )
@@ -197,7 +197,7 @@ async def ingest_feed_full(context, feed_lock, feed,):
         await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
 
 
-async def ingest_feed_updates(context, feed_lock, feed):
+async def ingest_updates(context, feed_lock, feed):
     metrics = context.metrics
     with \
             logged(context.logger, 'Updates ingest', []), \
@@ -214,8 +214,8 @@ async def ingest_feed_updates(context, feed_lock, feed):
 
         while href:
             updates_href = href
-            href = await ingest_feed_page(context, 'updates', feed_lock, feed,
-                                          activities_index_names, objects_index_names, href)
+            href = await ingest_page(context, 'updates', feed_lock, feed,
+                                     activities_index_names, objects_index_names, href)
 
         for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
             await refresh_index(context, index_name)
@@ -224,8 +224,8 @@ async def ingest_feed_updates(context, feed_lock, feed):
     await sleep(context, feed.updates_page_interval)
 
 
-async def ingest_feed_page(context, ingest_type, feed_lock, feed,
-                           activity_index_names, objects_index_names, href):
+async def ingest_page(context, ingest_type, feed_lock, feed,
+                      activity_index_names, objects_index_names, href):
     with \
             logged(context.logger, 'Polling/pushing page', []), \
             metric_timer(context.metrics['ingest_page_duration_seconds'],
