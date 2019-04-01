@@ -124,11 +124,11 @@ async def run_outgoing_application():
 
 
 async def create_outgoing_application(context, feed_endpoints):
-    async def ingester():
-        await ingest_feeds(context, feed_endpoints)
-
     asyncio.get_event_loop().create_task(
-        async_repeat_until_cancelled(context, EXCEPTION_INTERVALS, ingester)
+        async_repeat_until_cancelled(
+            context, EXCEPTION_INTERVALS,
+            ingest_feeds, context, feed_endpoints,
+        )
     )
 
 
@@ -142,20 +142,16 @@ async def ingest_feeds(context, feed_endpoints):
         get_child_context(context, 'initial-delete'), indexes_to_delete,
     )
 
-    def feed_ingester(ingest_type_context, feed_lock, feed_endpoint, ingest_func):
-        async def _feed_ingester():
-            await ingest_func(ingest_type_context, feed_lock, feed_endpoint)
-        return _feed_ingester
-
     await asyncio.gather(*[
-        async_repeat_until_cancelled(context, feed_endpoint.exception_intervals, ingester)
+        async_repeat_until_cancelled(
+            context, feed_endpoint.exception_intervals,
+            ingest_func, ingest_context, feed_endpoint,
+        )
         for feed_endpoint in feed_endpoints
-        for feed_lock in [feed_endpoint.get_lock()]
-        for feed_context in [get_child_context(context, feed_endpoint.unique_id)]
-        for feed_func_ingest_type in [(ingest_feed_full, 'full'), (ingest_feed_updates, 'updates')]
-        for ingest_type_logger in [get_child_context(feed_context, feed_func_ingest_type[1])]
-        for ingester in [feed_ingester(ingest_type_logger, feed_lock, feed_endpoint,
-                                       feed_func_ingest_type[0])]
+        for (ingest_func, ingest_context) in [
+            (ingest_full, get_child_context(context, f'{feed_endpoint.unique_id},full')),
+            (ingest_updates, get_child_context(context, f'{feed_endpoint.unique_id},updates')),
+        ]
     ])
 
 
@@ -163,7 +159,7 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-async def ingest_feed_full(context, feed_lock, feed,):
+async def ingest_full(context, feed):
     metrics = context.metrics
     with \
             logged(context.logger, 'Full ingest', []), \
@@ -183,9 +179,8 @@ async def ingest_feed_full(context, feed_lock, feed,):
         href = feed.seed
         while href:
             updates_href = href
-            href = await ingest_feed_page(
-                context, 'full', feed_lock, feed,
-                [activities_index_name], [objects_index_name], href,
+            href = await ingest_page(
+                context, 'full', feed, [activities_index_name], [objects_index_name], href,
             )
             await sleep(context, feed.full_ingest_page_interval)
 
@@ -196,7 +191,7 @@ async def ingest_feed_full(context, feed_lock, feed,):
         await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
 
 
-async def ingest_feed_updates(context, feed_lock, feed):
+async def ingest_updates(context, feed):
     metrics = context.metrics
     with \
             logged(context.logger, 'Updates ingest', []), \
@@ -213,8 +208,9 @@ async def ingest_feed_updates(context, feed_lock, feed):
 
         while href:
             updates_href = href
-            href = await ingest_feed_page(context, 'updates', feed_lock, feed,
-                                          activities_index_names, objects_index_names, href)
+            href = await ingest_page(
+                context, 'updates', feed, activities_index_names, objects_index_names, href,
+            )
 
         for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
             await refresh_index(context, index_name)
@@ -223,15 +219,14 @@ async def ingest_feed_updates(context, feed_lock, feed):
     await sleep(context, feed.updates_page_interval)
 
 
-async def ingest_feed_page(context, ingest_type, feed_lock, feed,
-                           activity_index_names, objects_index_names, href):
+async def ingest_page(context, ingest_type, feed, activity_index_names, objects_index_names, href):
     with \
             logged(context.logger, 'Polling/pushing page', []), \
             metric_timer(context.metrics['ingest_page_duration_seconds'],
                          [feed.unique_id, ingest_type, 'total']):
 
         # Lock so there is only 1 request per feed at any given time
-        async with feed_lock:
+        async with feed.lock:
             with \
                     logged(context.logger, 'Polling page (%s)', [href]), \
                     metric_timer(context.metrics['ingest_page_duration_seconds'],
