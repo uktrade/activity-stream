@@ -62,7 +62,6 @@ from .app_outgoing_redis import (
 )
 from .app_outgoing_utils import (
     async_repeat_until_cancelled,
-    http_429_retry_after,
 )
 from .utils import (
     Context,
@@ -239,7 +238,7 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed,
                                  [feed.unique_id, ingest_type, 'pull']):
                 feed_contents = await get_feed_contents(
                     context, href, await feed.auth_headers(context, href),
-                    _http_429_retry_after_context=context)
+                )
 
         with logged(context.logger, 'Parsing JSON', []):
             feed_parsed = ujson.loads(feed_contents)
@@ -261,12 +260,25 @@ async def ingest_feed_page(context, ingest_type, feed_lock, feed,
         return feed.next_href(feed_parsed)
 
 
-@http_429_retry_after
-async def get_feed_contents(context, href, headers, **_):
-    result = await http_make_request(
-        context.session, context.metrics, 'GET', href, data=b'', headers=headers)
-    result.raise_for_status()
-    return result._body
+async def get_feed_contents(context, href, headers):
+    num_attempts = 0
+    max_attempts = 10
+    logger = context.logger
+
+    while True:
+        num_attempts += 1
+        try:
+            result = await http_make_request(
+                context.session, context.metrics, 'GET', href, data=b'', headers=headers)
+            result.raise_for_status()
+            return result._body
+        except aiohttp.ClientResponseError as client_error:
+            if (num_attempts >= max_attempts or client_error.status != 429 or
+                    'Retry-After' not in client_error.headers):
+                raise
+            logger.debug('HTTP 429 received at attempt (%s). Will retry after (%s) seconds',
+                         num_attempts, client_error.headers['Retry-After'])
+            await sleep(context, int(client_error.headers['Retry-After']))
 
 
 async def create_metrics_application(parent_context, metrics_registry, feed_endpoints):
