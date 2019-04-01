@@ -1,7 +1,5 @@
 import asyncio
 
-import aiohttp
-
 
 def flatten(to_flatten):
     return list(flatten_generator(to_flatten))
@@ -38,25 +36,3 @@ async def async_repeat_until_cancelled(context, exception_intervals, coroutine):
                 await asyncio.sleep(exception_interval)
             except asyncio.CancelledError:
                 break
-
-
-def http_429_retry_after(coroutine):
-
-    async def _http_429_retry_after(*args, **kwargs):
-        num_attempts = 0
-        max_attempts = 10
-        logger = kwargs['_http_429_retry_after_context'].logger
-
-        while True:
-            num_attempts += 1
-            try:
-                return await coroutine(*args, **kwargs)
-            except aiohttp.ClientResponseError as client_error:
-                if (num_attempts >= max_attempts or client_error.status != 429 or
-                        'Retry-After' not in client_error.headers):
-                    raise
-                logger.debug('HTTP 429 received at attempt (%s). Will retry after (%s) seconds',
-                             num_attempts, client_error.headers['Retry-After'])
-                await asyncio.sleep(int(client_error.headers['Retry-After']))
-
-    return _http_429_retry_after
