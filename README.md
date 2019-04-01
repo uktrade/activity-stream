@@ -231,7 +231,7 @@ As such, the code has the below properties / follows the below patterns.
 
 - Tests are quite "end to end": it would be error-prone and time consuming to manually go through the many important asynchronous edge cases, such as the "eventual" recovery after a failure of a source feed or Elasticsearch.
 
-  The tests allow refactoring, and are correctly sensitive to broken behaviour. However, there is a downside: they offen offer little information on what is broken. This is compounded by the self-correcting nature of the code: it attempts to recover after exceptions, and so the tests may just sit there.
+  The tests allow refactoring, and are correctly sensitive to broken behaviour. However, there is a downside: they often offer little information on what is broken. This is compounded by the self-correcting nature of the code: it attempts to recover after exceptions, and so the tests may just sit there.
 
 ----
 
