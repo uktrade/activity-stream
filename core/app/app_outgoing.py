@@ -125,11 +125,11 @@ async def run_outgoing_application():
 
 
 async def create_outgoing_application(context, feed_endpoints):
-    async def ingester():
-        await ingest_feeds(context, feed_endpoints)
-
     asyncio.get_event_loop().create_task(
-        async_repeat_until_cancelled(context, EXCEPTION_INTERVALS, ingester)
+        async_repeat_until_cancelled(
+            context, EXCEPTION_INTERVALS,
+            ingest_feeds, context, feed_endpoints,
+        )
     )
 
 
@@ -143,18 +143,15 @@ async def ingest_feeds(context, feed_endpoints):
         get_child_context(context, 'initial-delete'), indexes_to_delete,
     )
 
-    def feed_ingester(ingest_type_context, feed_endpoint, ingest_func):
-        async def _feed_ingester():
-            await ingest_func(ingest_type_context, feed_endpoint)
-        return _feed_ingester
-
     await asyncio.gather(*[
-        async_repeat_until_cancelled(context, feed_endpoint.exception_intervals, ingester)
+        async_repeat_until_cancelled(
+            context, feed_endpoint.exception_intervals,
+            ingest_func, ingest_context, feed_endpoint,
+        )
         for feed_endpoint in feed_endpoints
         for feed_context in [get_child_context(context, feed_endpoint.unique_id)]
-        for (feed_func, ingest_type) in [(ingest_full, 'full'), (ingest_updates, 'updates')]
-        for ingest_type_context in [get_child_context(feed_context, ingest_type)]
-        for ingester in [feed_ingester(ingest_type_context, feed_endpoint, feed_func)]
+        for (ingest_func, ingest_type) in [(ingest_full, 'full'), (ingest_updates, 'updates')]
+        for ingest_context in [get_child_context(feed_context, ingest_type)]
     ])
 
 
