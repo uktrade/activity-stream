@@ -182,6 +182,62 @@ or to run the application that proxies incoming requests to Elasticsearch
 
 This closely resembles how the CI pipeline builds and deploys the applications.
 
+
+## Patterns
+
+The outgoing application has a number of properties/requirements that are different to a standard web-based application.
+
+- Chains of operations that effect data changes can be long running. A full ingest can take hours: there is no "instantaenous" web request to do this. [There are quicker changes: "almost" real time updates that take between 1 and 4 seconds.]
+
+- It's extremely asynchronous in terms of cause and effect, in that a change on a source feed only makes a difference to the data exposed by the AS "some time later". And this time can be different: an update can be quick, but a deletion would be on the next full ingest. [This is by design. Even if a source feed attempted to "push" data synchronously, it would need to handle failure, which would have to be asynchronous. Instead of having this asynchronous behaviour in all sources, it's here.]
+
+- It's multi-tasked [the asyncio version of multi-threaded], with communication between tasks. At the time of writing, production has [at least] 17 tasks.
+
+- Each task has log output that allows it to be `grep`ped for excluding other tasks. [Production makes over 40 outgoing HTTPS requests a second, each of these with many lines of logging output].
+
+- Each task outputs Activity Stream-specific metrics that allows each to be analysed separately.
+
+- It depends heavily on properties of Elasticsearch [that other data stores don't have].
+
+- It depends heavily on the sequence of the calls to Elasticsearch [e.g. creating, deleting and refreshing indexes, modifying aliases].
+
+- There is very little business logic in terms of user-facing features: it takes data from one place to another.
+
+- There is no interface to load up manually and check that "it all still works".
+
+As such, the code has the below properties / follows the below patterns.
+
+- It's light on abstraction: to make changes you need to understand the "guts", so they are not hidden. For example, abstracting Elasticsearch [probably] won't give value, because it would either have to expose everything underneath, or to make changes you would have to change what's hidden.
+
+- But there is some abstraction: source feeds can be of different types, with slightly different data formats or authentication patterns. This is abstracted so the rest of the algorithm "doesn't have to care" about these things.
+
+- There isn't much object-oriented code, since most concerns are cross-cutting, in that there are queries to source feeds, Elasticsearch, logging, metric, and Redis code.
+
+- Mutation is minimised wherever possible. There is a lot of state by nature of the algorithm, so it's more important to not make this "even worse" so the possibiliy of bugs caused by unexpected mutation(/lack of it) is reduced.
+
+- Logging requires an amount of "injection": each task is logged so each can be grepped for in output separately. The same function can require different logging output depending on which task its called from, and so needs a logging _context_ made available to it, which is done by passing it as an explicit function argument. An alternative is to use decorators/similar, but because these would have to be dynamic, this would be more complicated since it would use more functions that return functions.
+
+  Metrics are calculated "per feed", and so related structures are passed into functions for similar reasons as logging.
+
+- Dependencies are usually "injected" into functions as manual function arguments [often inside the `context` variable].
+
+  - This gives consistency with logging which requires it anyway.
+
+  - To aid explicitness: the "algorithmic", long-running and asynchronous nature of the problem, means there are a lot of implicit requirements on each line of code on what came before, potentially hours ago. It's therefore more important to not make this "even worse".
+
+  - This then helps for the future. Refactoring and changes are, usually, safer if for every function everything it depends on is explicit in its argument list, and its effect is by its return value [or what it does to things in its argument list]. This can be "more to take in" at first glance, but it's things that are important to understand _anyway_.
+
+    Put another way, this project is complex due to unavoidable dependencies between bits of code; all thing being equal, it's better to deal with the complexity up-front than after a bug has been introduced into production.
+
+- Tests are quite "end to end": it would be error-prone and time consuming to manually go through the many important asynchronous edge cases, such as the "eventual" recovery after a failure of a source feed or Elasticsearch.
+
+----
+
+The incoming application is a more traditional web application. However, it uses similar patterns for consistency with the outgoing application. It is also fairly basic by design: it is "dumb" proxy to ES, with some authentication and dictionary manipulation. This is so clients can have as much control as possible and in most cases won't need changes to the Activity Stream to change what data they use.
+
+The incoming application uses the same "injected" logging context pattern as the outgoing application to be able to distinguish concurrent chains of behaviour initiated by incoming requests, and to use the same code. Each incoming request creates a new "context" that allows all of its logging output to be grepped for.
+
+
 ## Development and git history
 
 Aim to make
