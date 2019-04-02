@@ -214,9 +214,6 @@ async def create_objects_index(context, index_name):
                         'type': {
                             'type': 'keyword',
                         },
-                        'object.type': {
-                            'type': 'keyword',
-                        },
                     },
                 },
             },
