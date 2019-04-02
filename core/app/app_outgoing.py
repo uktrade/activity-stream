@@ -180,7 +180,7 @@ async def ingest_feeds(context, feeds):
     Two tasks are created for each feed, a "full" task for the full ingest
     and an "updates" task for the updates ingest.
     """
-    all_feed_ids = feed_unique_ids(feeds)
+    all_feed_ids = [feed.unique_id for feed in feeds]
     indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
 
     indexes_to_delete = indexes_matching_no_feeds(
@@ -197,10 +197,6 @@ async def ingest_feeds(context, feeds):
         for feed in feeds
         for ingest_func in (ingest_full, ingest_updates)
     ])
-
-
-def feed_unique_ids(feeds):
-    return [feed.unique_id for feed in feeds]
 
 
 async def ingest_full(parent_context, feed):
@@ -416,7 +412,7 @@ async def create_metrics_application(parent_context, metrics_registry, feeds):
                 es_min_verification_age(context),
             )
 
-            feed_ids = feed_unique_ids(feeds)
+            feed_ids = [feed.unique_id for feed in feeds]
             for feed_id in feed_ids:
                 try:
                     searchable, nonsearchable = await es_feed_activities_total(
