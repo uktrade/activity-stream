@@ -4,7 +4,7 @@ from .logger import (
     logged,
 )
 from .app_outgoing_utils import (
-    async_repeat_until_cancelled,
+    repeat_until_cancelled,
 )
 from .utils import (
     get_child_context,
@@ -57,7 +57,7 @@ async def acquire_and_keep_lock(parent_context, exception_intervals, key):
             await acquire()
 
     await acquire()
-    asyncio.get_event_loop().create_task(async_repeat_until_cancelled(
+    asyncio.get_event_loop().create_task(repeat_until_cancelled(
         context, exception_intervals, to_repeat=extend_forever,
     ))
 

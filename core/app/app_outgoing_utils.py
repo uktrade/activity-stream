@@ -13,7 +13,7 @@ def flatten_generator(to_flatten):
     )
 
 
-async def async_repeat_until_cancelled(context, exception_intervals, to_repeat, to_repeat_args=()):
+async def repeat_until_cancelled(context, exception_intervals, to_repeat, to_repeat_args=()):
 
     num_exceptions_in_chain = 0
 

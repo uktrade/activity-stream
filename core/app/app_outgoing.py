@@ -61,7 +61,7 @@ from .app_outgoing_redis import (
     set_feed_status,
 )
 from .app_outgoing_utils import (
-    async_repeat_until_cancelled,
+    repeat_until_cancelled,
 )
 from .utils import (
     Context,
@@ -125,7 +125,7 @@ async def run_outgoing_application():
 
 async def create_outgoing_application(context, feed_endpoints):
     asyncio.get_event_loop().create_task(
-        async_repeat_until_cancelled(
+        repeat_until_cancelled(
             context, EXCEPTION_INTERVALS,
             to_repeat=ingest_feeds, to_repeat_args=(context, feed_endpoints),
         )
@@ -143,7 +143,7 @@ async def ingest_feeds(context, feed_endpoints):
     )
 
     await asyncio.gather(*[
-        async_repeat_until_cancelled(
+        repeat_until_cancelled(
             context, feed_endpoint.exception_intervals,
             to_repeat=ingest_func, to_repeat_args=(ingest_context, feed_endpoint),
         )
@@ -312,7 +312,7 @@ async def create_metrics_application(parent_context, metrics_registry, feed_endp
         await sleep(context, METRICS_INTERVAL)
 
     asyncio.get_event_loop().create_task(
-        async_repeat_until_cancelled(context, EXCEPTION_INTERVALS, to_repeat=poll_metrics)
+        repeat_until_cancelled(context, EXCEPTION_INTERVALS, to_repeat=poll_metrics)
     )
 
 
