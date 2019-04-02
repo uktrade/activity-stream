@@ -13,13 +13,13 @@ def flatten_generator(to_flatten):
     )
 
 
-async def async_repeat_until_cancelled(context, exception_intervals, coroutine, *args, **kwargs):
+async def repeat_until_cancelled(context, exception_intervals, to_repeat, to_repeat_args=()):
 
     num_exceptions_in_chain = 0
 
     while True:
         try:
-            await coroutine(*args, **kwargs)
+            await to_repeat(*to_repeat_args)
             num_exceptions_in_chain = 0
         except asyncio.CancelledError:
             break
