@@ -145,13 +145,10 @@ async def ingest_feeds(context, feed_endpoints):
     await asyncio.gather(*[
         repeat_until_cancelled(
             context, feed_endpoint.exception_intervals,
-            to_repeat=ingest_func, to_repeat_args=(ingest_context, feed_endpoint),
+            to_repeat=ingest_func, to_repeat_args=(context, feed_endpoint),
         )
         for feed_endpoint in feed_endpoints
-        for (ingest_func, ingest_context) in [
-            (ingest_full, get_child_context(context, f'{feed_endpoint.unique_id},full')),
-            (ingest_updates, get_child_context(context, f'{feed_endpoint.unique_id},updates')),
-        ]
+        for ingest_func in (ingest_full, ingest_updates)
     ])
 
 
@@ -159,7 +156,8 @@ def feed_unique_ids(feed_endpoints):
     return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
 
 
-async def ingest_full(context, feed):
+async def ingest_full(parent_context, feed):
+    context = get_child_context(parent_context, f'{feed.unique_id},full')
     metrics = context.metrics
     with \
             logged(context.logger, 'Full ingest', []), \
@@ -191,7 +189,8 @@ async def ingest_full(context, feed):
         await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
 
 
-async def ingest_updates(context, feed):
+async def ingest_updates(parent_context, feed):
+    context = get_child_context(parent_context, f'{feed.unique_id},updates')
     metrics = context.metrics
     with \
             logged(context.logger, 'Updates ingest', []), \
