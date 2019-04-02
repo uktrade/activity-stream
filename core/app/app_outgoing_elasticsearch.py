@@ -173,7 +173,7 @@ async def create_activities_index(context, index_name):
             'mappings': {
                 '_doc': {
                     'properties': {
-                        'published_date': {
+                        'published': {
                             'type': 'date',
                         },
                         'type': {
@@ -209,7 +209,7 @@ async def create_objects_index(context, index_name):
             'mappings': {
                 '_doc': {
                     'properties': {
-                        'published_date': {
+                        'published': {
                             'type': 'date',
                         },
                         'type': {
