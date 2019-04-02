@@ -58,7 +58,7 @@ async def acquire_and_keep_lock(parent_context, exception_intervals, key):
 
     await acquire()
     asyncio.get_event_loop().create_task(async_repeat_until_cancelled(
-        context, exception_intervals, extend_forever,
+        context, exception_intervals, to_repeat=extend_forever,
     ))
 
 

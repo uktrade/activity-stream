@@ -127,7 +127,7 @@ async def create_outgoing_application(context, feed_endpoints):
     asyncio.get_event_loop().create_task(
         async_repeat_until_cancelled(
             context, EXCEPTION_INTERVALS,
-            ingest_feeds, context, feed_endpoints,
+            to_repeat=ingest_feeds, to_repeat_args=(context, feed_endpoints),
         )
     )
 
@@ -145,7 +145,7 @@ async def ingest_feeds(context, feed_endpoints):
     await asyncio.gather(*[
         async_repeat_until_cancelled(
             context, feed_endpoint.exception_intervals,
-            ingest_func, ingest_context, feed_endpoint,
+            to_repeat=ingest_func, to_repeat_args=(ingest_context, feed_endpoint),
         )
         for feed_endpoint in feed_endpoints
         for (ingest_func, ingest_context) in [
@@ -312,7 +312,7 @@ async def create_metrics_application(parent_context, metrics_registry, feed_endp
         await sleep(context, METRICS_INTERVAL)
 
     asyncio.get_event_loop().create_task(
-        async_repeat_until_cancelled(context, EXCEPTION_INTERVALS, poll_metrics)
+        async_repeat_until_cancelled(context, EXCEPTION_INTERVALS, to_repeat=poll_metrics)
     )
 
 
