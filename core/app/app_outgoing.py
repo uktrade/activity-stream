@@ -86,7 +86,7 @@ async def run_outgoing_application():
     with logged(logger, 'Examining environment', []):
         env = normalise_environment(os.environ)
         es_uri, redis_uri, sentry = get_common_config(env)
-        feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
+        feeds = [parse_feed_config(feed) for feed in env['FEEDS']]
 
     settings.ES_URI = es_uri
     conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
@@ -105,9 +105,9 @@ async def run_outgoing_application():
         raven_client=raven_client, redis_client=redis_client, session=session)
 
     await acquire_and_keep_lock(context, EXCEPTION_INTERVALS, 'lock')
-    await create_outgoing_application(context, feed_endpoints)
+    await create_outgoing_application(context, feeds)
     await create_metrics_application(
-        context, metrics_registry, feed_endpoints,
+        context, metrics_registry, feeds,
     )
 
     async def cleanup():
@@ -123,17 +123,17 @@ async def run_outgoing_application():
     return cleanup
 
 
-async def create_outgoing_application(context, feed_endpoints):
+async def create_outgoing_application(context, feeds):
     asyncio.get_event_loop().create_task(
         repeat_until_cancelled(
             context, EXCEPTION_INTERVALS,
-            to_repeat=ingest_feeds, to_repeat_args=(context, feed_endpoints),
+            to_repeat=ingest_feeds, to_repeat_args=(context, feeds),
         )
     )
 
 
-async def ingest_feeds(context, feed_endpoints):
-    all_feed_ids = feed_unique_ids(feed_endpoints)
+async def ingest_feeds(context, feeds):
+    all_feed_ids = feed_unique_ids(feeds)
     indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
 
     indexes_to_delete = indexes_matching_no_feeds(
@@ -144,16 +144,16 @@ async def ingest_feeds(context, feed_endpoints):
 
     await asyncio.gather(*[
         repeat_until_cancelled(
-            context, feed_endpoint.exception_intervals,
-            to_repeat=ingest_func, to_repeat_args=(context, feed_endpoint),
+            context, feed.exception_intervals,
+            to_repeat=ingest_func, to_repeat_args=(context, feed),
         )
-        for feed_endpoint in feed_endpoints
+        for feed in feeds
         for ingest_func in (ingest_full, ingest_updates)
     ])
 
 
-def feed_unique_ids(feed_endpoints):
-    return [feed_endpoint.unique_id for feed_endpoint in feed_endpoints]
+def feed_unique_ids(feeds):
+    return [feed.unique_id for feed in feeds]
 
 
 async def ingest_full(parent_context, feed):
@@ -275,7 +275,7 @@ async def get_feed_contents(context, href, headers):
             await sleep(context, int(client_error.headers['Retry-After']))
 
 
-async def create_metrics_application(parent_context, metrics_registry, feed_endpoints):
+async def create_metrics_application(parent_context, metrics_registry, feeds):
     context = get_child_context(parent_context, 'metrics')
     metrics = context.metrics
 
@@ -295,7 +295,7 @@ async def create_metrics_application(parent_context, metrics_registry, feed_endp
                 es_min_verification_age(context),
             )
 
-            feed_ids = feed_unique_ids(feed_endpoints)
+            feed_ids = feed_unique_ids(feeds)
             for feed_id in feed_ids:
                 try:
                     searchable, nonsearchable = await es_feed_activities_total(

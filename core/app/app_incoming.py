@@ -56,7 +56,7 @@ async def run_incoming_application():
     with logged(logger, 'Examining environment', []):
         env = normalise_environment(os.environ)
         es_uri, redis_uri, sentry = get_common_config(env)
-        feed_endpoints = [parse_feed_config(feed) for feed in env['FEEDS']]
+        feeds = [parse_feed_config(feed) for feed in env['FEEDS']]
         port = env['PORT']
         incoming_key_pairs = [{
             'key_id': key_pair['KEY_ID'],
@@ -83,7 +83,7 @@ async def run_incoming_application():
 
     with logged(context.logger, 'Creating listening web application', []):
         runner = await create_incoming_application(
-            context, port, ip_whitelist, incoming_key_pairs, feed_endpoints,
+            context, port, ip_whitelist, incoming_key_pairs, feeds,
         )
 
     async def cleanup():
@@ -101,7 +101,7 @@ async def run_incoming_application():
 
 
 async def create_incoming_application(
-        context, port, ip_whitelist, incoming_key_pairs, feed_endpoints):
+        context, port, ip_whitelist, incoming_key_pairs, feeds):
 
     app = web.Application(middlewares=[
         server_logger(context.logger),
@@ -140,7 +140,7 @@ async def create_incoming_application(
     ])
     app.add_subapp('/v1/', private_app)
     app.add_routes([
-        web.get('/check', handle_get_check(context, feed_endpoints)),
+        web.get('/check', handle_get_check(context, feeds)),
         web.get('/metrics', handle_get_metrics(context)),
     ])
 

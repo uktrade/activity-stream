@@ -180,7 +180,7 @@ def handle_get_existing(context):
     return handle
 
 
-def handle_get_check(parent_context, feed_endpoints):
+def handle_get_check(parent_context, feeds):
     start_counter = time.perf_counter()
 
     # Grace period after uptime to allow new feeds to start reporting
@@ -207,7 +207,7 @@ def handle_get_check(parent_context, feed_endpoints):
             # - To keep the guarantee that we only make a single request to each feed at any one
             #   time (locking between the outoing application and this one would be tricky)
             feeds_statuses = await get_feeds_status(context, [
-                feed.unique_id for feed in feed_endpoints
+                feed.unique_id for feed in feeds
             ])
             feeds_statuses_with_red = [status if status ==
                                        b'GREEN' else b'RED' for status in feeds_statuses]
@@ -223,7 +223,7 @@ def handle_get_check(parent_context, feed_endpoints):
                 (b'elasticsearch:' + (b'GREEN' if is_elasticsearch_green else b'RED')) + b'\n' + \
                 b''.join([
                     feed.unique_id.encode('utf-8') + b':' + feeds_statuses_with_red[i] + b'\n'
-                    for (i, feed) in enumerate(feed_endpoints)
+                    for (i, feed) in enumerate(feeds)
                 ])
 
         return web.Response(body=status, status=200, headers={
