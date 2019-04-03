@@ -83,27 +83,29 @@ UPDATES_INTERVAL = 1
 async def run_outgoing_application():
     """Indefinitely poll paginated feeds and ingest them into Elasticsearch
 
-    - Reads environment variables that specifify what feeds to poll, with any
+    As part of startup:
+
+    - Read environment variables that specifify what feeds to poll, with any
       authentication credentials
-    - Creates HTTPS and Redis connection pools
-    - Creates a raven client for reporting errors to Sentry
-    - Creates a logging "context" that allows child contexts to be created
+    - Create HTTPS and Redis connection pools
+    - Create a raven client for reporting errors to Sentry
+    - Create a logging "context" that allows child contexts to be created
       from, which allow the same function to log output slightly differently
       when run from different tasks
-    - Creates the metrics registry in which functions throught the application
+    - Create the metrics registry in which functions throught the application
       store metrics. This registry which is then periodically exported from by
       the metrics application, also started here, into Redis.
 
-    A lock a acquired before any connections to feeds or Elasticsearch to
+    Exceptions are raised if any of the above fails in order to fail
+    blue/green deployments. Other error cases are swallowed and retried after
+    intervals in EXCEPTION_INTERVALS.
+
+    A lock is acquired before any connections to feeds or Elasticsearch to
     prevent conflicts with the existing version of the outgoing application
     during blue/green deployment.
 
-    Once the above is done, the outgoing application that performs the polling
-    and ingest is created as a separate task.
-
-    Exceptions are raised on startup if the environment is not setup
-    correctly in order to fail blue/green deployments. Other error cases are
-    swallowed and retried after intervals in EXCEPTION_INTERVALS.
+    Once the above is done, a task that performs the polling and ingest is
+    created.
 
     A cleanup function is returned that is expected to be called just before
     the application is shut down to given every chance for operation to
@@ -296,7 +298,7 @@ async def ingest_updates(parent_context, feed):
         href = await get_feed_updates_url(context, feed.unique_id)
         indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
 
-        # We deliberatly ingest into both the live and ingesting indexes
+        # We deliberately ingest into both the live and ingesting indexes
         indexes_to_ingest_into = indexes_matching_feeds(
             indexes_without_alias + indexes_with_alias, [feed.unique_id])
 
@@ -317,7 +319,7 @@ async def ingest_updates(parent_context, feed):
 
 async def fetch_and_ingest_page(context, ingest_type, feed, activity_index_names,
                                 objects_index_names, href):
-    """Ingest a page into Elasticsearch by calling fetch_page
+    """Ingest a page into Elasticsearch by calling fetch_page + es_bulk_ingest
 
     The url of the next page is returned or `None` if there is no next page
     """
