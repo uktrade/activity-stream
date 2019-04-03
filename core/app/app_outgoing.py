@@ -10,7 +10,7 @@ import ujson
 
 from .app_outgoing_elasticsearch import (
     ESMetricsUnavailable,
-    es_bulk,
+    es_bulk_ingest,
     es_feed_activities_total,
     es_searchable_total,
     es_nonsearchable_total,
@@ -246,7 +246,7 @@ async def ingest_full(parent_context, feed):
         href = feed.seed
         while href:
             updates_href = href
-            href = await ingest_page(
+            href = await fetch_and_ingest_page(
                 context, 'full', feed, [activities_index_name], [objects_index_name], href,
             )
             await sleep(context, feed.full_ingest_page_interval)
@@ -304,7 +304,7 @@ async def ingest_updates(parent_context, feed):
 
         while href:
             updates_href = href
-            href = await ingest_page(
+            href = await fetch_and_ingest_page(
                 context, 'updates', feed, activities_index_names, objects_index_names, href,
             )
 
@@ -315,8 +315,9 @@ async def ingest_updates(parent_context, feed):
     await sleep(context, feed.updates_page_interval)
 
 
-async def ingest_page(context, ingest_type, feed, activity_index_names, objects_index_names, href):
-    """Ingest a page into Elasticsearch by calling get_feed_contents
+async def fetch_and_ingest_page(context, ingest_type, feed, activity_index_names,
+                                objects_index_names, href):
+    """Ingest a page into Elasticsearch by calling fetch_page
 
     The url of the next page is returned or `None` if there is no next page
     """
@@ -331,7 +332,7 @@ async def ingest_page(context, ingest_type, feed, activity_index_names, objects_
                     logged(context.logger, 'Polling page (%s)', [href]), \
                     metric_timer(context.metrics['ingest_page_duration_seconds'],
                                  [feed.unique_id, ingest_type, 'pull']):
-                feed_contents = await get_feed_contents(
+                feed_contents = await fetch_page(
                     context, href, await feed.auth_headers(context, href),
                 )
 
@@ -347,7 +348,7 @@ async def ingest_page(context, ingest_type, feed, activity_index_names, objects_
                              [feed.unique_id, ingest_type, 'push']), \
                 metric_counter(context.metrics['ingest_activities_nonunique_total'],
                                [feed.unique_id], len(es_bulk_items)):
-            await es_bulk(context, es_bulk_items)
+            await es_bulk_ingest(context, es_bulk_items)
 
         asyncio.ensure_future(set_feed_status(
             context, feed.unique_id, feed.max_interval_before_reporting_down, b'GREEN'))
@@ -355,7 +356,7 @@ async def ingest_page(context, ingest_type, feed, activity_index_names, objects_
         return feed.next_href(feed_parsed)
 
 
-async def get_feed_contents(context, href, headers):
+async def fetch_page(context, href, headers):
     """Fetch a single page of data from a feed, returning it as bytes
 
     If a non-200 response is returned, an exception is raised. However, if a
