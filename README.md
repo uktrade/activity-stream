@@ -67,7 +67,7 @@ export SENTRY_ENVIRONMENT=test
 export VCAP_SERVICES='{"redis":[{"credentials":{"uri":"redis://127.0.0.1:6379"}}],"elasticsearch":[{"credentials":{"uri":"http://some-id:some-secret@127.0.0.1:9200"}}]}'
 ```
 
-And add to the bottom of the `deactivate ()` function in that file. 
+And add to the bottom of the `deactivate ()` function in that file.
 
 ```
     # unset environment variables - this must match "unset" list at top
@@ -121,6 +121,27 @@ Running an example app that Outgoing will pull data from:
 
     PORT=8082 python3 verification_feed/app.py
 
+## Populating an empty local database with data
+
+The database ActivityStream is in a docker image and it is wiped of data each time you restart the image.
+
+Either:
+
+1. Start the sample project ("Verification Feed") using the instuctions above, and then start the Outgoing script. You have already set up the Outgoing script with environment variables to scrape the Verification Feed.
+
+Or:
+
+2. Add a new set of environment variables that point the locally running Outgoing script to the currently running endpoints for one of the projects in staging. A few sets of environment variables to add for various feeds can be found in Vault in the "Activity Stream > Staging" folder. When these have been added, run the Outgoing script. Optionally add these environment variables to your `ENV/bin/activate` script to have them run each time
+
+## Viewing your local data
+
+To quickly check how many documents are in your activity stream database and the current names of the indices, use:
+
+    $ curl -X GET "localhost:9200/_cat/indices?v"
+
+To look at the data themselves, download Kibana 6.3.0 [here](https://www.elastic.co/downloads/past-releases/kibana-6-3-0). Follow the instructions for running the Kibana server. When running, you will need to configure Kibana to read from the indices. Direct your browser to localhost:5601 and in the "management" section, add the following patterns: "objects*" and "activities*". You will now be able to select these patterns in the "visualise" section and see your data.
+
+
 
 # Running the tests
 
@@ -135,7 +156,7 @@ To run all of the tests
 
 (Or directly using minitest)
 
-    python3 -m unittest 
+    python3 -m unittest
 
 Running a single test takes the format:
 
@@ -201,6 +222,7 @@ To isolate a particular stream of logs use `| grep` and the app or tag name
     cf logs activity-stream-staging | grep incoming
     cf logs activity-stream-staging | grep selling_online_overseas_markets
 
+
 # How ActivityStream Works
 
 Activity Stream has two main applications. A script called "Outgoing" collects data from each project and saves it in elasticsearch. An API called "Incoming" provides access to this data.
@@ -244,4 +266,3 @@ For consuming all data stored in the activities indices that meet a given elasti
 Is used by Great.gov.uk seach, provides data stored in the objects indices that meet a given elasticsearch query.
 
 The paginated feed can output the same activity multiple times, and as long as each has the same `id`, it won't be repeated in Elasticsearch.
-
