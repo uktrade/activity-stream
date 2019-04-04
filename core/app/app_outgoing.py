@@ -10,7 +10,7 @@ import ujson
 
 from .app_outgoing_elasticsearch import (
     ESMetricsUnavailable,
-    es_bulk,
+    es_bulk_ingest,
     es_feed_activities_total,
     es_searchable_total,
     es_nonsearchable_total,
@@ -81,6 +81,36 @@ UPDATES_INTERVAL = 1
 
 
 async def run_outgoing_application():
+    """Indefinitely poll paginated feeds and ingest them into Elasticsearch
+
+    As part of startup:
+
+    - Read environment variables that specifify what feeds to poll, with any
+      authentication credentials
+    - Create HTTPS and Redis connection pools
+    - Create a raven client for reporting errors to Sentry
+    - Create a logging "context" that allows child contexts to be created
+      from, which allow the same function to log output slightly differently
+      when run from different tasks
+    - Create the metrics registry in which functions throught the application
+      store metrics. This registry which is then periodically exported from by
+      the metrics application, also started here, into Redis.
+
+    Exceptions are raised if any of the above fails in order to fail
+    blue/green deployments. Other error cases are swallowed and retried after
+    intervals in EXCEPTION_INTERVALS.
+
+    A lock is acquired before any connections to feeds or Elasticsearch to
+    prevent conflicts with the existing version of the outgoing application
+    during blue/green deployment.
+
+    Once the above is done, a task that performs the polling and ingest is
+    created.
+
+    A cleanup function is returned that is expected to be called just before
+    the application is shut down to given every chance for operation to
+    shutdown cleanly.
+    """
     logger = get_root_logger('outgoing')
 
     with logged(logger, 'Examining environment', []):
@@ -124,6 +154,13 @@ async def run_outgoing_application():
 
 
 async def create_outgoing_application(context, feeds):
+    """Create a task that polls feeds and ingests them into Elasticsearch
+
+    This task is repeated in case there is some issue at the beginning of
+    `ingest_feeds` that causes an exception to be raised. There is an argument
+    that it is better to bubble such exceptions in order to fail deployments,
+    but this is not yet decided.
+    """
     asyncio.get_event_loop().create_task(
         repeat_until_cancelled(
             context, EXCEPTION_INTERVALS,
@@ -133,6 +170,16 @@ async def create_outgoing_application(context, feeds):
 
 
 async def ingest_feeds(context, feeds):
+    """Create tasks that poll feeds and ingest them into Elasticsearch
+
+    This deletes any unused indexes, for example for feeds that used to be
+    configured. It then repeats the "full" and "updates" ingest cycles for
+    all feeds until cancellation, which is expected to only be just before the
+    application closes down.
+
+    Two tasks are created for each feed, a "full" task for the full ingest
+    and an "updates" task for the updates ingest.
+    """
     all_feed_ids = feed_unique_ids(feeds)
     indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
 
@@ -157,6 +204,30 @@ def feed_unique_ids(feeds):
 
 
 async def ingest_full(parent_context, feed):
+    """Perform a single "full" ingest cycle of a paginated source feed
+
+    Starting at feed.seed, iteratively request all pages from the feed, and
+    ingest each into Elasticsearch. Indexes are created specifically for this
+    ingest cycle, with unused indexes deleted.
+
+    At the end of the cycle the `activities` and `objects` index aliases
+    are flipped so that they now alias the indexes created and ingested into
+    in this cycle, i.e. made visible to clients of the incoming app that only
+    query the `activities` and `objects` aliases.
+
+    This is a "partial" flip of the aliases, since they continue to also alias
+    indexes from _other_ feeds. This design allows the presentation of single
+    `activities` and `objects` indexes to clients, but also allows the ingest
+    cycle of feeds to fail without affecting the ingest of other feeds.
+
+    Unused indexes are deleted at the beginning of a cycle rather than the
+    end, to always clean up after any unexpected shutdown _before_ ingesting
+    more data.
+
+    The primary purpose of always ingesting into new indexes and then flipping
+    aliases is to allow for hard-deletion without any explicit "deletion" code
+    path. It also allows for data format changes/corrections.
+    """
     context = get_child_context(parent_context, f'{feed.unique_id},full')
     metrics = context.metrics
     with \
@@ -177,7 +248,7 @@ async def ingest_full(parent_context, feed):
         href = feed.seed
         while href:
             updates_href = href
-            href = await ingest_page(
+            href = await fetch_and_ingest_page(
                 context, 'full', feed, [activities_index_name], [objects_index_name], href,
             )
             await sleep(context, feed.full_ingest_page_interval)
@@ -190,6 +261,34 @@ async def ingest_full(parent_context, feed):
 
 
 async def ingest_updates(parent_context, feed):
+    """Perform a single "updates" ingest cycle of a paginated source feed
+
+    Poll the last page from the last completed "full" ingest and ingest it
+    into Elasticsearch.
+
+    This past page is paginated: if it has a next page, it too is fetched and
+    ingested from. This repeated until a page _without_ a next page, which is
+    then made the target of the polling.
+
+    Data is ingested into two sets of indexes. 1) The indexes that are aliased
+    to `activities` and `objects`, so they are immediately visible to clients
+    of the incoming app. 2) The target of the current "full" ingest. This is
+    to avoid the race condition:
+
+    - An activity has been ingested and visible in the incoming app
+
+    - The last page of data has been fetched during the "full" ingest, but
+      the alias flip has not yet occurred.
+
+    - A change is made to the activity, and the "updates" ingests it, and so
+      is visible in the incoming app
+
+    - The alias flip from the full ingest is performed, and the pre-change
+      version of the activity is visible in the incoming app.
+
+    This would "correct" on the next full ingest, but it has been deemed
+    strange and unexpected enough to ensure it doesn't happen.
+    """
     context = get_child_context(parent_context, f'{feed.unique_id},updates')
     metrics = context.metrics
     with \
@@ -199,7 +298,7 @@ async def ingest_updates(parent_context, feed):
         href = await get_feed_updates_url(context, feed.unique_id)
         indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
 
-        # We deliberatly ingest into both the live and ingesting indexes
+        # We deliberately ingest into both the live and ingesting indexes
         indexes_to_ingest_into = indexes_matching_feeds(
             indexes_without_alias + indexes_with_alias, [feed.unique_id])
 
@@ -207,7 +306,7 @@ async def ingest_updates(parent_context, feed):
 
         while href:
             updates_href = href
-            href = await ingest_page(
+            href = await fetch_and_ingest_page(
                 context, 'updates', feed, activities_index_names, objects_index_names, href,
             )
 
@@ -218,7 +317,12 @@ async def ingest_updates(parent_context, feed):
     await sleep(context, feed.updates_page_interval)
 
 
-async def ingest_page(context, ingest_type, feed, activity_index_names, objects_index_names, href):
+async def fetch_and_ingest_page(context, ingest_type, feed, activity_index_names,
+                                objects_index_names, href):
+    """Ingest a page into Elasticsearch by calling fetch_page + es_bulk_ingest
+
+    The url of the next page is returned or `None` if there is no next page
+    """
     with \
             logged(context.logger, 'Polling/pushing page', []), \
             metric_timer(context.metrics['ingest_page_duration_seconds'],
@@ -230,7 +334,7 @@ async def ingest_page(context, ingest_type, feed, activity_index_names, objects_
                     logged(context.logger, 'Polling page (%s)', [href]), \
                     metric_timer(context.metrics['ingest_page_duration_seconds'],
                                  [feed.unique_id, ingest_type, 'pull']):
-                feed_contents = await get_feed_contents(
+                feed_contents = await fetch_page(
                     context, href, await feed.auth_headers(context, href),
                 )
 
@@ -246,7 +350,7 @@ async def ingest_page(context, ingest_type, feed, activity_index_names, objects_
                              [feed.unique_id, ingest_type, 'push']), \
                 metric_counter(context.metrics['ingest_activities_nonunique_total'],
                                [feed.unique_id], len(es_bulk_items)):
-            await es_bulk(context, es_bulk_items)
+            await es_bulk_ingest(context, es_bulk_items)
 
         asyncio.ensure_future(set_feed_status(
             context, feed.unique_id, feed.max_interval_before_reporting_down, b'GREEN'))
@@ -254,7 +358,17 @@ async def ingest_page(context, ingest_type, feed, activity_index_names, objects_
         return feed.next_href(feed_parsed)
 
 
-async def get_feed_contents(context, href, headers):
+async def fetch_page(context, href, headers):
+    """Fetch a single page of data from a feed, returning it as bytes
+
+    If a non-200 response is returned, an exception is raised. However, if a
+    429 is returned with a Retry-After header, the fetch is retried after this
+    time, up to 10 attempts. After 10 failed attempts, an exception is
+    raised.
+
+    Raised exceptions are expected to cause the current ingest cycle to fail,
+    but be re-attempted some time later.
+    """
     num_attempts = 0
     max_attempts = 10
     logger = context.logger
@@ -276,6 +390,13 @@ async def get_feed_contents(context, href, headers):
 
 
 async def create_metrics_application(parent_context, metrics_registry, feeds):
+    """Creates a task that supplies metrics to the incoming application
+
+    Every METRICS_INTERVAL seconds the metrics are exported to Redis, so that
+    they are available to the incoming app, at an endpoint which is queried
+    by Prometheus and then used in Grafana. This is slightly awkward, but no
+    better way has been thought of.
+    """
     context = get_child_context(parent_context, 'metrics')
     metrics = context.metrics
 

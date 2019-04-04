@@ -240,7 +240,7 @@ async def refresh_index(context, index_name):
         )
 
 
-async def es_bulk(context, items):
+async def es_bulk_ingest(context, items):
     with logged(context.logger, 'Pushing (%s) items into Elasticsearch', [len(items)]):
         if not items:
             return
