@@ -236,7 +236,7 @@ Is used by great.gov.uk seach, provides data stored in the objects indices that 
 
 The paginated feed can output the same activity multiple times, and as long as each has the same `id`, it won't be repeated in Elasticsearch.
 
-The Incoming API uses Hawk Authentication; a valid Hawk protocal `Authorization` header must be provided on the inbound request. The request must also included an 'X-Forwarded-For' header (automatically added by GOV.UK PaaS) including an IP in the IP_WHITELIST, therefore the IP_WHITELIST environment variables must be kept up to date with changes to IPs in Gov PaaS.
+The Incoming API uses Hawk Authentication; a valid Hawk protocol `Authorization` header must be provided on the inbound request. The request must also included an 'X-Forwarded-For' header (automatically added by GOV.UK PaaS) including an IP in the IP_WHITELIST, therefore the IP_WHITELIST environment variables must be kept up to date with changes to IPs in Gov PaaS.
 
 # Notes on approach to development
 
