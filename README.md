@@ -1,6 +1,6 @@
 # activity-stream [![CircleCI](https://circleci.com/gh/uktrade/activity-stream.svg?style=svg)](https://circleci.com/gh/uktrade/activity-stream) [![Maintainability](https://api.codeclimate.com/v1/badges/e0284a2cb292704bf53c/maintainability)](https://codeclimate.com/github/uktrade/activity-stream/maintainability) [![Test Coverage](https://api.codeclimate.com/v1/badges/e0284a2cb292704bf53c/test_coverage)](https://codeclimate.com/github/uktrade/activity-stream/test_coverage)
 
-Activity Stream pulls a selection of data from several DIT services into one ElasticsSearch Database. This data is searchable through an API and is connected to Datahub.
+Activity Stream pulls a selection of data from several DIT & external services into one Elasticsearch Database. This data is searchable through an API and is connected to Datahub.
 
 Data is collected from:
 
@@ -13,16 +13,16 @@ Data is collected from:
 - https://www.datahub.trade.gov.uk/
 - Specific ad-hoc web pages added to search at https://www.great.gov.uk/search-key-pages
 
-# Installation Instructions
+# Installation
 
-    $ git clone https://github.com/uktrade/great-domestic-ui
-    $ cd great-domestic-ui
+    $ git clone https://github.com/uktrade/activity-stream
+    $ cd activity-stream
 
-Install [Virtual Env](https://virtualenv.pypa.io) if you haven't got it installed locally, then create one using:
+Install [Virtualenv](https://virtualenv.pypa.io) if you haven't got it installed locally, then create one using:
 
     $ virtualenv .venv -p python3.6
 
-Next follow the instructions in the section below below to automatically set environment variables when this starts up.
+You will need environment variables activated to run the main scripts. One time saving approach is to automatically set the environment variables when you start your virtual environment, one approach to which is described in the section below.
 
 Finally, start the virtual environment with
 
@@ -36,10 +36,11 @@ Install the requirements
 Install the automatic linter, Pre-commit
 
     $ pip install pre-commit
+    $ pre-commit install
 
-## Adding the Env Vars to VirtualEnv setup
+## Adding the environment variables to Virtualenv setup
 
-This is one approach to adding environment variables automatically.
+This is one approach to adding environment variables automatically each time you start your virtual environment.
 
 Add to the bottom of `ENV/bin/activate`
 
@@ -133,23 +134,15 @@ To run all of the tests
 
     ./tests.sh
 
-(Or directly using minitest)
-
-    python3 -m unittest 
-
 Running a single test takes the format:
 
-    python3 -m unittest -v core.tests.tests.TestApplication.test_aventri
+    ./tests.sh core.tests.tests.TestApplication.test_aventri
 
-## Release Process
+## Release process
 
 ### Linting
 
 A tool called [Pre-commit](https://pre-commit.com/) must be installed. This will run linting when committing.
-
-### Commit Signing
-
-Commits must be signed to be submitted to github. Use [GPG Signer](https://git-scm.com/book/en/v2/Git-Tools-Signing-Your-Work)
 
 ### Deployment
 
@@ -157,7 +150,7 @@ Deploy master branch or feature branches to development, staging or production h
 
 https://jenkins.ci.uktrade.io/job/activity-stream/
 
-## Dashboards and Metrics
+## Dashboards and metrics
 
 Due to the quantity of requests, the logs can be difficult to interpret. Dashboards are used to identify issues early.
 
@@ -168,7 +161,7 @@ Staging Dashboard: https://grafana.ci.uktrade.io/d/gKcrzUKmz/activity-stream?org
 Explanation of graphs:
 
 *Feed failures in previous minute*
-Shows whether feeds are connected and active correctly, and should show zero for all feeds.
+Shows whether feeds are connected and active correctly, and should mostly show zero for all feeds.
 
 *Age of youngest activity*
 Shows the age of the most recent activity, and should be flat. If the graph is going up over time, no activities are being consumed and this indicates that the "outgoing" script is down.
@@ -201,9 +194,9 @@ To isolate a particular stream of logs use `| grep` and the app or tag name
     cf logs activity-stream-staging | grep incoming
     cf logs activity-stream-staging | grep selling_online_overseas_markets
 
-# How ActivityStream Works
+# How Activity Stream Works
 
-Activity Stream has two main applications. A script called "Outgoing" collects data from each project and saves it in elasticsearch. An API called "Incoming" provides access to this data.
+Activity Stream has two main applications. A script called "Outgoing" collects data from each project and saves it in Elasticsearch. An API called "Incoming" provides access to this data.
 
 ## The "Outgoing" Script
 
@@ -213,15 +206,11 @@ Each project connected to Activity Stream has an API that the Activity Stream "O
 
 As it consumes an API, the Outgoing Script will create a new pair of temporary indices (one for activities and one for objects) for each source. When the script has consumed the last page of data, the current pair of indexes are deleted and replaced by the just-created temporary indices, and the process immediately begins again from the first page. The script is not polling the source on a scheduled basis, but rather continuously and repeatedly downloading the data.
 
-Repeatedly downloading the data keeps the data in Activity Stream up to date. If there are any errors in the script, it restarts. Because Activity Stream deletes any data shortly after the source does, Activity Stream is also GDPR compliant. Outgoing is self-correcting after any downtime of either Activity Stream or the source.
+Repeatedly downloading the data keeps the data in Activity Stream up to date. If there are any errors during ingesting one of the feeds into Elasticsearch, that particular feed restarts. Outgoing is self-correcting after any downtime of either Activity Stream or the source. As Activity Stream deletes any data shortly after the source does, Activity Stream is as GDPR compliant as the sources it pulls from.
 
 Outgoing does not know about the format of the data that is consumed or provided. When the format of the data changes, "Outgoing" automatically deletes the old data and replaces it with the new format data after one cycle.
 
-Outgoing uses Hawk Authentication; a valid Hawk protocal `Authorization` header must be provided. The endpoint queried must also be included as an item in the IP_WHITELIST
-
 Outgoing is not scalable, besides during deployments there should only be one instance running.
-
-Each activity must have an `id` field that is unique. In the current implementation, it doesn't have to be unique accross all sources, but it is planned to in future. It is recommend to ensure this is unique accross all sources.
 
 ### Performance requirements of source APIs
 
@@ -237,11 +226,12 @@ The Inbound API provides two endpoints:
 
     /v1/activities
 
-For consuming all data stored in the activities indices that meet a given elasticsearch query. Results are returned one page at a time.
+For consuming all data stored in the activities indices that meet a given Elasticsearch query. Results are returned one page at a time.
 
     /v1/objects
 
-Is used by Great.gov.uk seach, provides data stored in the objects indices that meet a given elasticsearch query.
+Is used by Great.gov.uk seach, provides data stored in the objects indices that meet a given Elasticsearch query.
 
 The paginated feed can output the same activity multiple times, and as long as each has the same `id`, it won't be repeated in Elasticsearch.
 
+The Incoming API uses Hawk Authentication; a valid Hawk protocal `Authorization` header must be provided on the inbound request. The request must also included an 'X-Forwarded-For' header (automatically added by Gov Pass) including an IP in the IP_WHITELIST, therefore the IP_WHITELIST environment variables must be kept up to date with changes to IPs in Gov PaaS.
