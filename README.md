@@ -1,6 +1,6 @@
 # activity-stream [![CircleCI](https://circleci.com/gh/uktrade/activity-stream.svg?style=svg)](https://circleci.com/gh/uktrade/activity-stream) [![Maintainability](https://api.codeclimate.com/v1/badges/e0284a2cb292704bf53c/maintainability)](https://codeclimate.com/github/uktrade/activity-stream/maintainability) [![Test Coverage](https://api.codeclimate.com/v1/badges/e0284a2cb292704bf53c/test_coverage)](https://codeclimate.com/github/uktrade/activity-stream/test_coverage)
 
-Activity Stream pulls a selection of data from several DIT & external services into one Elasticsearch Database. This data is searchable through an API and is connected to Datahub.
+Activity Stream pulls a selection of data from several DIT & external services into one Elasticsearch Database. This data is searchable through an API and is connected to Datahub. There is very little business logic in terms of user-facing features: it takes data from one place to another.
 
 Data is collected from:
 
@@ -152,7 +152,7 @@ https://jenkins.ci.uktrade.io/job/activity-stream/
 
 ## Dashboards and metrics
 
-Due to the quantity of requests, the logs can be difficult to interpret. Dashboards are used to identify issues early.
+Due to the quantity of requests, the logs can be difficult to interpret. Each task outputs Activity Stream-specific metrics that allows each to be analysed separately. Dashboards are used to identify issues early.
 
 Production Dashboard: https://grafana.ci.uktrade.io/d/gKcrzUKmz/activity-stream?orgId=1&var-instance=activity-stream.london.cloudapps.digital:443
 
@@ -202,11 +202,13 @@ Activity Stream has two main applications. A script called "Outgoing" collects d
 
 Data from each endpoint are saved in seperate indices in Elasticsearch. Each item is saved twice, first in one index for Activities and one for Objects. The "Activities" index stores each action performed on the object ("Created, Updated") as a different item and so a given object can appear multiple times. The "Objects" index for a particular data type only stores the most recent version of a given object - each item of data is unique.
 
-Each project connected to Activity Stream has an API that the Activity Stream "Outgoing" script can crawl. For consistency the data should be presented in W3C Activity 2.0 format. Specifically, it must offer a `Collection` with the activites in the `orderedItems` key. The API in each project should provide the data as a list of all data, ordered by some attribute (e.g. date updated), one page at a time. Each "page" of data also provides a link to the next page in the chain in the key `next`, until the last page which does not have a `next` key.
+Each project connected to Activity Stream has an API that the Activity Stream "Outgoing" script can crawl. For consistency the data should be presented in W3C Activity 2.0 format. Specifically, it must offer a `Collection` with the activites in the `orderedItems` key. The API in each project should provide the data as a list of all data, which must be ordered by date updated ascending, one page at a time. Each "page" of data also provides a link to the next page in the chain in the key `next`, until the last page which does not have a `next` key.
 
-As it consumes an API, the Outgoing Script will create a new pair of temporary indices (one for activities and one for objects) for each source. When the script has consumed the last page of data, the current pair of indexes are deleted and replaced by the just-created temporary indices, and the process immediately begins again from the first page. The script is not polling the source on a scheduled basis, but rather continuously and repeatedly downloading the data.
+As it consumes an API, the Outgoing Script will create a new pair of temporary indices (one for activities and one for objects) for each source. When the script has consumed the last page of data, the current pair of indexes are deleted and replaced by the just-created temporary indices, and the process immediately begins again from the first page. The script is not polling the source on a scheduled basis, but rather continuously and repeatedly downloading the data. This process is called the "full ingest cycle"
 
-Repeatedly downloading the data keeps the data in Activity Stream up to date. If there are any errors during ingesting one of the feeds into Elasticsearch, that particular feed restarts. Outgoing is self-correcting after any downtime of either Activity Stream or the source. As Activity Stream deletes any data shortly after the source does, Activity Stream is as GDPR compliant as the sources it pulls from.
+The Outgoing Script also has a second process that repeatedly polls the last page (i.e. most recently updated data) for new data. This is called the "update cycle". This updated data are added to both the currently active indices for that feed (both Activities and Objects) and also the indices being currently constructed by the in-progress full ingest cycle.
+
+Repeatedly downloading the data keep the data in Activity Stream up to date. If there are any errors during ingesting one of the feeds into Elasticsearch, that particular feed restarts. Outgoing is self-correcting after any downtime of either Activity Stream or the source. As Activity Stream deletes any data shortly after the source does, Activity Stream is as GDPR compliant as the sources it pulls from.
 
 Outgoing does not know about the format of the data that is consumed or provided. When the format of the data changes, "Outgoing" automatically deletes the old data and replaces it with the new format data after one cycle.
 
@@ -230,8 +232,56 @@ For consuming all data stored in the activities indices that meet a given Elasti
 
     /v1/objects
 
-Is used by Great.gov.uk seach, provides data stored in the objects indices that meet a given Elasticsearch query.
+Is used by great.gov.uk seach, provides data stored in the objects indices that meet a given Elasticsearch query.
 
 The paginated feed can output the same activity multiple times, and as long as each has the same `id`, it won't be repeated in Elasticsearch.
 
-The Incoming API uses Hawk Authentication; a valid Hawk protocal `Authorization` header must be provided on the inbound request. The request must also included an 'X-Forwarded-For' header (automatically added by Gov Pass) including an IP in the IP_WHITELIST, therefore the IP_WHITELIST environment variables must be kept up to date with changes to IPs in Gov PaaS.
+The Incoming API uses Hawk Authentication; a valid Hawk protocal `Authorization` header must be provided on the inbound request. The request must also included an 'X-Forwarded-For' header (automatically added by GOV.UK PaaS) including an IP in the IP_WHITELIST, therefore the IP_WHITELIST environment variables must be kept up to date with changes to IPs in Gov PaaS.
+
+# Notes on approach to development
+
+The outgoing application has a number of properties/requirements that are different to a standard web-based application. Below are the properties, followed by the development patterns used to support this.
+
+- Chains of operations that effect data changes can be long running. A full ingest can take hours: there is no "instantaenous" web request to do this. (There are quicker changes: "almost" real time updates that take between 1 and 4 seconds.)
+
+- It's extremely asynchronous in terms of cause and effect, in that a change on a source feed only makes a difference to the data exposed by the AS "some time later". And this time can be different: an update can be quick, but a deletion would be on the next full ingest. (This is by design. Even if a source feed attempted to "push" data synchronously, it would need to handle failure, which would have to be asynchronous. Instead of having this asynchronous behaviour in all sources, it's here.)
+
+- It's multi-tasked (the asyncio version of multi-threaded), with communication between tasks. At the time of writing, production has [at least] 17 tasks.
+
+- It depends heavily on properties of Elasticsearch that other data stores don't have
+
+- It depends heavily on the sequence of the calls to Elasticsearch e.g. creating, deleting and refreshing indexes, modifying aliases.
+
+- There is no interface to load up manually and check that "it all still works".
+
+As such, the code has the below properties / follows the below patterns.
+
+- It's light on abstraction: to make changes you need to understand the "guts", so they are not hidden. For example, abstracting Elasticsearch [probably] won't give value, because it would either have to expose everything underneath, or to make changes you would have to change what's hidden.
+
+- But there is some abstraction: source feeds can be of different types, with slightly different data formats or authentication patterns. This is abstracted so the rest of the algorithm "doesn't have to care" about these things.
+
+- There isn't much object-oriented code, since most concerns are cross-cutting, in that there are queries to source feeds, Elasticsearch, logging, metric, and Redis code.
+
+- Mutation is minimised wherever possible. There is a lot of state by nature of the algorithm, so it's more important to not make this "even worse" so the possibiliy of bugs caused by unexpected mutation(/lack of it) is reduced.
+
+- Logging requires an amount of "injection": each task is logged so each can be grepped for in output separately. The same function can require different logging output depending on which task its called from, and so needs a logging _context_ made available to it, which is done by passing it as an explicit function argument. An alternative is to use decorators/similar, but because these would have to be dynamic, this would be more complicated since it would use more functions that return functions.
+
+  Metrics are calculated "per feed", and so related structures are passed into functions for similar reasons as logging.
+
+- Dependencies are usually "injected" into functions as manual function arguments [often inside the `context` variable].
+
+  - To aid explicitness: the "algorithmic", long-running and asynchronous nature of the problem, means there are a lot of implicit requirements on each line of code on what came before, potentially hours ago. It's therefore more important to not make this "even worse".
+
+  - This then helps for the future. Refactoring and changes are, usually, safer if for every function everything it depends on is explicit in its argument list, and its effect is by its return value [or what it does to things in its argument list]. This can be "more to take in" at first glance, but it's things that are important to understand _anyway_.
+
+    Put another way, this project is complex due to unavoidable dependencies between bits of code; all thing being equal, it's better to deal with the complexity up-front than after a bug has been introduced into production.
+
+- Tests are "end to end": it would be error-prone and time consuming to manually go through the many important asynchronous edge cases, such as the "eventual" recovery after a failure of a source feed or Elasticsearch.
+
+  The tests allow refactoring, and are correctly sensitive to broken behaviour. However, there are downsides. They often offer little information on what is broken. This is compounded by the self-correcting nature of the code: it attempts to recover after exceptions, and so the tests may just sit there. Another downside is that each test requires a lot of setup: source feeds, Elasticsearch, Redis, and uses a HTTP client to query for data that often has to poll until a condition is met.
+
+----
+
+The incoming application is a more traditional web application. However, it uses similar patterns for consistency with the outgoing application. It is also fairly basic by design: it is "dumb" proxy to ES, with some authentication and dictionary manipulation. This is so clients can have as much control as possible and in most cases won't need changes to the Activity Stream to change what data they use.
+
+The incoming application uses the same "injected" logging context pattern as the outgoing application to be able to distinguish concurrent chains of behaviour initiated by incoming requests, and to use the same code. Each incoming request creates a new "context" that allows all of its logging output to be grepped for.

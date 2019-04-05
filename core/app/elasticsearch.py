@@ -2,6 +2,9 @@ import time
 
 import ujson
 
+from .http import (
+    http_make_request,
+)
 from .logger import (
     logged,
 )
@@ -40,7 +43,7 @@ async def es_min_verification_age(context):
         headers={'Content-Type': 'application/json'},
         payload=payload,
     )
-    result_dict = ujson.loads(await result.text())
+    result_dict = ujson.loads(result._body.decode('utf-8'))
     try:
         max_published = int(result_dict['aggregations']
                             ['verifier_activities']['max_published']['value'] / 1000)
@@ -55,7 +58,7 @@ async def es_min_verification_age(context):
 async def es_request_non_200_exception(context, method, path, query, headers, payload):
     results = await es_request(context, method, path, query, headers, payload)
     if results.status not in [200, 201]:
-        raise Exception(await results.text())
+        raise Exception(results._body.decode('utf-8'))
     return results
 
 
@@ -65,13 +68,11 @@ async def es_request(context, method, path, query, headers, payload):
         [settings.ES_URI, method, path, query],
     ):
         query_string = '&'.join([key + '=' + query[key] for key in query.keys()])
-        async with context.session.request(
-            method, settings.ES_URI + path + (('?' + query_string) if query_string != '' else ''),
+        return await http_make_request(
+            context.session, context.metrics, method,
+            settings.ES_URI + path + (('?' + query_string) if query_string != '' else ''),
             data=payload, headers=headers,
-        ) as result:
-            # Without this, after some number of requests, they end up hanging
-            await result.read()
-            return result
+        )
 
 
 class ESMetricsUnavailable(Exception):
