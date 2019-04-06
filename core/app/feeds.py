@@ -304,7 +304,7 @@ class EventFeed:
                     'index': {
                         '_index': index_name,
                         '_type': '_doc',
-                        '_id':  'dit:aventri:Event:' + str(event['eventid']) + ':Create',
+                        '_id':  'dit:aventri:Event:' + str(event['eventid']),
                     },
                 },
                 'source': {
