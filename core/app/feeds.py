@@ -149,7 +149,14 @@ class ZendeskFeed:
                     published_date=ticket['created_at'],
                     dit_application='zendesk',
                     object_type='dit:zendesk:Ticket',
-                    actor=_company_actor(companies_house_number=company_number)),
+                    actor={
+                        'type': [
+                            'Organization',
+                            'dit:company',
+                        ],
+                        'dit:companiesHouseNumber': company_number,
+                    }
+                )
             }
             for ticket in page['tickets']
             for company_number in company_numbers(ticket['description'])
@@ -171,7 +178,13 @@ class ZendeskFeed:
                     published_date=ticket['created_at'],
                     dit_application='zendesk',
                     object_type='dit:zendesk:Ticket',
-                    actor=_company_actor(companies_house_number=company_number)
+                    actor={
+                        'type': [
+                            'Organization',
+                            'dit:company',
+                        ],
+                        'dit:companiesHouseNumber': company_number,
+                    }
                 )['object']
             }
             for ticket in page['tickets']
@@ -382,14 +395,4 @@ def _source(
             ],
             'id': object_id,
         },
-    }
-
-
-def _company_actor(companies_house_number):
-    return {
-        'type': [
-            'Organization',
-            'dit:company',
-        ],
-        'dit:companiesHouseNumber': companies_house_number,
     }
