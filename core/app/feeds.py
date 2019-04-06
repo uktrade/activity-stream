@@ -139,9 +139,13 @@ class ZendeskFeed:
 
         return [
             {
-                'action_and_metadata': _action_and_metadata(
-                    index_name=index_name,
-                    activity_id=activity_id),
+                'action_and_metadata': {
+                    'index': {
+                        '_index': index_name,
+                        '_type': '_doc',
+                        '_id': activity_id,
+                    },
+                },
                 'source': _source(
                     activity_id=activity_id,
                     activity_type='Create',
@@ -255,9 +259,13 @@ class EventFeed:
         now = datetime.datetime.now().isoformat()
         return [
             {
-                'action_and_metadata': _action_and_metadata(
-                    index_name=index_name,
-                    activity_id='dit:aventri:Event:' + str(event['eventid']) + ':Create'),
+                'action_and_metadata': {
+                    'index': {
+                        '_index': index_name,
+                        '_type': '_doc',
+                        '_id': 'dit:aventri:Event:' + str(event['eventid']) + ':Create',
+                    },
+                },
                 'source': {
                     'id': 'dit:aventri:Event:' + str(event['eventid']) + ':Create',
                     'type': 'Search',
@@ -360,18 +368,6 @@ class EventFeed:
                              loggable_event, should_include)
 
         return should_include
-
-
-def _action_and_metadata(
-        index_name,
-        activity_id):
-    return {
-        'index': {
-            '_index': index_name,
-            '_type': '_doc',
-            '_id': activity_id,
-        },
-    }
 
 
 def _source(
