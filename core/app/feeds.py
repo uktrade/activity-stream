@@ -177,7 +177,7 @@ class ZendeskFeed:
                     'index': {
                         '_index': index_name,
                         '_type': '_doc',
-                        '_id': activity_id,
+                        '_id': 'dit:zendesk:Ticket:' + str(ticket['id']),
                     },
                 },
                 'source': {
@@ -190,7 +190,7 @@ class ZendeskFeed:
             }
             for ticket in page['tickets']
             for company_number in company_numbers(ticket['description'])
-            for activity_id in ['dit:zendesk:Ticket:' + str(ticket['id']) + ':Create']
+            for activity_id in ['dit:zendesk:Ticket:' + str(ticket['id'])]
             for index_name in object_index_names
         ]
 
