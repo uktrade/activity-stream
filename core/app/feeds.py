@@ -180,21 +180,13 @@ class ZendeskFeed:
                         '_id': activity_id,
                     },
                 },
-                'source': _source(
-                    activity_id=activity_id,
-                    activity_type='Create',
-                    object_id='dit:zendesk:Ticket:' + str(ticket['id']),
-                    published_date=ticket['created_at'],
-                    dit_application='zendesk',
-                    object_type='dit:zendesk:Ticket',
-                    actor={
-                        'type': [
-                            'Organization',
-                            'dit:company',
-                        ],
-                        'dit:companiesHouseNumber': company_number,
-                    }
-                )['object']
+                'source': {
+                    'type': [
+                        'Document',
+                        'dit:zendesk:Ticket',
+                    ],
+                    'id': 'dit:zendesk:Ticket:' + str(ticket['id']),
+                },
             }
             for ticket in page['tickets']
             for company_number in company_numbers(ticket['description'])
@@ -373,27 +365,3 @@ class EventFeed:
                              loggable_event, should_include)
 
         return should_include
-
-
-def _source(
-        activity_id,
-        activity_type,
-        object_id,
-        published_date,
-        dit_application,
-        object_type,
-        actor):
-    return {
-        'id': activity_id,
-        'type': activity_type,
-        'published': published_date,
-        'dit:application': dit_application,
-        'actor': actor,
-        'object': {
-            'type': [
-                'Document',
-                object_type,
-            ],
-            'id': object_id,
-        },
-    }
