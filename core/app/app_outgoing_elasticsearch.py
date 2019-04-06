@@ -258,10 +258,11 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
                             }
                         }),
                         '\n',
-                        es_json_dumps(activity),
+                        activity_json,
                         '\n',
                     ]
                     for activity in activities
+                    for activity_json in [es_json_dumps(activity)]
                     for activity_index_name in activity_index_names
                 ),
                 flatten_generator(
@@ -274,10 +275,11 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
                             }
                         }),
                         '\n',
-                        es_json_dumps(activity['object']),
+                        object_json,
                         '\n',
                     ]
                     for activity in activities
+                    for object_json in [es_json_dumps(activity['object'])]
                     for object_index_name in object_index_names
                 ),
             )).encode('utf-8')
