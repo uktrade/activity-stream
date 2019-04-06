@@ -1,4 +1,5 @@
 import datetime
+import itertools
 
 import ujson
 
@@ -240,18 +241,45 @@ async def refresh_index(context, index_name):
         )
 
 
-async def es_bulk_ingest(context, items):
-    with logged(context.logger, 'Pushing (%s) items into Elasticsearch', [len(items)]):
-        if not items:
+async def es_bulk_ingest(context, activities, activity_index_names, object_index_names):
+    with logged(context.logger, 'Pushing (%s) activities into Elasticsearch', [len(activities)]):
+        if not activities:
             return
 
         with logged(context.logger, 'Converting to Elasticsearch bulk ingest commands', []):
-            es_bulk_contents = ''.join(flatten_generator(
-                [es_json_dumps(item['action_and_metadata']),
-                 '\n',
-                 es_json_dumps(item['source']),
-                 '\n']
-                for item in items
+            es_bulk_contents = ''.join(itertools.chain(
+                flatten_generator(
+                    [
+                        es_json_dumps({
+                            'index': {
+                                '_id': activity['id'],
+                                '_index': activity_index_name,
+                                '_type': '_doc',
+                            }
+                        }),
+                        '\n',
+                        es_json_dumps(activity),
+                        '\n',
+                    ]
+                    for activity in activities
+                    for activity_index_name in activity_index_names
+                ),
+                flatten_generator(
+                    [
+                        es_json_dumps({
+                            'index': {
+                                '_id': activity['object']['id'],
+                                '_index': object_index_name,
+                                '_type': '_doc',
+                            }
+                        }),
+                        '\n',
+                        es_json_dumps(activity['object']),
+                        '\n',
+                    ]
+                    for activity in activities
+                    for object_index_name in object_index_names
+                ),
             )).encode('utf-8')
 
         with logged(context.logger, 'POSTing bulk ingest to Elasticsearch', []):
