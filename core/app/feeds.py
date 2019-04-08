@@ -66,34 +66,8 @@ class ActivityStreamFeed:
         }
 
     @classmethod
-    async def convert_to_bulk_es(cls, _, feed, activity_index_names, object_index_names):
-        return [
-            {
-                'action_and_metadata': {
-                    'index': {
-                        '_id': item['id'],
-                        '_index': index_name,
-                        '_type': '_doc',
-                    }
-                },
-                'source': item
-            }
-            for item in feed['orderedItems']
-            for index_name in activity_index_names
-        ] + [
-            {
-                'action_and_metadata': {
-                    'index': {
-                        '_id': item['object']['id'],
-                        '_index': index_name,
-                        '_type': '_doc',
-                    }
-                },
-                'source': item['object']
-            }
-            for item in feed['orderedItems']
-            for index_name in object_index_names
-        ]
+    async def get_activities(cls, _, feed):
+        return feed['orderedItems']
 
 
 class ZendeskFeed:
@@ -132,52 +106,34 @@ class ZendeskFeed:
         }
 
     @classmethod
-    async def convert_to_bulk_es(cls, _, page, activity_index_names, object_index_names):
+    async def get_activities(cls, _, page):
         def company_numbers(description):
             match = re.search(cls.company_number_regex, description)
             return [match[1]] if match else []
 
         return [
             {
-                'action_and_metadata': _action_and_metadata(
-                    index_name=index_name,
-                    activity_id=activity_id),
-                'source': _source(
-                    activity_id=activity_id,
-                    activity_type='Create',
-                    object_id='dit:zendesk:Ticket:' + str(ticket['id']),
-                    published_date=ticket['created_at'],
-                    dit_application='zendesk',
-                    object_type='dit:zendesk:Ticket',
-                    actor=_company_actor(companies_house_number=company_number)),
-            }
-            for ticket in page['tickets']
-            for company_number in company_numbers(ticket['description'])
-            for activity_id in ['dit:zendesk:Ticket:' + str(ticket['id']) + ':Create']
-            for index_name in activity_index_names
-        ] + [
-            {
-                'action_and_metadata': {
-                    'index': {
-                        '_index': index_name,
-                        '_type': '_doc',
-                        '_id': activity_id,
-                    },
+                'id': 'dit:zendesk:Ticket:' + str(ticket['id']) + ':Create',
+                'type': 'Create',
+                'published': ticket['created_at'],
+                'dit:application': 'zendesk',
+                'actor': {
+                    'type': [
+                        'Organization',
+                        'dit:company',
+                    ],
+                    'dit:companiesHouseNumber': company_number,
                 },
-                'source': _source(
-                    activity_id=activity_id,
-                    activity_type='Create',
-                    object_id='dit:zendesk:Ticket:' + str(ticket['id']),
-                    published_date=ticket['created_at'],
-                    dit_application='zendesk',
-                    object_type='dit:zendesk:Ticket',
-                    actor=_company_actor(companies_house_number=company_number)
-                )['object']
+                'object': {
+                    'type': [
+                        'Document',
+                        'dit:zendesk:Ticket',
+                    ],
+                    'id': 'dit:zendesk:Ticket:' + str(ticket['id']),
+                },
             }
             for ticket in page['tickets']
             for company_number in company_numbers(ticket['description'])
-            for activity_id in ['dit:zendesk:Ticket:' + str(ticket['id']) + ':Create']
-            for index_name in object_index_names
         ]
 
 
@@ -226,7 +182,7 @@ class EventFeed:
             'accesstoken': self.accesstoken,
         }
 
-    async def convert_to_bulk_es(self, context, page, activity_index_names, object_index_names):
+    async def get_activities(self, context, page):
         async def get_event(event_id):
             await asyncio.sleep(3)
             url = self.event_url.format(event_id=event_id)
@@ -242,53 +198,16 @@ class EventFeed:
         now = datetime.datetime.now().isoformat()
         return [
             {
-                'action_and_metadata': _action_and_metadata(
-                    index_name=index_name,
-                    activity_id='dit:aventri:Event:' + str(event['eventid']) + ':Create'),
-                'source': {
-                    'id': 'dit:aventri:Event:' + str(event['eventid']) + ':Create',
-                    'type': 'Search',
-                    'eventid': event['eventid'],
-                    'dit:application': 'aventri',
-                    'object': {
-                        'type': [
-                            'Document',
-                            'dit:aventri:Event',
-                        ],
-                        'id': 'dit:aventri:Event:' + event['eventid'],
-                        'name': event['name'],
-                        'url': event['url'],
-                        'content': event['description'],
-                        'startdate': event['startdate'],
-                        'enddate': event['enddate'],
-                        'foldername': event['foldername'],
-                        'location': event['location'],
-                        'language': event['defaultlanguage'],
-                        'timezone': event['timezone'],
-                        'currency': event['standardcurrency'],
-                        'price_type': event['price_type'],
-                        'price': event['pricepoints'],
-                        'published': now
-                    },
-
-                }
-            }
-            for page_event in page
-            for index_name in activity_index_names
-            for event in [await get_event(page_event['eventid'])]
-            if self.should_include(context, event)
-        ] + [
-            {
-                'action_and_metadata': {
-                    'index': {
-                        '_index': index_name,
-                        '_type': '_doc',
-                        '_id':  'dit:aventri:Event:' + str(event['eventid']) + ':Create',
-                    },
-                },
-                'source': {
-                    'type': 'Event',
-                    'id': 'dit:aventri:Event:' + str(event['eventid']),
+                'id': 'dit:aventri:Event:' + str(event['eventid']) + ':Create',
+                'type': 'Search',
+                'eventid': event['eventid'],
+                'dit:application': 'aventri',
+                'object': {
+                    'type': [
+                        'Document',
+                        'dit:aventri:Event',
+                    ],
+                    'id': 'dit:aventri:Event:' + event['eventid'],
                     'name': event['name'],
                     'url': event['url'],
                     'content': event['description'],
@@ -301,11 +220,10 @@ class EventFeed:
                     'currency': event['standardcurrency'],
                     'price_type': event['price_type'],
                     'price': event['pricepoints'],
-                    'published': now
-                },
+                    'published': now,
+                }
             }
             for page_event in page
-            for index_name in object_index_names
             for event in [await get_event(page_event['eventid'])]
             if self.should_include(context, event)
         ]
@@ -347,49 +265,3 @@ class EventFeed:
                              loggable_event, should_include)
 
         return should_include
-
-
-def _action_and_metadata(
-        index_name,
-        activity_id):
-    return {
-        'index': {
-            '_index': index_name,
-            '_type': '_doc',
-            '_id': activity_id,
-        },
-    }
-
-
-def _source(
-        activity_id,
-        activity_type,
-        object_id,
-        published_date,
-        dit_application,
-        object_type,
-        actor):
-    return {
-        'id': activity_id,
-        'type': activity_type,
-        'published': published_date,
-        'dit:application': dit_application,
-        'actor': actor,
-        'object': {
-            'type': [
-                'Document',
-                object_type,
-            ],
-            'id': object_id,
-        },
-    }
-
-
-def _company_actor(companies_house_number):
-    return {
-        'type': [
-            'Organization',
-            'dit:company',
-        ],
-        'dit:companiesHouseNumber': companies_house_number,
-    }

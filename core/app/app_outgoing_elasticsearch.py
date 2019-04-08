@@ -1,4 +1,5 @@
 import datetime
+import itertools
 
 import ujson
 
@@ -118,7 +119,7 @@ async def add_remove_aliases_atomically(context, activity_index_name, object_ind
                 [feed_unique_id]):
         activities_remove_pattern = f'{ALIAS_ACTIVITIES}__feed_id_{feed_unique_id}__*'
         objects_remove_pattern = f'{ALIAS_OBJECTS}__feed_id_{feed_unique_id}__*'
-        actions = ujson.dumps({
+        actions = es_json_dumps({
             'actions': [
                 {'remove': {'index': activities_remove_pattern, 'alias': ALIAS_ACTIVITIES}},
                 {'remove': {'index': objects_remove_pattern, 'alias': ALIAS_OBJECTS}},
@@ -161,7 +162,7 @@ async def delete_indexes(context, index_names):
 
 async def create_activities_index(context, index_name):
     with logged(context.logger, 'Creating index (%s)', [index_name]):
-        index_definition = ujson.dumps({
+        index_definition = es_json_dumps({
             'settings': {
                 'index': {
                     'number_of_shards': 3,
@@ -184,7 +185,7 @@ async def create_activities_index(context, index_name):
                     },
                 },
             },
-        }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
+        }).encode('utf-8')
         await es_request_non_200_exception(
             context=context,
             method='PUT',
@@ -197,7 +198,7 @@ async def create_activities_index(context, index_name):
 
 async def create_objects_index(context, index_name):
     with logged(context.logger, 'Creating index (%s)', [index_name]):
-        index_definition = ujson.dumps({
+        index_definition = es_json_dumps({
             'settings': {
                 'index': {
                     'number_of_shards': 3,
@@ -217,7 +218,7 @@ async def create_objects_index(context, index_name):
                     },
                 },
             },
-        }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
+        }).encode('utf-8')
         await es_request_non_200_exception(
             context=context,
             method='PUT',
@@ -240,20 +241,47 @@ async def refresh_index(context, index_name):
         )
 
 
-async def es_bulk_ingest(context, items):
-    with logged(context.logger, 'Pushing (%s) items into Elasticsearch', [len(items)]):
-        if not items:
+async def es_bulk_ingest(context, activities, activity_index_names, object_index_names):
+    with logged(context.logger, 'Pushing (%s) activities into Elasticsearch', [len(activities)]):
+        if not activities:
             return
 
         with logged(context.logger, 'Converting to Elasticsearch bulk ingest commands', []):
-            es_bulk_contents = ''.join(flatten_generator(
-                [ujson.dumps(item['action_and_metadata'], sort_keys=True,
-                             escape_forward_slashes=False, ensure_ascii=False),
-                 '\n',
-                 ujson.dumps(item['source'], sort_keys=True,
-                             escape_forward_slashes=False, ensure_ascii=False),
-                 '\n']
-                for item in items
+            es_bulk_contents = ''.join(itertools.chain(
+                flatten_generator(
+                    [
+                        es_json_dumps({
+                            'index': {
+                                '_id': activity['id'],
+                                '_index': activity_index_name,
+                                '_type': '_doc',
+                            }
+                        }),
+                        '\n',
+                        activity_json,
+                        '\n',
+                    ]
+                    for activity in activities
+                    for activity_json in [es_json_dumps(activity)]
+                    for activity_index_name in activity_index_names
+                ),
+                flatten_generator(
+                    [
+                        es_json_dumps({
+                            'index': {
+                                '_id': activity['object']['id'],
+                                '_index': object_index_name,
+                                '_type': '_doc',
+                            }
+                        }),
+                        '\n',
+                        object_json,
+                        '\n',
+                    ]
+                    for activity in activities
+                    for object_json in [es_json_dumps(activity['object'])]
+                    for object_index_name in object_index_names
+                ),
             )).encode('utf-8')
 
         with logged(context.logger, 'POSTing bulk ingest to Elasticsearch', []):
@@ -320,3 +348,7 @@ async def es_maybe_unvailable_metrics(context, method, path, query, headers, pay
     if results.status != 200:
         raise Exception(results._body.decode('utf-8'))
     return results
+
+
+def es_json_dumps(data_dict):
+    return ujson.dumps(data_dict, sort_keys=True, escape_forward_slashes=False, ensure_ascii=False)
