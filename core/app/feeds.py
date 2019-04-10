@@ -203,10 +203,7 @@ class EventFeed:
                 'eventid': event['eventid'],
                 'dit:application': 'aventri',
                 'object': {
-                    'type': [
-                        'Document',
-                        'dit:aventri:Event',
-                    ],
+                    'type': 'Event',
                     'id': 'dit:aventri:Event:' + event['eventid'],
                     'name': event['name'],
                     'url': event['url'],
