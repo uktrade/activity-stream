@@ -5,7 +5,7 @@
 #    pip-compile --output-file requirements_test.txt requirements_test.in
 #
 aiodns==1.1.1
-aiohttp==3.3.2
+aiohttp==3.5.4
 aioredis==1.1.0
 aspy.yaml==1.2.0          # via pre-commit
 astroid==2.2.5            # via pylint
