@@ -25,6 +25,9 @@ from .app_outgoing_elasticsearch import (
     delete_indexes,
     refresh_index,
 )
+from .dns import (
+    AioHttpDnsResolver,
+)
 from .elasticsearch import (
     es_min_verification_age,
 )
@@ -119,7 +122,7 @@ async def run_outgoing_application():
         feeds = [parse_feed_config(feed) for feed in env['FEEDS']]
 
     settings.ES_URI = es_uri
-    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
+    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=AioHttpDnsResolver())
     session = aiohttp.ClientSession(
         connector=conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
