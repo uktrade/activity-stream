@@ -1173,7 +1173,7 @@ class TestApplication(TestBase):
             if 'hits' not in results or 'hits' not in results['hits']:
                 return False
 
-            elif str(results).find('aventri') != -1:
+            if str(results).find('aventri') != -1:
                 return True
 
             return False

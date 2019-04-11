@@ -104,7 +104,7 @@ class TestProcess(unittest.TestCase):
         return \
             (server_out, get_server_out_stdout), \
             (server_inc, get_server_inc_stdout), \
-            feed_runner_2,
+            feed_runner_2
 
     @async_test
     async def test_http_and_exit_clean(self):
