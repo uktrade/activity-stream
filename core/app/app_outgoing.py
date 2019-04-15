@@ -341,16 +341,16 @@ async def fetch_and_ingest_page(context, ingest_type, feed, activity_index_names
         with logged(context.logger, 'Parsing JSON', []):
             feed_parsed = ujson.loads(feed_contents)
 
-        with logged(context.logger, 'Converting to bulk Elasticsearch items', []):
-            es_bulk_items = await feed.convert_to_bulk_es(
-                context, feed_parsed, activity_index_names, objects_index_names)
+        with logged(context.logger, 'Converting to activities', []):
+            activities = await feed.get_activities(context, feed_parsed)
 
+        num_es_documents = len(activities) * (len(activity_index_names) + len(objects_index_names))
         with \
                 metric_timer(context.metrics['ingest_page_duration_seconds'],
                              [feed.unique_id, ingest_type, 'push']), \
                 metric_counter(context.metrics['ingest_activities_nonunique_total'],
-                               [feed.unique_id], len(es_bulk_items)):
-            await es_bulk_ingest(context, es_bulk_items)
+                               [feed.unique_id], num_es_documents):
+            await es_bulk_ingest(context, activities, activity_index_names, objects_index_names)
 
         asyncio.ensure_future(set_feed_status(
             context, feed.unique_id, feed.max_interval_before_reporting_down, b'GREEN'))
