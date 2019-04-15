@@ -204,6 +204,7 @@ class EventFeed:
                 'dit:application': 'aventri',
                 'object': {
                     'type': 'Event',
+                    'dit:greatDomesticUI:searchResultType': 'Event',
                     'id': 'dit:aventri:Event:' + event['eventid'],
                     'name': event['name'],
                     'url': event['url'],
