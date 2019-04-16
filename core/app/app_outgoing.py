@@ -349,7 +349,7 @@ async def fetch_and_ingest_page(context, ingest_type, feed, activity_index_names
                 metric_timer(context.metrics['ingest_page_duration_seconds'],
                              [feed.unique_id, ingest_type, 'push']), \
                 metric_counter(context.metrics['ingest_activities_nonunique_total'],
-                               [feed.unique_id], num_es_documents):
+                               [feed.unique_id, ingest_type], num_es_documents):
             await es_bulk_ingest(context, activities, activity_index_names, objects_index_names)
 
         asyncio.ensure_future(set_feed_status(

@@ -22,7 +22,7 @@ METRICS_CONF = [
     (Gauge, 'ingest_inprogress_ingests_total',
      'The number of inprogress ingests', []),
     (Counter, 'ingest_activities_nonunique_total',
-     'The number of nonunique activities ingested', ['feed_unique_id']),
+     'The number of nonunique activities ingested', ['feed_unique_id', 'ingest_type']),
     (Gauge, 'elasticsearch_activities_total',
      'The number of activities stored in Elasticsearch', ['searchable']),
     (Gauge, 'elasticsearch_feed_activities_total',
