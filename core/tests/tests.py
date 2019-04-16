@@ -1385,8 +1385,7 @@ class TestApplication(TestBase):
         self.assertIn('ingest_feed_duration_seconds_count', text)
         self.assertIn('feed_unique_id="first_feed"', text)
         self.assertIn('status="success"', text)
-        self.assertIn('ingest_activities_nonunique_total{feed_unique_id="first_feed"}',
-                      text)
+        self.assertIn('ingest_activities_nonunique_total{', text)
 
         # The order of labels is apparently not deterministic
         self.assertIn('ingest_page_duration_seconds_bucket{', text)
