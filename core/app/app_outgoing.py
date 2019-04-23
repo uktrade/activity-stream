@@ -349,7 +349,7 @@ async def fetch_and_ingest_page(context, ingest_type, feed, activity_index_names
             await es_bulk_ingest(context, activities, activity_index_names, objects_index_names)
 
         asyncio.ensure_future(set_feed_status(
-            context, feed.unique_id, feed.max_interval_before_reporting_down, b'GREEN'))
+            context, feed.unique_id, feed.down_grace_period, b'GREEN'))
 
         return feed.next_href(feed_parsed)
 
