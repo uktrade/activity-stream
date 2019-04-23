@@ -185,6 +185,9 @@ async def create_activities_index(context, index_name):
                         'object.published': {
                             'type': 'date',
                         },
+                        'object.content': {
+                            'type': 'text',
+                        },
                     },
                 },
             },
@@ -217,6 +220,9 @@ async def create_objects_index(context, index_name):
                         },
                         'type': {
                             'type': 'keyword',
+                        },
+                        'content': {
+                            'type': 'text',
                         },
                     },
                 },
