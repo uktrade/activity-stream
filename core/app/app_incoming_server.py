@@ -180,7 +180,7 @@ def handle_get_existing(context):
     return handle
 
 
-def handle_get_check(parent_context, feeds):
+def handle_get_p1_check(parent_context, feeds):
     start_counter = time.perf_counter()
 
     # Grace period after uptime to allow new feeds to start reporting
