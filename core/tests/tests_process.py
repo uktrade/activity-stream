@@ -191,6 +191,14 @@ class TestProcess(unittest.TestCase):
         check, _, _ = await get_until_raw(check_url, x_forwarded_for, check_is_up)
         self.assertIn('__UP__', check)
 
+        check_p1_url = 'http://127.0.0.1:8080/checks/p1'
+        check_p1, _, _ = await get_until_raw(check_url, x_forwarded_for, check_is_up)
+        self.assertIn('__UP__', check_p1)
+
+        check_p2_url = 'http://127.0.0.1:8080/checks/p2'
+        check_p2, _, _ = await get_until_raw(check_p2_url, x_forwarded_for, check_is_up)
+        self.assertIn('__UP__', check_p2)
+
         def check_verification_is_green(text):
             return 'verification:GREEN' in text
         _, _, _ = await get_until_raw(check_url, x_forwarded_for,
@@ -202,3 +210,9 @@ class TestProcess(unittest.TestCase):
         verification_feed.terminate()
         check_down, _, _ = await get_until_raw(check_url, x_forwarded_for, check_is_not_up)
         self.assertIn('__DOWN__', check_down)
+
+        check_p1_down, _, _ = await get_until_raw(check_p1_url, x_forwarded_for, check_is_not_up)
+        self.assertIn('__DOWN__', check_p1_down)
+
+        check_p2_down, _, _ = await get_until_raw(check_p2_url, x_forwarded_for, check_is_not_up)
+        self.assertIn('__DOWN__', check_p2_down)

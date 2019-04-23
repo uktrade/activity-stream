@@ -28,7 +28,7 @@ def parse_feed_config(feed_config):
 
 class ActivityStreamFeed:
 
-    max_interval_before_reporting_down = 60
+    down_grace_period = 60
 
     full_ingest_page_interval = 0.25
     updates_page_interval = 1
@@ -72,7 +72,7 @@ class ActivityStreamFeed:
 
 class ZendeskFeed:
 
-    max_interval_before_reporting_down = 400
+    down_grace_period = 400
 
     # The staging API is severely rate limited
     # Could be higher on prod, but KISS
@@ -139,7 +139,7 @@ class ZendeskFeed:
 
 class EventFeed:
 
-    max_interval_before_reporting_down = 60 * 60 * 4
+    down_grace_period = 60 * 60 * 4
 
     full_ingest_page_interval = 3
     updates_page_interval = 60 * 60 * 24 * 30

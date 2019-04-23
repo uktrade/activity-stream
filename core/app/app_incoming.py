@@ -26,10 +26,11 @@ from .app_incoming_server import (
     authenticator,
     authorizer,
     convert_errors_to_json,
-    handle_get_check,
     handle_get_existing,
     handle_get_metrics,
     handle_get_new,
+    handle_get_p1_check,
+    handle_get_p2_check,
     handle_get_search,
     handle_post,
     raven_reporter,
@@ -140,7 +141,9 @@ async def create_incoming_application(
     ])
     app.add_subapp('/v1/', private_app)
     app.add_routes([
-        web.get('/check', handle_get_check(context, feeds)),
+        web.get('/check', handle_get_p1_check(context)),
+        web.get('/checks/p1', handle_get_p1_check(context)),
+        web.get('/checks/p2', handle_get_p2_check(context, feeds)),
         web.get('/metrics', handle_get_metrics(context)),
     ])
 
