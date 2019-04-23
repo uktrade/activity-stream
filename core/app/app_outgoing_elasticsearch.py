@@ -188,6 +188,9 @@ async def create_activities_index(context, index_name):
                         'object.content': {
                             'type': 'text',
                         },
+                        'object.name': {
+                            'type': 'text',
+                        },
                         # Not AS 2.0, but is used, and is a space-separated
                         # list of keywords
                         'object.keywords': {
@@ -230,6 +233,9 @@ async def create_objects_index(context, index_name):
                             'type': 'keyword',
                         },
                         'content': {
+                            'type': 'text',
+                        },
+                        'name': {
                             'type': 'text',
                         },
                         # Not AS 2.0, but is used, and is a space-separated
