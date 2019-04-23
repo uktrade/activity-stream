@@ -192,7 +192,10 @@ async def create_activities_index(context, index_name):
                         # list of keywords
                         'object.keywords': {
                             'type': 'text',
-                        }
+                        },
+                        'actor.dit:companiesHouseNumber': {
+                            'type': 'keyword',
+                        },
                     },
                 },
             },
