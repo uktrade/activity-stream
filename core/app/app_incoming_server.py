@@ -212,14 +212,14 @@ def handle_get_p2_check(parent_context, feeds):
 
     # Grace period after uptime to allow new feeds to start reporting
     # without making the service appear down
-    startup_feed_grace_seconds = 30
+    grace = 30
 
     async def handle(_):
         context = get_child_context(parent_context, 'check')
 
         with logged(context.logger, 'Checking', []):
             uptime = time.perf_counter() - start_counter
-            in_grace_period = uptime <= startup_feed_grace_seconds
+            in_grace_period = uptime <= grace
 
             # The status of the feeds are via Redis...
             # - To actually reflect if each was recently sucessful, since it is done by the
@@ -229,16 +229,18 @@ def handle_get_p2_check(parent_context, feeds):
             feeds_statuses = await get_feeds_status(context, [
                 feed.unique_id for feed in feeds
             ])
-            feeds_statuses_with_red = [status if status ==
-                                       b'GREEN' else b'RED' for status in feeds_statuses]
-            are_all_feeds_green = all([status == b'GREEN' for status in feeds_statuses])
-            all_green = are_all_feeds_green or in_grace_period
+            feeds_status_green_if_grace = [
+                b'RED' if uptime > feed.down_grace_period + grace and status != b'GREEN' else
+                b'GREEN'
+                for feed, status in zip(feeds, feeds_statuses)
+            ]
+            all_green = all([status == b'GREEN' for status in feeds_status_green_if_grace])
 
             status = \
                 (b'__UP__' if all_green else b'__DOWN__') + \
                 (b' (IN_STARTUP_GRACE_PERIOD)' if in_grace_period else b'') + b'\n' + \
                 b''.join([
-                    feed.unique_id.encode('utf-8') + b':' + feeds_statuses_with_red[i] + b'\n'
+                    feed.unique_id.encode('utf-8') + b':' + feeds_status_green_if_grace[i] + b'\n'
                     for (i, feed) in enumerate(feeds)
                 ])
 
