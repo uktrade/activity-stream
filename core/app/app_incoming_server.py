@@ -180,12 +180,7 @@ def handle_get_existing(context):
     return handle
 
 
-def handle_get_p1_check(parent_context, feeds):
-    start_counter = time.perf_counter()
-
-    # Grace period after uptime to allow new feeds to start reporting
-    # without making the service appear down
-    startup_feed_grace_seconds = 30
+def handle_get_p1_check(parent_context):
 
     async def handle(_):
         context = get_child_context(parent_context, 'check')
@@ -198,6 +193,31 @@ def handle_get_p1_check(parent_context, feeds):
             min_age = await es_min_verification_age(context)
             is_elasticsearch_green = min_age < 60
 
+            all_green = is_redis_green and is_elasticsearch_green
+
+            status = \
+                (b'__UP__' if all_green else b'__DOWN__') + b'\n' + \
+                (b'redis:' + (b'GREEN' if is_redis_green else b'RED')) + b'\n' + \
+                (b'elasticsearch:' + (b'GREEN' if is_elasticsearch_green else b'RED')) + b'\n'
+
+        return web.Response(body=status, status=200, headers={
+            'Content-Type': 'text/plain; charset=utf-8',
+        })
+
+    return handle
+
+
+def handle_get_p2_check(parent_context, feeds):
+    start_counter = time.perf_counter()
+
+    # Grace period after uptime to allow new feeds to start reporting
+    # without making the service appear down
+    startup_feed_grace_seconds = 30
+
+    async def handle(_):
+        context = get_child_context(parent_context, 'check')
+
+        with logged(context.logger, 'Checking', []):
             uptime = time.perf_counter() - start_counter
             in_grace_period = uptime <= startup_feed_grace_seconds
 
@@ -212,15 +232,11 @@ def handle_get_p1_check(parent_context, feeds):
             feeds_statuses_with_red = [status if status ==
                                        b'GREEN' else b'RED' for status in feeds_statuses]
             are_all_feeds_green = all([status == b'GREEN' for status in feeds_statuses])
-
-            all_green = is_redis_green and is_elasticsearch_green and \
-                (are_all_feeds_green or in_grace_period)
+            all_green = are_all_feeds_green or in_grace_period
 
             status = \
                 (b'__UP__' if all_green else b'__DOWN__') + \
                 (b' (IN_STARTUP_GRACE_PERIOD)' if in_grace_period else b'') + b'\n' + \
-                (b'redis:' + (b'GREEN' if is_redis_green else b'RED')) + b'\n' + \
-                (b'elasticsearch:' + (b'GREEN' if is_elasticsearch_green else b'RED')) + b'\n' + \
                 b''.join([
                     feed.unique_id.encode('utf-8') + b':' + feeds_statuses_with_red[i] + b'\n'
                     for (i, feed) in enumerate(feeds)
