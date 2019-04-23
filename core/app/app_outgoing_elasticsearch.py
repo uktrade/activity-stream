@@ -172,6 +172,7 @@ async def create_activities_index(context, index_name):
             },
             'mappings': {
                 '_doc': {
+                    'dynamic': False,
                     'properties': {
                         'published': {
                             'type': 'date',
@@ -225,6 +226,7 @@ async def create_objects_index(context, index_name):
             },
             'mappings': {
                 '_doc': {
+                    'dynamic': False,
                     'properties': {
                         'published': {
                             'type': 'date',

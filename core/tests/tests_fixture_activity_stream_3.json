@@ -17,10 +17,9 @@
       "dit:application": "CMS",
       "id": "dit:CMS:Article:49863:Create",
       "object": {
-        "heading": "Advice",
+        "content": "Article title 1",
         "id": "dit:CMS:Article:49863",
-        "introduction": "Lorem ipsum",
-        "title": "Article title 1",
+        "name": "Advice",
         "type": [
           "Document",
           "dit:CMS:Article"
@@ -41,10 +40,9 @@
       "dit:application": "CMS",
       "id": "dit:CMS:Article:49864:Create",
       "object": {
-        "heading": "Advice",
+        "content": "Article title 2",
         "id": "dit:CMS:Article:49864",
-        "introduction": "Lorem ipsum",
-        "title": "Article title 2",
+        "name": "Advice",
         "type": [
           "Document",
           "dit:CMS:Article"
@@ -65,10 +63,9 @@
       "dit:application": "CMS",
       "id": "dit:CMS:Article:49865:Create",
       "object": {
-        "heading": "Advice",
+        "content": "Article title 3",
         "id": "dit:CMS:Article:49865",
-        "introduction": "Lorem ipsum",
-        "title": "Article title 3",
+        "name": "Advice",
         "type": [
           "Document",
           "dit:CMS:Article"
@@ -89,10 +86,9 @@
       "dit:application": "CMS",
       "id": "dit:CMS:Article:49866:Create",
       "object": {
-        "heading": "Advice",
+        "content": "Article title 4",
         "id": "dit:CMS:Article:49866",
-        "introduction": "Lorem ipsum",
-        "title": "Article title 4",
+        "name": "Advice",
         "type": [
           "Document",
           "dit:CMS:Article"
@@ -113,10 +109,9 @@
       "dit:application": "CMS",
       "id": "dit:CMS:Article:49867:Create",
       "object": {
-        "heading": "Advice",
+        "content": "Article title 5",
         "id": "dit:CMS:Article:49867",
-        "introduction": "Lorem ipsum",
-        "title": "Article title 5",
+        "name": "Advice",
         "type": [
           "Document",
           "dit:CMS:Article"

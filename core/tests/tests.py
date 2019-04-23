@@ -720,16 +720,13 @@ class TestApplication(TestBase):
             'query': {
                 'multi_match': {
                     'query': 'Article',
-                    'fields': ['heading',
-                               'title',
-                               'url',
-                               'introduction']
+                    'fields': ['name',
+                               'content']
                 }
             },
-            '_source': ['heading',
-                        'title',
-                        'url',
-                        'introduction']
+            '_source': ['name',
+                        'content',
+                        'url']
         })
 
         response = await _get('/v1/objects', body)
@@ -742,13 +739,12 @@ class TestApplication(TestBase):
         results = json.loads(response['result'])['hits']['hits']
         self.assertEqual(5, len(results))
         article_1 = next(
-            result for result in results if result['_source']['title'] == 'Article title 1'
+            result for result in results if result['_source']['content'] == 'Article title 1'
         )
         self.assertEqual(article_1['_source'], {
-            'heading':      'Advice',
-            'title':        'Article title 1',
-            'url':          'www.great.gov.uk/article',
-            'introduction': 'Lorem ipsum'
+            'name': 'Advice',
+            'content': 'Article title 1',
+            'url': 'www.great.gov.uk/article',
         })
 
     @async_test
