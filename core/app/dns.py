@@ -9,6 +9,10 @@ from aiodnsresolver import (
 )
 import aiohttp
 
+from .metrics import (
+    metric_timer,
+)
+
 
 class AioHttpDnsResolver(aiohttp.abc.AbstractResolver):
     def __init__(self, metrics):
@@ -31,7 +35,8 @@ class AioHttpDnsResolver(aiohttp.abc.AbstractResolver):
             TYPES.A
 
         try:
-            ip_addresses = await self.resolver(host, record_type)
+            with metric_timer(self.metrics['dns_request_duration_seconds'], [host]):
+                ip_addresses = await self.resolver(host, record_type)
         except DoesNotExist as does_not_exist:
             raise OSError(0, '{} does not exist'.format(host)) from does_not_exist
         except ResolverError as resolver_error:
