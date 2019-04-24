@@ -1,3 +1,4 @@
+import asyncio
 import socket
 
 from aiodnsresolver import (
@@ -41,6 +42,10 @@ class AioHttpDnsResolver(aiohttp.abc.AbstractResolver):
             raise OSError(0, '{} does not exist'.format(host)) from does_not_exist
         except ResolverError as resolver_error:
             raise OSError(0, '{} failed to resolve'.format(host)) from resolver_error
+
+        min_expires_at = min(ip_address.expires_at for ip_address in ip_addresses)
+        ttl = max(0, min_expires_at - asyncio.get_event_loop().time())
+        self.metrics['dns_ttl'].labels(host).set(ttl)
 
         return [{
             'hostname': host,

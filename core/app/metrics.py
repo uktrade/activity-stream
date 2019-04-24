@@ -40,6 +40,9 @@ METRICS_CONF = [
     (Summary, 'dns_request_duration_seconds',
      'Time to make a possibly-from-cache DNS request',
      ['host', 'status']),
+    (Gauge, 'dns_ttl',
+     'The TTL of A or AAAA records just after a DNS request',
+     ['host']),
 ]
 
 
