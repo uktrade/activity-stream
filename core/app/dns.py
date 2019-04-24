@@ -1,3 +1,4 @@
+import asyncio
 import socket
 
 from aiodnsresolver import (
@@ -9,9 +10,13 @@ from aiodnsresolver import (
 )
 import aiohttp
 
+from .metrics import (
+    metric_timer,
+)
+
 
 class AioHttpDnsResolver(aiohttp.abc.AbstractResolver):
-    def __init__(self):
+    def __init__(self, metrics):
         super().__init__()
 
         async def transform_fqdn(fqdn):
@@ -19,6 +24,7 @@ class AioHttpDnsResolver(aiohttp.abc.AbstractResolver):
                 fqdn if fqdn.endswith(b'.apps.internal') else \
                 await mix_case(fqdn)
 
+        self.metrics = metrics
         self.resolver, self.clear = Resolver(transform_fqdn=transform_fqdn)
 
     # pylint: disable=arguments-differ
@@ -30,11 +36,16 @@ class AioHttpDnsResolver(aiohttp.abc.AbstractResolver):
             TYPES.A
 
         try:
-            ip_addresses = await self.resolver(host, record_type)
+            with metric_timer(self.metrics['dns_request_duration_seconds'], [host]):
+                ip_addresses = await self.resolver(host, record_type)
         except DoesNotExist as does_not_exist:
             raise OSError(0, '{} does not exist'.format(host)) from does_not_exist
         except ResolverError as resolver_error:
             raise OSError(0, '{} failed to resolve'.format(host)) from resolver_error
+
+        min_expires_at = min(ip_address.expires_at for ip_address in ip_addresses)
+        ttl = max(0, min_expires_at - asyncio.get_event_loop().time())
+        self.metrics['dns_ttl'].labels(host).set(ttl)
 
         return [{
             'hostname': host,

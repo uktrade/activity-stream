@@ -122,15 +122,14 @@ async def run_outgoing_application():
         feeds = [parse_feed_config(feed) for feed in env['FEEDS']]
 
     settings.ES_URI = es_uri
-    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=AioHttpDnsResolver())
+    metrics_registry = CollectorRegistry()
+    metrics = get_metrics(metrics_registry)
+    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=AioHttpDnsResolver(metrics))
     session = aiohttp.ClientSession(
         connector=conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
     )
     redis_client = await redis_get_client(redis_uri)
-
-    metrics_registry = CollectorRegistry()
-    metrics = get_metrics(metrics_registry)
     raven_client = get_raven_client(sentry, session, metrics)
 
     context = Context(

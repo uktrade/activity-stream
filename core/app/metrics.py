@@ -37,6 +37,12 @@ METRICS_CONF = [
      ['host', 'status']),
     (Counter, 'http_request_completed_total',
      'The number of HTTP requests completed', ['host', 'code']),
+    (Summary, 'dns_request_duration_seconds',
+     'Time to make a possibly-from-cache DNS request',
+     ['host', 'status']),
+    (Gauge, 'dns_ttl',
+     'The TTL of A or AAAA records just after a DNS request',
+     ['host']),
 ]
 
 
