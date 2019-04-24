@@ -1,7 +1,6 @@
 import yarl
 
 from .metrics import (
-    metric_counter,
     metric_timer,
 )
 
@@ -15,14 +14,9 @@ async def http_make_request(session, metrics, method, url, data, headers):
             # be on exit of the context manager
             await result.read()
 
-            # The counters are context managers, but in these cases we have
-            # nothing to wrap, we just want to increment
-            with metric_counter(metrics['http_request_completed_total'],
-                                [parsed_url.host, str(result.status)], 1):
-                pass
-
-            with metric_counter(metrics['http_response_body_bytes'],
-                                [parsed_url.host, str(result.status)], len(result._body)):
-                pass
+            metrics['http_request_completed_total'] \
+                .labels(parsed_url.host, str(result.status)).inc(1)
+            metrics['http_response_body_bytes'] \
+                .labels(parsed_url.host, str(result.status)).inc(len(result._body))
 
             return result
