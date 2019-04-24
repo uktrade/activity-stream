@@ -37,6 +37,8 @@ METRICS_CONF = [
      ['host', 'status']),
     (Counter, 'http_request_completed_total',
      'The number of HTTP requests completed', ['host', 'code']),
+    (Counter, 'http_response_body_bytes',
+     'The bytes receives in an HTTP response', ['host', 'code']),
     (Summary, 'dns_request_duration_seconds',
      'Time to make a possibly-from-cache DNS request',
      ['host', 'status']),
