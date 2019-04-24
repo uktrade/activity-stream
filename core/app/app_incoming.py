@@ -7,6 +7,9 @@ from prometheus_client import (
     CollectorRegistry,
 )
 
+from .dns import (
+    AioHttpDnsResolver,
+)
 from .feeds import (
     parse_feed_config,
 )
@@ -67,7 +70,7 @@ async def run_incoming_application():
         ip_whitelist = env['INCOMING_IP_WHITELIST']
 
     settings.ES_URI = es_uri
-    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
+    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=AioHttpDnsResolver())
     session = aiohttp.ClientSession(
         connector=conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
