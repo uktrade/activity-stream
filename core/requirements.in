@@ -1,4 +1,4 @@
-aiodnsresolver==0.0.110
+aiodnsresolver==0.0.111
 aiohttp==3.5.4
 aioredis==1.1.0
 prometheus_client==0.3.0
