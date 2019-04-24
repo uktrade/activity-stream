@@ -72,7 +72,7 @@ async def run_incoming_application():
     settings.ES_URI = es_uri
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
-    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=AioHttpDnsResolver())
+    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=AioHttpDnsResolver(metrics))
     session = aiohttp.ClientSession(
         connector=conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},

@@ -11,7 +11,7 @@ import aiohttp
 
 
 class AioHttpDnsResolver(aiohttp.abc.AbstractResolver):
-    def __init__(self):
+    def __init__(self, metrics):
         super().__init__()
 
         async def transform_fqdn(fqdn):
@@ -19,6 +19,7 @@ class AioHttpDnsResolver(aiohttp.abc.AbstractResolver):
                 fqdn if fqdn.endswith(b'.apps.internal') else \
                 await mix_case(fqdn)
 
+        self.metrics = metrics
         self.resolver, self.clear = Resolver(transform_fqdn=transform_fqdn)
 
     # pylint: disable=arguments-differ
