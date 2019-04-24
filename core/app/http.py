@@ -15,10 +15,14 @@ async def http_make_request(session, metrics, method, url, data, headers):
             # be on exit of the context manager
             await result.read()
 
+            # The counters are context managers, but in these cases we have
+            # nothing to wrap, we just want to increment
             with metric_counter(metrics['http_request_completed_total'],
                                 [parsed_url.host, str(result.status)], 1):
-                # The counter is a context manager, but in this case we have nothing
-                # to wrap, we just want to increment the counter
+                pass
+
+            with metric_counter(metrics['http_response_body_bytes'],
+                                [parsed_url.host, str(result.status)], len(result._body)):
                 pass
 
             return result
