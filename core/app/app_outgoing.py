@@ -294,23 +294,24 @@ async def ingest_updates(parent_context, feed):
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'updates']):
 
         href = await get_feed_updates_url(context, feed.unique_id)
-        indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
+        if href != feed.seed:
+            indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
 
-        # We deliberately ingest into both the live and ingesting indexes
-        indexes_to_ingest_into = indexes_matching_feeds(
-            indexes_without_alias + indexes_with_alias, [feed.unique_id])
+            # We deliberately ingest into both the live and ingesting indexes
+            indexes_to_ingest_into = indexes_matching_feeds(
+                indexes_without_alias + indexes_with_alias, [feed.unique_id])
 
-        activities_index_names, objects_index_names = split_index_names(indexes_to_ingest_into)
+            activities_index_names, objects_index_names = split_index_names(indexes_to_ingest_into)
 
-        while href:
-            updates_href = href
-            href = await fetch_and_ingest_page(
-                context, 'updates', feed, activities_index_names, objects_index_names, href,
-            )
+            while href:
+                updates_href = href
+                href = await fetch_and_ingest_page(
+                    context, 'updates', feed, activities_index_names, objects_index_names, href,
+                )
 
-        for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
-            await refresh_index(context, index_name)
-        await set_feed_updates_url(context, feed.unique_id, updates_href)
+            for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
+                await refresh_index(context, index_name)
+            await set_feed_updates_url(context, feed.unique_id, updates_href)
 
     await sleep(context, feed.updates_page_interval)
 
