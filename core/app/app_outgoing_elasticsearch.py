@@ -21,6 +21,9 @@ from .elasticsearch import (
     es_request,
     es_request_non_200_exception,
 )
+from .metrics import (
+    metric_timer,
+)
 
 DELETE_TIMEOUTS = [1, 2, 4, 8, 16, 32] + [64] * 120
 
@@ -269,8 +272,12 @@ async def create_objects_index(context, index_name):
         )
 
 
-async def refresh_index(context, index_name):
-    with logged(context.logger, 'Refreshing index (%s)', [index_name]):
+async def refresh_index(context, index_name, *metric_labels):
+    metric = context.metrics['elasticsearch_refresh_duration_seconds']
+    with \
+            logged(context.logger, 'Refreshing index (%s)', [index_name]), \
+            metric_timer(metric, [metric_labels]):
+
         await es_request_non_200_exception(
             context=context,
             method='POST',
