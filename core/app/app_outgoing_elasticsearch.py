@@ -1,5 +1,4 @@
 import datetime
-import itertools
 
 import ujson
 
@@ -8,7 +7,6 @@ from .logger import (
 )
 from .app_outgoing_utils import (
     flatten,
-    flatten_generator,
 )
 from .utils import (
     random_url_safe,
@@ -293,48 +291,41 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
         if not activities:
             return
 
-        with logged(context.logger, 'Converting to Elasticsearch bulk ingest commands', []):
-            es_bulk_contents = b''.join(itertools.chain(
-                flatten_generator(
-                    [
+        async def es_bulk_contents():
+            for activity in activities:
+                yield  \
+                    b''.join([
                         es_json_dumps({
                             'index': {
                                 '_id': activity['id'],
                                 '_index': activity_index_name,
                                 '_type': '_doc',
                             }
-                        }).encode('utf-8'),
-                        b'\n',
-                        activity_json,
-                        b'\n',
-                    ]
-                    for activity in activities
-                    for activity_json in [es_json_dumps(activity).encode('utf-8')]
-                    for activity_index_name in activity_index_names
-                ),
-                flatten_generator(
-                    [
+                        }).encode('utf-8') +
+                        b'\n' +
+                        activity_json +
+                        b'\n'
+                        for activity_json in [es_json_dumps(activity).encode('utf-8')]
+                        for activity_index_name in activity_index_names
+                    ] + [
                         es_json_dumps({
                             'index': {
                                 '_id': activity['object']['id'],
                                 '_index': object_index_name,
                                 '_type': '_doc',
                             }
-                        }).encode('utf-8'),
-                        b'\n',
-                        object_json,
-                        b'\n',
-                    ]
-                    for activity in activities
-                    for object_json in [es_json_dumps(activity['object']).encode('utf-8')]
-                    for object_index_name in object_index_names
-                ),
-            ))
+                        }).encode('utf-8') +
+                        b'\n' +
+                        object_json +
+                        b'\n'
+                        for object_json in [es_json_dumps(activity['object']).encode('utf-8')]
+                        for object_index_name in object_index_names
+                    ])
 
         with logged(context.logger, 'POSTing bulk ingest to Elasticsearch', []):
             await es_request_non_200_exception(
                 context=context, method='POST', path='/_bulk', query={},
-                headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,
+                headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents(),
             )
 
 
