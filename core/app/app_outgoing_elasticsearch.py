@@ -12,6 +12,7 @@ from .app_outgoing_utils import (
 )
 from .utils import (
     random_url_safe,
+    sleep,
 )
 from .elasticsearch import (
     ALIAS_ACTIVITIES,
@@ -20,6 +21,8 @@ from .elasticsearch import (
     es_request,
     es_request_non_200_exception,
 )
+
+DELETE_TIMEOUTS = [1, 2, 4, 8, 16, 32] + [64] * 120
 
 
 def get_new_index_names(feed_unique_id):
@@ -139,25 +142,32 @@ async def add_remove_aliases_atomically(context, activity_index_name, object_ind
 
 
 async def delete_indexes(context, index_names):
+    # If the snapshot is taking a long time, it's likely large, and so
+    # its _more_ important to wait until its deleted before continuing with
+    # ingest. If we still can't delete, we abort and raise
+
     with logged(context.logger, 'Deleting indexes (%s)', [index_names]):
-        for index_name in index_names:
+        if not index_names:
+            return
+        index_names_comma_separated = ','.join(index_names)
+        for i, timeout in enumerate(DELETE_TIMEOUTS):
             try:
-                await es_request_non_200_exception(
+                return await es_request_non_200_exception(
                     context=context,
                     method='DELETE',
-                    path=f'/{index_name}',
+                    path=f'/{index_names_comma_separated}',
                     query={},
                     headers={'Content-Type': 'application/json'},
                     payload=b'',
                 )
-            except BaseException as exception:
-                if \
-                        exception.args and \
-                        'Cannot delete indices that are being snapshotted' in exception.args[0]:
-                    context.logger.debug(
-                        'Attempted to delete indices being snapshotted (%s)', [exception.args[0]])
-                else:
+            except Exception as exception:
+                is_snapshot = exception.args and \
+                    'Cannot delete indices that are being snapshotted' in exception.args[0]
+                if not is_snapshot or i == len(DELETE_TIMEOUTS):
                     raise
+                context.logger.debug(
+                    'Attempted to delete indices being snapshotted (%s)', [exception.args[0]])
+                await sleep(context, timeout)
 
 
 async def create_activities_index(context, index_name):
