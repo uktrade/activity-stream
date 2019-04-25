@@ -294,7 +294,7 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
             return
 
         with logged(context.logger, 'Converting to Elasticsearch bulk ingest commands', []):
-            es_bulk_contents = ''.join(itertools.chain(
+            es_bulk_contents = b''.join(itertools.chain(
                 flatten_generator(
                     [
                         es_json_dumps({
@@ -303,13 +303,13 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
                                 '_index': activity_index_name,
                                 '_type': '_doc',
                             }
-                        }),
-                        '\n',
+                        }).encode('utf-8'),
+                        b'\n',
                         activity_json,
-                        '\n',
+                        b'\n',
                     ]
                     for activity in activities
-                    for activity_json in [es_json_dumps(activity)]
+                    for activity_json in [es_json_dumps(activity).encode('utf-8')]
                     for activity_index_name in activity_index_names
                 ),
                 flatten_generator(
@@ -320,16 +320,16 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
                                 '_index': object_index_name,
                                 '_type': '_doc',
                             }
-                        }),
-                        '\n',
+                        }).encode('utf-8'),
+                        b'\n',
                         object_json,
-                        '\n',
+                        b'\n',
                     ]
                     for activity in activities
-                    for object_json in [es_json_dumps(activity['object'])]
+                    for object_json in [es_json_dumps(activity['object']).encode('utf-8')]
                     for object_index_name in object_index_names
                 ),
-            )).encode('utf-8')
+            ))
 
         with logged(context.logger, 'POSTing bulk ingest to Elasticsearch', []):
             await es_request_non_200_exception(
