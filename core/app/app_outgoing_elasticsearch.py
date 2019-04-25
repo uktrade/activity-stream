@@ -140,24 +140,26 @@ async def add_remove_aliases_atomically(context, activity_index_name, object_ind
 
 async def delete_indexes(context, index_names):
     with logged(context.logger, 'Deleting indexes (%s)', [index_names]):
-        for index_name in index_names:
-            try:
-                await es_request_non_200_exception(
-                    context=context,
-                    method='DELETE',
-                    path=f'/{index_name}',
-                    query={},
-                    headers={'Content-Type': 'application/json'},
-                    payload=b'',
-                )
-            except BaseException as exception:
-                if \
-                        exception.args and \
-                        'Cannot delete indices that are being snapshotted' in exception.args[0]:
-                    context.logger.debug(
-                        'Attempted to delete indices being snapshotted (%s)', [exception.args[0]])
-                else:
-                    raise
+        if not index_names:
+            return
+        index_names_comma_separated = ','.join(index_names)
+        try:
+            await es_request_non_200_exception(
+                context=context,
+                method='DELETE',
+                path=f'/{index_names_comma_separated}',
+                query={},
+                headers={'Content-Type': 'application/json'},
+                payload=b'',
+            )
+        except BaseException as exception:
+            if \
+                    exception.args and \
+                    'Cannot delete indices that are being snapshotted' in exception.args[0]:
+                context.logger.debug(
+                    'Attempted to delete indices being snapshotted (%s)', [exception.args[0]])
+            else:
+                raise
 
 
 async def create_activities_index(context, index_name):
