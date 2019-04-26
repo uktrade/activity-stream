@@ -39,7 +39,7 @@ async def es_search_query_existing_scroll(context, match_info, _):
 
     return '/_search/scroll', {'scroll': '30s'}, json_dumps({
         'scroll_id': private_scroll_id.decode('utf-8'),
-    }).encode('utf-8')
+    })
 
 
 async def es_search_activities(context, path, query, body, headers, request):

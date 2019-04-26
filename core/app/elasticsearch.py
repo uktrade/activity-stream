@@ -37,7 +37,7 @@ async def es_min_verification_age(context):
                 }
             }
         }
-    }).encode('utf-8')
+    })
     result = await es_request_non_200_exception(
         context=context,
         method='GET',

@@ -133,7 +133,7 @@ async def add_remove_aliases_atomically(context, activity_index_name, object_ind
                 {'add': {'index': activity_index_name, 'alias': ALIAS_ACTIVITIES}},
                 {'add': {'index': object_index_name, 'alias': ALIAS_OBJECTS}},
             ]
-        }).encode('utf-8')
+        })
 
         await es_request_non_200_exception(
             context=context,
@@ -220,7 +220,7 @@ async def create_activities_index(context, index_name):
                     },
                 },
             },
-        }).encode('utf-8')
+        })
         await es_request_non_200_exception(
             context=context,
             method='PUT',
@@ -268,7 +268,7 @@ async def create_objects_index(context, index_name):
                     },
                 },
             },
-        }).encode('utf-8')
+        })
         await es_request_non_200_exception(
             context=context,
             method='PUT',
@@ -310,13 +310,13 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
                                 '_index': activity_index_name,
                                 '_type': '_doc',
                             }
-                        }).encode('utf-8'),
+                        }),
                         b'\n',
                         activity_json,
                         b'\n',
                     ]
                     for activity in activities
-                    for activity_json in [json_dumps(activity).encode('utf-8')]
+                    for activity_json in [json_dumps(activity)]
                     for activity_index_name in activity_index_names
                 ),
                 flatten_generator(
@@ -327,13 +327,13 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
                                 '_index': object_index_name,
                                 '_type': '_doc',
                             }
-                        }).encode('utf-8'),
+                        }),
                         b'\n',
                         object_json,
                         b'\n',
                     ]
                     for activity in activities
-                    for object_json in [json_dumps(activity['object']).encode('utf-8')]
+                    for object_json in [json_dumps(activity['object'])]
                     for object_index_name in object_index_names
                 ),
             ))

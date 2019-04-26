@@ -167,7 +167,10 @@ def normalise_environment(key_values):
 
 
 def json_dumps(data_dict):
-    return ujson.dumps(data_dict, sort_keys=True, escape_forward_slashes=False, ensure_ascii=False)
+    return ujson.dumps(
+        data_dict,
+        sort_keys=True, escape_forward_slashes=False,
+        ensure_ascii=False).encode('utf-8')
 
 
 def main(run_application_coroutine):
