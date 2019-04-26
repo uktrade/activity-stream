@@ -15,5 +15,4 @@ idna==2.6                 # via yarl
 multidict==4.3.1          # via aiohttp, yarl
 prometheus_client==0.3.0
 raven==6.9.0
-ujson==1.35
 yarl==1.2.4               # via aiohttp
