@@ -11,7 +11,6 @@ from .app_incoming_elasticsearch import (
 )
 from .elasticsearch import (
     es_min_verification_age,
-    ALIAS_OBJECTS
 )
 from .app_incoming_hawk import (
     authenticate_hawk_header,
@@ -260,14 +259,14 @@ def handle_get_metrics(context):
     return handle
 
 
-def handle_get_search(context):
+def handle_get_search(context, alias):
     async def handle(request):
         body = await request.read()
 
         results = await es_request(
             context=context,
             method='GET',
-            path=f'/{ALIAS_OBJECTS}/_search',
+            path=f'/{alias}/_search',
             query={},
             headers={'Content-Type': request.headers['Content-Type']},
             payload=body,

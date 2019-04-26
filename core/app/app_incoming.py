@@ -39,6 +39,9 @@ from .app_incoming_server import (
     raven_reporter,
     server_logger,
 )
+from .elasticsearch import (
+    ALIAS_OBJECTS,
+)
 from .redis import (
     redis_get_client,
 )
@@ -120,7 +123,7 @@ async def create_incoming_application(
     private_app.add_routes([
         web.get(
             '/objects',
-            handle_get_search(context)
+            handle_get_search(context, ALIAS_OBJECTS)
         ),
         web.get(
             '/activities',
