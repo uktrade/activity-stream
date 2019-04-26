@@ -40,6 +40,7 @@ from .app_incoming_server import (
     server_logger,
 )
 from .elasticsearch import (
+    ALIAS_ACTIVITIES,
     ALIAS_OBJECTS,
 )
 from .redis import (
@@ -145,6 +146,23 @@ async def create_incoming_application(
         ),
     ])
     app.add_subapp('/v1/', private_app_v1)
+
+    private_app_v2 = web.Application(middlewares=[
+        authenticate_by_ip(INCORRECT, ip_whitelist),
+        authenticator(context, incoming_key_pairs, NONCE_EXPIRE),
+        authorizer(),
+    ])
+    private_app_v2.add_routes([
+        web.get(
+            '/activities',
+            handle_get_search(context, ALIAS_ACTIVITIES),
+        ),
+        web.get(
+            '/objects',
+            handle_get_search(context, ALIAS_OBJECTS),
+        ),
+    ])
+    app.add_subapp('/v2/', private_app_v2)
     app.add_routes([
         web.get('/checks/p1', handle_get_p1_check(context)),
         web.get('/checks/p2', handle_get_p2_check(context, feeds)),
