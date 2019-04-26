@@ -11,6 +11,7 @@ from .app_outgoing_utils import (
     flatten_generator,
 )
 from .utils import (
+    json_dumps,
     random_url_safe,
     sleep,
 )
@@ -125,7 +126,7 @@ async def add_remove_aliases_atomically(context, activity_index_name, object_ind
                 [feed_unique_id]):
         activities_remove_pattern = f'{ALIAS_ACTIVITIES}__feed_id_{feed_unique_id}__*'
         objects_remove_pattern = f'{ALIAS_OBJECTS}__feed_id_{feed_unique_id}__*'
-        actions = es_json_dumps({
+        actions = json_dumps({
             'actions': [
                 {'remove': {'index': activities_remove_pattern, 'alias': ALIAS_ACTIVITIES}},
                 {'remove': {'index': objects_remove_pattern, 'alias': ALIAS_OBJECTS}},
@@ -175,7 +176,7 @@ async def delete_indexes(context, index_names):
 
 async def create_activities_index(context, index_name):
     with logged(context.logger, 'Creating index (%s)', [index_name]):
-        index_definition = es_json_dumps({
+        index_definition = json_dumps({
             'settings': {
                 'index': {
                     'number_of_shards': 3,
@@ -232,7 +233,7 @@ async def create_activities_index(context, index_name):
 
 async def create_objects_index(context, index_name):
     with logged(context.logger, 'Creating index (%s)', [index_name]):
-        index_definition = es_json_dumps({
+        index_definition = json_dumps({
             'settings': {
                 'index': {
                     'number_of_shards': 3,
@@ -303,7 +304,7 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
             es_bulk_contents = b''.join(itertools.chain(
                 flatten_generator(
                     [
-                        es_json_dumps({
+                        json_dumps({
                             'index': {
                                 '_id': activity['id'],
                                 '_index': activity_index_name,
@@ -315,12 +316,12 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
                         b'\n',
                     ]
                     for activity in activities
-                    for activity_json in [es_json_dumps(activity).encode('utf-8')]
+                    for activity_json in [json_dumps(activity).encode('utf-8')]
                     for activity_index_name in activity_index_names
                 ),
                 flatten_generator(
                     [
-                        es_json_dumps({
+                        json_dumps({
                             'index': {
                                 '_id': activity['object']['id'],
                                 '_index': object_index_name,
@@ -332,7 +333,7 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
                         b'\n',
                     ]
                     for activity in activities
-                    for object_json in [es_json_dumps(activity['object']).encode('utf-8')]
+                    for object_json in [json_dumps(activity['object']).encode('utf-8')]
                     for object_index_name in object_index_names
                 ),
             ))
@@ -401,7 +402,3 @@ async def es_maybe_unvailable_metrics(context, method, path, query, headers, pay
     if results.status != 200:
         raise Exception(results._body.decode('utf-8'))
     return results
-
-
-def es_json_dumps(data_dict):
-    return ujson.dumps(data_dict, sort_keys=True, escape_forward_slashes=False, ensure_ascii=False)
