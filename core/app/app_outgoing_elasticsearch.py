@@ -1,8 +1,6 @@
 import datetime
 import itertools
 
-import ujson
-
 from .logger import (
     logged,
 )
@@ -12,6 +10,7 @@ from .app_outgoing_utils import (
 )
 from .utils import (
     json_dumps,
+    json_loads,
     random_url_safe,
     sleep,
 )
@@ -103,7 +102,7 @@ async def get_old_index_names(context):
             headers={'Content-Type': 'application/json'},
             payload=b'',
         )
-        indexes = ujson.loads(results._body.decode('utf-8'))
+        indexes = json_loads(results._body)
 
         without_alias = [
             index_name
@@ -355,7 +354,7 @@ async def es_searchable_total(context):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    return (ujson.loads(searchable_result._body.decode('utf-8')))['count']
+    return json_loads(searchable_result._body)['count']
 
 
 async def es_nonsearchable_total(context):
@@ -367,7 +366,7 @@ async def es_nonsearchable_total(context):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    return ujson.loads(nonsearchable_result._body.decode('utf-8'))['count']
+    return json_loads(nonsearchable_result._body)['count']
 
 
 async def es_feed_activities_total(context, feed_id):
@@ -379,7 +378,7 @@ async def es_feed_activities_total(context, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    nonsearchable = ujson.loads(nonsearchable_result._body.decode('utf-8'))['count']
+    nonsearchable = json_loads(nonsearchable_result._body)['count']
 
     total_results = await es_maybe_unvailable_metrics(
         context=context,
@@ -389,7 +388,7 @@ async def es_feed_activities_total(context, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    searchable = max(ujson.loads(total_results._body.decode('utf-8'))['count'] - nonsearchable, 0)
+    searchable = max(json_loads(total_results._body)['count'] - nonsearchable, 0)
 
     return searchable, nonsearchable
 

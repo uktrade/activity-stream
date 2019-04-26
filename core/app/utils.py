@@ -173,6 +173,10 @@ def json_dumps(data_dict):
         ensure_ascii=False).encode('utf-8')
 
 
+def json_loads(data):
+    return ujson.loads(data.decode('utf-8'))
+
+
 def main(run_application_coroutine):
     stdout_handler = logging.StreamHandler(sys.stdout)
     app_logger = logging.getLogger('activity-stream')

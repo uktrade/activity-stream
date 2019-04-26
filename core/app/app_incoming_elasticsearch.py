@@ -1,13 +1,13 @@
 from aiohttp.web import (
     HTTPNotFound,
 )
-import ujson
 
 from .app_incoming_redis import (
     get_private_scroll_id,
 )
 from .utils import (
     json_dumps,
+    json_loads,
     random_url_safe,
 )
 from .elasticsearch import (
@@ -85,7 +85,7 @@ async def es_search_activities(context, path, query, body, headers, request):
         payload=body,
     )
 
-    response = ujson.loads(results._body.decode('utf-8'))
+    response = json_loads(results._body)
     return \
         (await activities(context, response, request), 200) if results.status == 200 else \
         (response, results.status)

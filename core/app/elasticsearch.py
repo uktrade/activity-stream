@@ -1,7 +1,5 @@
 import time
 
-import ujson
-
 from .http import (
     http_make_request,
 )
@@ -10,6 +8,7 @@ from .logger import (
 )
 from .utils import (
     json_dumps,
+    json_loads,
 )
 
 from . import settings
@@ -46,7 +45,7 @@ async def es_min_verification_age(context):
         headers={'Content-Type': 'application/json'},
         payload=payload,
     )
-    result_dict = ujson.loads(result._body.decode('utf-8'))
+    result_dict = json_loads(result._body)
     try:
         max_published = int(result_dict['aggregations']
                             ['verifier_activities']['max_published']['value'] / 1000)

@@ -6,7 +6,6 @@ from prometheus_client import (
     CollectorRegistry,
     generate_latest,
 )
-import ujson
 
 from .app_outgoing_elasticsearch import (
     ESMetricsUnavailable,
@@ -71,6 +70,7 @@ from .utils import (
     cancel_non_current_tasks,
     get_child_context,
     get_common_config,
+    json_loads,
     main,
     normalise_environment,
     sleep,
@@ -338,7 +338,7 @@ async def fetch_and_ingest_page(context, ingest_type, feed, activity_index_names
                 )
 
         with logged(context.logger, 'Parsing JSON', []):
-            feed_parsed = ujson.loads(feed_contents)
+            feed_parsed = json_loads(feed_contents)
 
         with logged(context.logger, 'Converting to activities', []):
             activities = await feed.get_activities(context, feed_parsed)
