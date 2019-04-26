@@ -1,8 +1,6 @@
 import datetime
 import itertools
 
-import ujson
-
 from .logger import (
     logged,
 )
@@ -11,6 +9,8 @@ from .app_outgoing_utils import (
     flatten_generator,
 )
 from .utils import (
+    json_dumps,
+    json_loads,
     random_url_safe,
     sleep,
 )
@@ -102,7 +102,7 @@ async def get_old_index_names(context):
             headers={'Content-Type': 'application/json'},
             payload=b'',
         )
-        indexes = ujson.loads(results._body.decode('utf-8'))
+        indexes = json_loads(results._body)
 
         without_alias = [
             index_name
@@ -125,14 +125,14 @@ async def add_remove_aliases_atomically(context, activity_index_name, object_ind
                 [feed_unique_id]):
         activities_remove_pattern = f'{ALIAS_ACTIVITIES}__feed_id_{feed_unique_id}__*'
         objects_remove_pattern = f'{ALIAS_OBJECTS}__feed_id_{feed_unique_id}__*'
-        actions = es_json_dumps({
+        actions = json_dumps({
             'actions': [
                 {'remove': {'index': activities_remove_pattern, 'alias': ALIAS_ACTIVITIES}},
                 {'remove': {'index': objects_remove_pattern, 'alias': ALIAS_OBJECTS}},
                 {'add': {'index': activity_index_name, 'alias': ALIAS_ACTIVITIES}},
                 {'add': {'index': object_index_name, 'alias': ALIAS_OBJECTS}},
             ]
-        }).encode('utf-8')
+        })
 
         await es_request_non_200_exception(
             context=context,
@@ -175,7 +175,7 @@ async def delete_indexes(context, index_names):
 
 async def create_activities_index(context, index_name):
     with logged(context.logger, 'Creating index (%s)', [index_name]):
-        index_definition = es_json_dumps({
+        index_definition = json_dumps({
             'settings': {
                 'index': {
                     'number_of_shards': 3,
@@ -219,7 +219,7 @@ async def create_activities_index(context, index_name):
                     },
                 },
             },
-        }).encode('utf-8')
+        })
         await es_request_non_200_exception(
             context=context,
             method='PUT',
@@ -232,7 +232,7 @@ async def create_activities_index(context, index_name):
 
 async def create_objects_index(context, index_name):
     with logged(context.logger, 'Creating index (%s)', [index_name]):
-        index_definition = es_json_dumps({
+        index_definition = json_dumps({
             'settings': {
                 'index': {
                     'number_of_shards': 3,
@@ -267,7 +267,7 @@ async def create_objects_index(context, index_name):
                     },
                 },
             },
-        }).encode('utf-8')
+        })
         await es_request_non_200_exception(
             context=context,
             method='PUT',
@@ -303,36 +303,36 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
             es_bulk_contents = b''.join(itertools.chain(
                 flatten_generator(
                     [
-                        es_json_dumps({
+                        json_dumps({
                             'index': {
                                 '_id': activity['id'],
                                 '_index': activity_index_name,
                                 '_type': '_doc',
                             }
-                        }).encode('utf-8'),
+                        }),
                         b'\n',
                         activity_json,
                         b'\n',
                     ]
                     for activity in activities
-                    for activity_json in [es_json_dumps(activity).encode('utf-8')]
+                    for activity_json in [json_dumps(activity)]
                     for activity_index_name in activity_index_names
                 ),
                 flatten_generator(
                     [
-                        es_json_dumps({
+                        json_dumps({
                             'index': {
                                 '_id': activity['object']['id'],
                                 '_index': object_index_name,
                                 '_type': '_doc',
                             }
-                        }).encode('utf-8'),
+                        }),
                         b'\n',
                         object_json,
                         b'\n',
                     ]
                     for activity in activities
-                    for object_json in [es_json_dumps(activity['object']).encode('utf-8')]
+                    for object_json in [json_dumps(activity['object'])]
                     for object_index_name in object_index_names
                 ),
             ))
@@ -354,7 +354,7 @@ async def es_searchable_total(context):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    return (ujson.loads(searchable_result._body.decode('utf-8')))['count']
+    return json_loads(searchable_result._body)['count']
 
 
 async def es_nonsearchable_total(context):
@@ -366,7 +366,7 @@ async def es_nonsearchable_total(context):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    return ujson.loads(nonsearchable_result._body.decode('utf-8'))['count']
+    return json_loads(nonsearchable_result._body)['count']
 
 
 async def es_feed_activities_total(context, feed_id):
@@ -378,7 +378,7 @@ async def es_feed_activities_total(context, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    nonsearchable = ujson.loads(nonsearchable_result._body.decode('utf-8'))['count']
+    nonsearchable = json_loads(nonsearchable_result._body)['count']
 
     total_results = await es_maybe_unvailable_metrics(
         context=context,
@@ -388,7 +388,7 @@ async def es_feed_activities_total(context, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    searchable = max(ujson.loads(total_results._body.decode('utf-8'))['count'] - nonsearchable, 0)
+    searchable = max(json_loads(total_results._body)['count'] - nonsearchable, 0)
 
     return searchable, nonsearchable
 
@@ -401,7 +401,3 @@ async def es_maybe_unvailable_metrics(context, method, path, query, headers, pay
     if results.status != 200:
         raise Exception(results._body.decode('utf-8'))
     return results
-
-
-def es_json_dumps(data_dict):
-    return ujson.dumps(data_dict, sort_keys=True, escape_forward_slashes=False, ensure_ascii=False)

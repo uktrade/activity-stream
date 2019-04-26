@@ -8,6 +8,8 @@ import signal
 import string
 import sys
 
+import ujson
+
 from .logger import (
     logged,
     get_child_logger,
@@ -162,6 +164,17 @@ def normalise_environment(key_values):
     return \
         list_sorted_by_int_key() if all_keys_are_ints() else \
         nested_structured_dict
+
+
+def json_dumps(data_dict):
+    return ujson.dumps(
+        data_dict,
+        sort_keys=True, escape_forward_slashes=False,
+        ensure_ascii=False).encode('utf-8')
+
+
+def json_loads(data):
+    return ujson.loads(data.decode('utf-8'))
 
 
 def main(run_application_coroutine):

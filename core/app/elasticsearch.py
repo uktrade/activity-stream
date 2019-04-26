@@ -1,12 +1,14 @@
 import time
 
-import ujson
-
 from .http import (
     http_make_request,
 )
 from .logger import (
     logged,
+)
+from .utils import (
+    json_dumps,
+    json_loads,
 )
 
 from . import settings
@@ -16,7 +18,7 @@ ALIAS_OBJECTS = 'objects'
 
 
 async def es_min_verification_age(context):
-    payload = ujson.dumps({
+    payload = json_dumps({
         'size': 0,
         'aggs': {
             'verifier_activities': {
@@ -34,7 +36,7 @@ async def es_min_verification_age(context):
                 }
             }
         }
-    }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
+    })
     result = await es_request_non_200_exception(
         context=context,
         method='GET',
@@ -43,7 +45,7 @@ async def es_min_verification_age(context):
         headers={'Content-Type': 'application/json'},
         payload=payload,
     )
-    result_dict = ujson.loads(result._body.decode('utf-8'))
+    result_dict = json_loads(result._body)
     try:
         max_published = int(result_dict['aggregations']
                             ['verifier_activities']['max_published']['value'] / 1000)

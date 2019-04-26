@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-import json
 import re
 import aiohttp
 import yarl
@@ -14,7 +13,10 @@ from .http import (
 from .logger import (
     logged,
 )
-from .utils import sub_dict_lower
+from .utils import (
+    json_loads,
+    sub_dict_lower,
+)
 
 
 def parse_feed_config(feed_config):
@@ -177,7 +179,7 @@ class EventFeed:
             }, headers={})
         result.raise_for_status()
 
-        self.accesstoken = json.loads(result._body.decode('utf-8'))['accesstoken']
+        self.accesstoken = json_loads(result._body)['accesstoken']
         return {
             'accesstoken': self.accesstoken,
         }
@@ -193,7 +195,7 @@ class EventFeed:
                     headers={'accesstoken': self.accesstoken})
                 result.raise_for_status()
 
-            return json.loads(result._body.decode('utf-8'))
+            return json_loads(result._body)
 
         now = datetime.datetime.now().isoformat()
         return [
