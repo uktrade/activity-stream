@@ -187,6 +187,9 @@ async def create_activities_index(context, index_name):
                 '_doc': {
                     'dynamic': False,
                     'properties': {
+                        'id': {
+                            'type': 'keyword',
+                        },
                         'published': {
                             'type': 'date',
                         },
@@ -241,6 +244,9 @@ async def create_objects_index(context, index_name):
                 '_doc': {
                     'dynamic': False,
                     'properties': {
+                        'id': {
+                            'type': 'keyword',
+                        },
                         'published': {
                             'type': 'date',
                         },
