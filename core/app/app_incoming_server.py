@@ -259,7 +259,7 @@ def handle_get_metrics(context):
     return handle
 
 
-def handle_get_search(context, alias):
+def handle_get_search_v1(context, alias):
     async def handle(request):
         body = await request.read()
 
@@ -273,6 +273,26 @@ def handle_get_search(context, alias):
         )
 
         return web.Response(body=results._body, status=200, headers={
+            'Content-Type': 'application/json; charset=utf-8',
+        })
+
+    return handle
+
+
+def handle_get_search_v2(context, alias):
+    async def handle(request):
+        body = await request.read()
+
+        results = await es_request(
+            context=context,
+            method='GET',
+            path=f'/{alias}/_search',
+            query={},
+            headers={'Content-Type': request.headers['Content-Type']},
+            payload=body,
+        )
+
+        return web.Response(body=results._body, status=results.status, headers={
             'Content-Type': 'application/json; charset=utf-8',
         })
 
