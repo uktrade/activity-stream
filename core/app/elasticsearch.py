@@ -8,6 +8,9 @@ from .http import (
 from .logger import (
     logged,
 )
+from .utils import (
+    json_dumps,
+)
 
 from . import settings
 
@@ -16,7 +19,7 @@ ALIAS_OBJECTS = 'objects'
 
 
 async def es_min_verification_age(context):
-    payload = ujson.dumps({
+    payload = json_dumps({
         'size': 0,
         'aggs': {
             'verifier_activities': {
@@ -34,7 +37,7 @@ async def es_min_verification_age(context):
                 }
             }
         }
-    }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
+    }).encode('utf-8')
     result = await es_request_non_200_exception(
         context=context,
         method='GET',
