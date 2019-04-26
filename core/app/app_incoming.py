@@ -115,12 +115,12 @@ async def create_incoming_application(
         raven_reporter(context),
     ])
 
-    private_app = web.Application(middlewares=[
+    private_app_v1 = web.Application(middlewares=[
         authenticate_by_ip(INCORRECT, ip_whitelist),
         authenticator(context, incoming_key_pairs, NONCE_EXPIRE),
         authorizer(),
     ])
-    private_app.add_routes([
+    private_app_v1.add_routes([
         web.get(
             '/objects',
             handle_get_search(context, ALIAS_OBJECTS)
@@ -144,7 +144,7 @@ async def create_incoming_application(
             handle_get_existing(context),
         ),
     ])
-    app.add_subapp('/v1/', private_app)
+    app.add_subapp('/v1/', private_app_v1)
     app.add_routes([
         web.get('/checks/p1', handle_get_p1_check(context)),
         web.get('/checks/p2', handle_get_p2_check(context, feeds)),
