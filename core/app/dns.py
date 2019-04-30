@@ -3,8 +3,8 @@ import socket
 
 from aiodnsresolver import (
     TYPES,
-    ResolverError,
-    DoesNotExist,
+    DnsError,
+    DnsRecordDoesNotExist,
     Resolver,
     mix_case,
 )
@@ -38,10 +38,10 @@ class AioHttpDnsResolver(aiohttp.abc.AbstractResolver):
         try:
             with metric_timer(self.metrics['dns_request_duration_seconds'], [host]):
                 ip_addresses = await self.resolver(host, record_type)
-        except DoesNotExist as does_not_exist:
+        except DnsRecordDoesNotExist as does_not_exist:
             raise OSError(0, '{} does not exist'.format(host)) from does_not_exist
-        except ResolverError as resolver_error:
-            raise OSError(0, '{} failed to resolve'.format(host)) from resolver_error
+        except DnsError as dns_error:
+            raise OSError(0, '{} failed to resolve'.format(host)) from dns_error
 
         min_expires_at = min(ip_address.expires_at for ip_address in ip_addresses)
         ttl = max(0, min_expires_at - asyncio.get_event_loop().time())

@@ -4,7 +4,7 @@
 #
 #    pip-compile --output-file requirements.txt requirements.in
 #
-aiodnsresolver==0.0.111
+aiodnsresolver==0.0.120
 aiohttp==3.5.4
 aioredis==1.1.0
 async-timeout==3.0.0      # via aiohttp, aioredis
