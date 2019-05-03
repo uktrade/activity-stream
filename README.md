@@ -280,11 +280,3 @@ Keeping commits small, releasable, and with working tests is especially helpful 
 - Code should be designed for the _current_ behaviour in terms of inputs and outputs, and avoid anything that isn't required for this. Be _very_ self-skeptical if you're adding complexity for perceived future requirements. Minimise complexity by only adding it when it's needed, rather than just in case.
 
 These guidelines also apply to test code, since the behaviour of production code is enforced, in part, by the tests.
-
-## Deployment
-
-https://jenkins.ci.uktrade.io/job/activity-stream/
-
-## Dashboards and Metrics
-
-https://grafana.ci.uktrade.io/d/gKcrzUKmz/activity-stream?orgId=1&var-instance=activity-stream-staging.london.cloudapps.digital:443
