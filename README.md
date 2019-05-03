@@ -68,7 +68,7 @@ export SENTRY_ENVIRONMENT=test
 export VCAP_SERVICES='{"redis":[{"credentials":{"uri":"redis://127.0.0.1:6379"}}],"elasticsearch":[{"credentials":{"uri":"http://some-id:some-secret@127.0.0.1:9200"}}]}'
 ```
 
-And add to the bottom of the `deactivate ()` function in that file. 
+And add to the bottom of the `deactivate ()` function in that file.
 
 ```
     # unset environment variables - this must match "unset" list at top
@@ -146,17 +146,11 @@ A tool called [Pre-commit](https://pre-commit.com/) must be installed. This will
 
 ### Deployment
 
-Deploy master branch or feature branches to development, staging or production here:
-
-https://jenkins.ci.uktrade.io/job/activity-stream/
+Deploy master branch or feature branches to development, staging or production using Jenkins.
 
 ## Dashboards and metrics
 
-Due to the quantity of requests, the logs can be difficult to interpret. Each task outputs Activity Stream-specific metrics that allows each to be analysed separately. Dashboards are used to identify issues early.
-
-Production Dashboard: https://grafana.ci.uktrade.io/d/gKcrzUKmz/activity-stream?orgId=1&var-instance=activity-stream.london.cloudapps.digital:443
-
-Staging Dashboard: https://grafana.ci.uktrade.io/d/gKcrzUKmz/activity-stream?orgId=1&var-instance=activity-stream-staging.london.cloudapps.digital:443
+Due to the quantity of requests, the logs can be difficult to interpret. Each task outputs Activity Stream-specific metrics that allows each to be analysed separately. Dashboards are used to identify issues early. The grafana URLs are available from any developer associated with the project.
 
 Explanation of graphs:
 
