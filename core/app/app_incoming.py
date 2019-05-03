@@ -7,6 +7,9 @@ from prometheus_client import (
     CollectorRegistry,
 )
 
+from .dns import (
+    AioHttpDnsResolver,
+)
 from .feeds import (
     parse_feed_config,
 )
@@ -26,14 +29,20 @@ from .app_incoming_server import (
     authenticator,
     authorizer,
     convert_errors_to_json,
-    handle_get_check,
     handle_get_existing,
     handle_get_metrics,
     handle_get_new,
-    handle_get_search,
+    handle_get_p1_check,
+    handle_get_p2_check,
+    handle_get_search_v1,
+    handle_get_search_v2,
     handle_post,
     raven_reporter,
     server_logger,
+)
+from .elasticsearch import (
+    ALIAS_ACTIVITIES,
+    ALIAS_OBJECTS,
 )
 from .redis import (
     redis_get_client,
@@ -66,15 +75,14 @@ async def run_incoming_application():
         ip_whitelist = env['INCOMING_IP_WHITELIST']
 
     settings.ES_URI = es_uri
-    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
+    metrics_registry = CollectorRegistry()
+    metrics = get_metrics(metrics_registry)
+    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=AioHttpDnsResolver(metrics))
     session = aiohttp.ClientSession(
         connector=conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
     )
     redis_client = await redis_get_client(redis_uri)
-
-    metrics_registry = CollectorRegistry()
-    metrics = get_metrics(metrics_registry)
     raven_client = get_raven_client(sentry, session, metrics)
 
     context = Context(
@@ -109,15 +117,15 @@ async def create_incoming_application(
         raven_reporter(context),
     ])
 
-    private_app = web.Application(middlewares=[
+    private_app_v1 = web.Application(middlewares=[
         authenticate_by_ip(INCORRECT, ip_whitelist),
         authenticator(context, incoming_key_pairs, NONCE_EXPIRE),
         authorizer(),
     ])
-    private_app.add_routes([
+    private_app_v1.add_routes([
         web.get(
             '/objects',
-            handle_get_search(context)
+            handle_get_search_v1(context, ALIAS_OBJECTS)
         ),
         web.get(
             '/activities',
@@ -138,9 +146,27 @@ async def create_incoming_application(
             handle_get_existing(context),
         ),
     ])
-    app.add_subapp('/v1/', private_app)
+    app.add_subapp('/v1/', private_app_v1)
+
+    private_app_v2 = web.Application(middlewares=[
+        authenticate_by_ip(INCORRECT, ip_whitelist),
+        authenticator(context, incoming_key_pairs, NONCE_EXPIRE),
+        authorizer(),
+    ])
+    private_app_v2.add_routes([
+        web.get(
+            '/activities',
+            handle_get_search_v2(context, ALIAS_ACTIVITIES),
+        ),
+        web.get(
+            '/objects',
+            handle_get_search_v2(context, ALIAS_OBJECTS),
+        ),
+    ])
+    app.add_subapp('/v2/', private_app_v2)
     app.add_routes([
-        web.get('/check', handle_get_check(context, feeds)),
+        web.get('/checks/p1', handle_get_p1_check(context)),
+        web.get('/checks/p2', handle_get_p2_check(context, feeds)),
         web.get('/metrics', handle_get_metrics(context)),
     ])
 

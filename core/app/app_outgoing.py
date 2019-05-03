@@ -6,7 +6,6 @@ from prometheus_client import (
     CollectorRegistry,
     generate_latest,
 )
-import ujson
 
 from .app_outgoing_elasticsearch import (
     ESMetricsUnavailable,
@@ -24,6 +23,9 @@ from .app_outgoing_elasticsearch import (
     add_remove_aliases_atomically,
     delete_indexes,
     refresh_index,
+)
+from .dns import (
+    AioHttpDnsResolver,
 )
 from .elasticsearch import (
     es_min_verification_age,
@@ -68,6 +70,7 @@ from .utils import (
     cancel_non_current_tasks,
     get_child_context,
     get_common_config,
+    json_loads,
     main,
     normalise_environment,
     sleep,
@@ -119,15 +122,14 @@ async def run_outgoing_application():
         feeds = [parse_feed_config(feed) for feed in env['FEEDS']]
 
     settings.ES_URI = es_uri
-    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=aiohttp.AsyncResolver())
+    metrics_registry = CollectorRegistry()
+    metrics = get_metrics(metrics_registry)
+    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=AioHttpDnsResolver(metrics))
     session = aiohttp.ClientSession(
         connector=conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
     )
     redis_client = await redis_get_client(redis_uri)
-
-    metrics_registry = CollectorRegistry()
-    metrics = get_metrics(metrics_registry)
     raven_client = get_raven_client(sentry, session, metrics)
 
     context = Context(
@@ -180,7 +182,7 @@ async def ingest_feeds(context, feeds):
     Two tasks are created for each feed, a "full" task for the full ingest
     and an "updates" task for the updates ingest.
     """
-    all_feed_ids = feed_unique_ids(feeds)
+    all_feed_ids = [feed.unique_id for feed in feeds]
     indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
 
     indexes_to_delete = indexes_matching_no_feeds(
@@ -197,10 +199,6 @@ async def ingest_feeds(context, feeds):
         for feed in feeds
         for ingest_func in (ingest_full, ingest_updates)
     ])
-
-
-def feed_unique_ids(feeds):
-    return [feed.unique_id for feed in feeds]
 
 
 async def ingest_full(parent_context, feed):
@@ -253,8 +251,8 @@ async def ingest_full(parent_context, feed):
             )
             await sleep(context, feed.full_ingest_page_interval)
 
-        await refresh_index(context, activities_index_name)
-        await refresh_index(context, objects_index_name)
+        await refresh_index(context, activities_index_name, feed.unique_id, 'full')
+        await refresh_index(context, objects_index_name, feed.unique_id, 'full')
         await add_remove_aliases_atomically(
             context, activities_index_name, objects_index_name, feed.unique_id)
         await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
@@ -296,23 +294,24 @@ async def ingest_updates(parent_context, feed):
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'updates']):
 
         href = await get_feed_updates_url(context, feed.unique_id)
-        indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
+        if href != feed.seed:
+            indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
 
-        # We deliberately ingest into both the live and ingesting indexes
-        indexes_to_ingest_into = indexes_matching_feeds(
-            indexes_without_alias + indexes_with_alias, [feed.unique_id])
+            # We deliberately ingest into both the live and ingesting indexes
+            indexes_to_ingest_into = indexes_matching_feeds(
+                indexes_without_alias + indexes_with_alias, [feed.unique_id])
 
-        activities_index_names, objects_index_names = split_index_names(indexes_to_ingest_into)
+            activities_index_names, objects_index_names = split_index_names(indexes_to_ingest_into)
 
-        while href:
-            updates_href = href
-            href = await fetch_and_ingest_page(
-                context, 'updates', feed, activities_index_names, objects_index_names, href,
-            )
+            while href:
+                updates_href = href
+                href = await fetch_and_ingest_page(
+                    context, 'updates', feed, activities_index_names, objects_index_names, href,
+                )
 
-        for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
-            await refresh_index(context, index_name)
-        await set_feed_updates_url(context, feed.unique_id, updates_href)
+            for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
+                await refresh_index(context, index_name, feed.unique_id, 'updates')
+            await set_feed_updates_url(context, feed.unique_id, updates_href)
 
     await sleep(context, feed.updates_page_interval)
 
@@ -339,7 +338,7 @@ async def fetch_and_ingest_page(context, ingest_type, feed, activity_index_names
                 )
 
         with logged(context.logger, 'Parsing JSON', []):
-            feed_parsed = ujson.loads(feed_contents)
+            feed_parsed = json_loads(feed_contents)
 
         with logged(context.logger, 'Converting to activities', []):
             activities = await feed.get_activities(context, feed_parsed)
@@ -349,11 +348,11 @@ async def fetch_and_ingest_page(context, ingest_type, feed, activity_index_names
                 metric_timer(context.metrics['ingest_page_duration_seconds'],
                              [feed.unique_id, ingest_type, 'push']), \
                 metric_counter(context.metrics['ingest_activities_nonunique_total'],
-                               [feed.unique_id], num_es_documents):
+                               [feed.unique_id, ingest_type], num_es_documents):
             await es_bulk_ingest(context, activities, activity_index_names, objects_index_names)
 
         asyncio.ensure_future(set_feed_status(
-            context, feed.unique_id, feed.max_interval_before_reporting_down, b'GREEN'))
+            context, feed.unique_id, feed.down_grace_period, b'GREEN'))
 
         return feed.next_href(feed_parsed)
 
@@ -416,7 +415,7 @@ async def create_metrics_application(parent_context, metrics_registry, feeds):
                 es_min_verification_age(context),
             )
 
-            feed_ids = feed_unique_ids(feeds)
+            feed_ids = [feed.unique_id for feed in feeds]
             for feed_id in feed_ids:
                 try:
                     searchable, nonsearchable = await es_feed_activities_total(

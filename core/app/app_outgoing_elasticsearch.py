@@ -1,8 +1,6 @@
 import datetime
 import itertools
 
-import ujson
-
 from .logger import (
     logged,
 )
@@ -11,7 +9,10 @@ from .app_outgoing_utils import (
     flatten_generator,
 )
 from .utils import (
+    json_dumps,
+    json_loads,
     random_url_safe,
+    sleep,
 )
 from .elasticsearch import (
     ALIAS_ACTIVITIES,
@@ -20,6 +21,11 @@ from .elasticsearch import (
     es_request,
     es_request_non_200_exception,
 )
+from .metrics import (
+    metric_timer,
+)
+
+DELETE_TIMEOUTS = [1, 2, 4, 8, 16, 32] + [64] * 120
 
 
 def get_new_index_names(feed_unique_id):
@@ -96,7 +102,7 @@ async def get_old_index_names(context):
             headers={'Content-Type': 'application/json'},
             payload=b'',
         )
-        indexes = ujson.loads(results._body.decode('utf-8'))
+        indexes = json_loads(results._body)
 
         without_alias = [
             index_name
@@ -119,14 +125,14 @@ async def add_remove_aliases_atomically(context, activity_index_name, object_ind
                 [feed_unique_id]):
         activities_remove_pattern = f'{ALIAS_ACTIVITIES}__feed_id_{feed_unique_id}__*'
         objects_remove_pattern = f'{ALIAS_OBJECTS}__feed_id_{feed_unique_id}__*'
-        actions = es_json_dumps({
+        actions = json_dumps({
             'actions': [
                 {'remove': {'index': activities_remove_pattern, 'alias': ALIAS_ACTIVITIES}},
                 {'remove': {'index': objects_remove_pattern, 'alias': ALIAS_OBJECTS}},
                 {'add': {'index': activity_index_name, 'alias': ALIAS_ACTIVITIES}},
                 {'add': {'index': object_index_name, 'alias': ALIAS_OBJECTS}},
             ]
-        }).encode('utf-8')
+        })
 
         await es_request_non_200_exception(
             context=context,
@@ -139,30 +145,37 @@ async def add_remove_aliases_atomically(context, activity_index_name, object_ind
 
 
 async def delete_indexes(context, index_names):
+    # If the snapshot is taking a long time, it's likely large, and so
+    # its _more_ important to wait until its deleted before continuing with
+    # ingest. If we still can't delete, we abort and raise
+
     with logged(context.logger, 'Deleting indexes (%s)', [index_names]):
-        for index_name in index_names:
+        if not index_names:
+            return
+        index_names_comma_separated = ','.join(index_names)
+        for i, timeout in enumerate(DELETE_TIMEOUTS):
             try:
-                await es_request_non_200_exception(
+                return await es_request_non_200_exception(
                     context=context,
                     method='DELETE',
-                    path=f'/{index_name}',
+                    path=f'/{index_names_comma_separated}',
                     query={},
                     headers={'Content-Type': 'application/json'},
                     payload=b'',
                 )
-            except BaseException as exception:
-                if \
-                        exception.args and \
-                        'Cannot delete indices that are being snapshotted' in exception.args[0]:
-                    context.logger.debug(
-                        'Attempted to delete indices being snapshotted (%s)', [exception.args[0]])
-                else:
+            except Exception as exception:
+                is_snapshot = exception.args and \
+                    'Cannot delete indices that are being snapshotted' in exception.args[0]
+                if not is_snapshot or i == len(DELETE_TIMEOUTS):
                     raise
+                context.logger.debug(
+                    'Attempted to delete indices being snapshotted (%s)', [exception.args[0]])
+                await sleep(context, timeout)
 
 
 async def create_activities_index(context, index_name):
     with logged(context.logger, 'Creating index (%s)', [index_name]):
-        index_definition = es_json_dumps({
+        index_definition = json_dumps({
             'settings': {
                 'index': {
                     'number_of_shards': 3,
@@ -172,8 +185,12 @@ async def create_activities_index(context, index_name):
             },
             'mappings': {
                 '_doc': {
+                    'dynamic': False,
                     'properties': {
-                        'published_date': {
+                        'id': {
+                            'type': 'keyword',
+                        },
+                        'published': {
                             'type': 'date',
                         },
                         'type': {
@@ -182,10 +199,27 @@ async def create_activities_index(context, index_name):
                         'object.type': {
                             'type': 'keyword',
                         },
+                        'object.published': {
+                            'type': 'date',
+                        },
+                        'object.content': {
+                            'type': 'text',
+                        },
+                        'object.name': {
+                            'type': 'text',
+                        },
+                        # Not AS 2.0, but is used, and is a space-separated
+                        # list of keywords
+                        'object.keywords': {
+                            'type': 'text',
+                        },
+                        'actor.dit:companiesHouseNumber': {
+                            'type': 'keyword',
+                        },
                     },
                 },
             },
-        }).encode('utf-8')
+        })
         await es_request_non_200_exception(
             context=context,
             method='PUT',
@@ -198,7 +232,7 @@ async def create_activities_index(context, index_name):
 
 async def create_objects_index(context, index_name):
     with logged(context.logger, 'Creating index (%s)', [index_name]):
-        index_definition = es_json_dumps({
+        index_definition = json_dumps({
             'settings': {
                 'index': {
                     'number_of_shards': 3,
@@ -208,17 +242,32 @@ async def create_objects_index(context, index_name):
             },
             'mappings': {
                 '_doc': {
+                    'dynamic': False,
                     'properties': {
-                        'published_date': {
+                        'id': {
+                            'type': 'keyword',
+                        },
+                        'published': {
                             'type': 'date',
                         },
                         'type': {
                             'type': 'keyword',
                         },
+                        'content': {
+                            'type': 'text',
+                        },
+                        'name': {
+                            'type': 'text',
+                        },
+                        # Not AS 2.0, but is used, and is a space-separated
+                        # list of keywords
+                        'keywords': {
+                            'type': 'text',
+                        }
                     },
                 },
             },
-        }).encode('utf-8')
+        })
         await es_request_non_200_exception(
             context=context,
             method='PUT',
@@ -229,8 +278,12 @@ async def create_objects_index(context, index_name):
         )
 
 
-async def refresh_index(context, index_name):
-    with logged(context.logger, 'Refreshing index (%s)', [index_name]):
+async def refresh_index(context, index_name, *metric_labels):
+    metric = context.metrics['elasticsearch_refresh_duration_seconds']
+    with \
+            logged(context.logger, 'Refreshing index (%s)', [index_name]), \
+            metric_timer(metric, [metric_labels]):
+
         await es_request_non_200_exception(
             context=context,
             method='POST',
@@ -247,42 +300,42 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
             return
 
         with logged(context.logger, 'Converting to Elasticsearch bulk ingest commands', []):
-            es_bulk_contents = ''.join(itertools.chain(
+            es_bulk_contents = b''.join(itertools.chain(
                 flatten_generator(
                     [
-                        es_json_dumps({
+                        json_dumps({
                             'index': {
                                 '_id': activity['id'],
                                 '_index': activity_index_name,
                                 '_type': '_doc',
                             }
                         }),
-                        '\n',
+                        b'\n',
                         activity_json,
-                        '\n',
+                        b'\n',
                     ]
                     for activity in activities
-                    for activity_json in [es_json_dumps(activity)]
+                    for activity_json in [json_dumps(activity)]
                     for activity_index_name in activity_index_names
                 ),
                 flatten_generator(
                     [
-                        es_json_dumps({
+                        json_dumps({
                             'index': {
                                 '_id': activity['object']['id'],
                                 '_index': object_index_name,
                                 '_type': '_doc',
                             }
                         }),
-                        '\n',
+                        b'\n',
                         object_json,
-                        '\n',
+                        b'\n',
                     ]
                     for activity in activities
-                    for object_json in [es_json_dumps(activity['object'])]
+                    for object_json in [json_dumps(activity['object'])]
                     for object_index_name in object_index_names
                 ),
-            )).encode('utf-8')
+            ))
 
         with logged(context.logger, 'POSTing bulk ingest to Elasticsearch', []):
             await es_request_non_200_exception(
@@ -301,7 +354,7 @@ async def es_searchable_total(context):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    return (ujson.loads(searchable_result._body.decode('utf-8')))['count']
+    return json_loads(searchable_result._body)['count']
 
 
 async def es_nonsearchable_total(context):
@@ -313,7 +366,7 @@ async def es_nonsearchable_total(context):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    return ujson.loads(nonsearchable_result._body.decode('utf-8'))['count']
+    return json_loads(nonsearchable_result._body)['count']
 
 
 async def es_feed_activities_total(context, feed_id):
@@ -325,7 +378,7 @@ async def es_feed_activities_total(context, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    nonsearchable = ujson.loads(nonsearchable_result._body.decode('utf-8'))['count']
+    nonsearchable = json_loads(nonsearchable_result._body)['count']
 
     total_results = await es_maybe_unvailable_metrics(
         context=context,
@@ -335,7 +388,7 @@ async def es_feed_activities_total(context, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    searchable = max(ujson.loads(total_results._body.decode('utf-8'))['count'] - nonsearchable, 0)
+    searchable = max(json_loads(total_results._body)['count'] - nonsearchable, 0)
 
     return searchable, nonsearchable
 
@@ -348,7 +401,3 @@ async def es_maybe_unvailable_metrics(context, method, path, query, headers, pay
     if results.status != 200:
         raise Exception(results._body.decode('utf-8'))
     return results
-
-
-def es_json_dumps(data_dict):
-    return ujson.dumps(data_dict, sort_keys=True, escape_forward_slashes=False, ensure_ascii=False)
