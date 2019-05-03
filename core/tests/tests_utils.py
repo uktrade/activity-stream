@@ -166,7 +166,7 @@ async def get(url, auth, x_forwarded_for, body):
 
 
 async def get_until(url, x_forwarded_for, condition):
-    body = b'{"size": 1000, "sort": ["_doc"]}'
+    body = b'{"size": 1000, "sort": [{"published": {"order": "desc"}}]}'
     while True:
         auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', body, 'application/json',
@@ -181,7 +181,7 @@ async def get_until(url, x_forwarded_for, condition):
 
 
 async def get_until_raw(url, x_forwarded_for, condition):
-    for _ in range(0, 90):
+    for _ in range(0, 180):
         auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', b'', 'application/json',
         )
@@ -242,7 +242,7 @@ async def run_feed_application(feed, status, headers, feed_requested_callback, p
         asyncio.get_event_loop().call_soon(feed_requested_callback, request)
         return web.Response(text=feed(path), status=status(), headers=headers())
 
-    routes = [web.get('/{feed}', handle)]
+    routes = [web.get('/{feed}', handle), web.post('/{feed}', handle)]
     return await _web_application(port=port, routes=routes)
 
 

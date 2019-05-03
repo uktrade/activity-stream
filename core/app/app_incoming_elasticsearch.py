@@ -1,12 +1,13 @@
 from aiohttp.web import (
     HTTPNotFound,
 )
-import ujson
 
 from .app_incoming_redis import (
     get_private_scroll_id,
 )
 from .utils import (
+    json_dumps,
+    json_loads,
     random_url_safe,
 )
 from .elasticsearch import (
@@ -36,9 +37,9 @@ async def es_search_query_existing_scroll(context, match_info, _):
         # so KISS, and not introduce more layers unless needed
         raise HTTPNotFound(text='Scroll ID not found.')
 
-    return '/_search/scroll', {'scroll': '30s'}, ujson.dumps({
+    return '/_search/scroll', {'scroll': '30s'}, json_dumps({
         'scroll_id': private_scroll_id.decode('utf-8'),
-    }, escape_forward_slashes=False, ensure_ascii=False).encode('utf-8')
+    })
 
 
 async def es_search_activities(context, path, query, body, headers, request):
@@ -84,7 +85,7 @@ async def es_search_activities(context, path, query, body, headers, request):
         payload=body,
     )
 
-    response = await results.json()
+    response = json_loads(results._body)
     return \
         (await activities(context, response, request), 200) if results.status == 200 else \
         (response, results.status)

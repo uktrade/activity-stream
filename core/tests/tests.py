@@ -5,11 +5,18 @@ import os
 import re
 import unittest
 from unittest.mock import patch
+from unittest.mock import MagicMock
 
 import aiohttp
 from aiohttp import web
 import aioredis
 from freezegun import freeze_time
+
+from ..app.utils import Context
+
+from ..app.feeds import (
+    EventFeed,
+)
 
 from .tests_utils import (
     ORIGINAL_SLEEP,
@@ -453,6 +460,9 @@ class TestApplication(TestBase):
 
         query = json.dumps({
             'size': '1',
+            'sort': [
+                {'published': {'order': 'desc'}},
+            ]
         }).encode('utf-8')
         auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url_1,
@@ -710,16 +720,13 @@ class TestApplication(TestBase):
             'query': {
                 'multi_match': {
                     'query': 'Article',
-                    'fields': ['heading',
-                               'title',
-                               'url',
-                               'introduction']
+                    'fields': ['name',
+                               'content']
                 }
             },
-            '_source': ['heading',
-                        'title',
-                        'url',
-                        'introduction']
+            '_source': ['name',
+                        'content',
+                        'url']
         })
 
         response = await _get('/v1/objects', body)
@@ -732,13 +739,12 @@ class TestApplication(TestBase):
         results = json.loads(response['result'])['hits']['hits']
         self.assertEqual(5, len(results))
         article_1 = next(
-            result for result in results if result['_source']['title'] == 'Article title 1'
+            result for result in results if result['_source']['content'] == 'Article title 1'
         )
         self.assertEqual(article_1['_source'], {
-            'heading':      'Advice',
-            'title':        'Article title 1',
-            'url':          'www.great.gov.uk/article',
-            'introduction': 'Lorem ipsum'
+            'name': 'Advice',
+            'content': 'Article title 1',
+            'url': 'www.great.gov.uk/article',
         })
 
     @async_test
@@ -747,7 +753,6 @@ class TestApplication(TestBase):
 
         async def return_200_and_callback(request):
             content, headers = (await request.content.read(), request.headers)
-            print('headers', headers)
             if content == b'{}':
                 asyncio.get_event_loop().call_soon(append_es, (content, headers))
             return await respond_http('{"hits":{},"_scroll_id":{}}', 200)(request)
@@ -874,6 +879,123 @@ class TestApplication(TestBase):
             metrics_result = await session.get('http://127.0.0.1:8080/metrics')
             metrics_text = await metrics_result.text()
             self.assertIn('status="success"', metrics_text)
+
+    @async_test
+    async def test_delete_fail_snapshot(self):
+        http_400 = b'HTTP/1.1 400 Bad Request\r\ncontent-type: application/json; charset=UTF-8' \
+                   b'\r\ncontent-length: 60\r\n\r\n' \
+                   b'{"error":"Cannot delete indices that are being snapshotted"}'
+
+        previous_data = {}
+
+        def modify(data, direction, client_id):
+            nonlocal previous_data
+            previous_data[(direction, client_id)] = data
+            be_400 = direction == 'response' and b'DELETE' in previous_data[('request', client_id)]
+            return (
+                http_400 if be_400 else
+                data
+            )
+
+        client_id = 0
+
+        async def handle_client(local_reader, local_writer):
+            nonlocal client_id
+            client_id += 1
+            local_client_id = client_id
+            try:
+                remote_reader, remote_writer = await asyncio.open_connection('127.0.0.1', 9200)
+                await asyncio.gather(
+                    pipe(local_reader, remote_writer, 'request', local_client_id),  # Upstream
+                    pipe(remote_reader, local_writer, 'response', local_client_id),  # Downstream
+                )
+            finally:
+                local_writer.close()
+
+        async def pipe(reader, writer, direction, client_id):
+            try:
+                while not reader.at_eof():
+                    writer.write(modify(await reader.read(16384), direction, client_id))
+            finally:
+                writer.close()
+
+        server = await asyncio.start_server(handle_client, '0.0.0.0', 9201)
+        original_env = mock_env()
+        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
+
+        with patch('asyncio.sleep', wraps=fast_sleep), patch('raven.Client') as raven_client:
+            await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
+                                    mock_feed=read_file, mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await wait_until_get_working()
+            url = 'http://127.0.0.1:8080/v1/'
+            x_forwarded_for = '1.2.3.4, 127.0.0.0'
+            await get_until(url, x_forwarded_for, has_at_least_ordered_items(2))
+
+            # This is the point of the test: the exception should _not_ have been
+            # captured, since this error is expected
+            raven_client().captureException.assert_not_called()
+
+            server.close()
+            await server.wait_closed()
+
+    @async_test
+    async def test_delete_fail_not_snapshot(self):
+        http_400 = b'HTTP/1.1 400 OK\r\ncontent-type: application/json; charset=UTF-8' \
+                   b'\r\ncontent-length: 30\r\n\r\n' \
+                   b'{"error":"Something horrible"}'
+
+        previous_data = {}
+
+        def modify(data, direction, client_id):
+            nonlocal previous_data
+            previous_data[(direction, client_id)] = data
+            be_400 = direction == 'response' and b'DELETE' in previous_data[('request', client_id)]
+            return (
+                http_400 if be_400 else
+                data
+            )
+
+        client_id = 0
+
+        async def handle_client(local_reader, local_writer):
+            nonlocal client_id
+            local_client_id = client_id
+            try:
+                remote_reader, remote_writer = await asyncio.open_connection('127.0.0.1', 9200)
+                await asyncio.gather(
+                    pipe(local_reader, remote_writer, 'request', local_client_id),  # Upstream
+                    pipe(remote_reader, local_writer, 'response', local_client_id),  # Downstream
+                )
+            finally:
+                local_writer.close()
+
+        async def pipe(reader, writer, direction, client_id):
+            try:
+                while not reader.at_eof():
+                    writer.write(modify(await reader.read(16384), direction, client_id))
+            finally:
+                writer.close()
+
+        server = await asyncio.start_server(handle_client, '0.0.0.0', 9201)
+        original_env = mock_env()
+        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
+
+        with patch('asyncio.sleep', wraps=fast_sleep), patch('raven.Client') as raven_client:
+            await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
+                                    mock_feed=read_file, mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await wait_until_get_working()
+            url = 'http://127.0.0.1:8080/v1/'
+            x_forwarded_for = '1.2.3.4, 127.0.0.0'
+            await get_until(url, x_forwarded_for, has_at_least_ordered_items(2))
+
+            # This is the point of the test: the exception should have been
+            # captured, since this error is not expected
+            raven_client().captureException.assert_called()
+
+            server.close()
+            await server.wait_closed()
 
     @async_test
     async def test_es_no_connect_recovered(self):
@@ -1042,6 +1164,126 @@ class TestApplication(TestBase):
         self.assertIn('"2011-04-12T12:48:13+00:00"', results)
 
     @async_test
+    async def test_aventri(self):
+        def aventri_base_fetch(results):
+            if 'hits' not in results or 'hits' not in results['hits']:
+                return False
+
+            if str(results).find('aventri') != -1:
+                return True
+
+            return False
+
+        env = {
+            **mock_env(),
+            'FEEDS__1__UNIQUE_ID': 'aventri',
+            'FEEDS__1__API_EMAIL': 'some@email.com',
+            'FEEDS__1__ACCOUNT_ID': '1234',
+            'FEEDS__1__API_KEY': '5678',
+            'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_aventri_list.json',
+            'FEEDS__1__TYPE': 'aventri',
+            'FEEDS__1__AUTH_URL':
+                'http://localhost:8081/tests_fixture_aventri_auth.json',
+            'FEEDS__1__EVENT_URL': 'http://localhost:8081/tests_fixture_aventri_{event_id}.json',
+            'FEEDS__1__WHITELISTED_FOLDERS': 'Archive',
+        }
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_file, mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+
+        results_dict = await fetch_all_es_data_until(aventri_base_fetch)
+        self.assertEqual(
+            results_dict['hits']['hits'][0]['_source']['object']['id'],
+            'dit:aventri:Event:1')
+
+    def test_base_event_should_include(self):
+        json_null_event = {}
+        context = Context(logger=MagicMock(), metrics=MagicMock(),
+                          raven_client=MagicMock(), redis_client=MagicMock(), session=MagicMock())
+        actual = EventFeed(
+            unique_id='aventri',
+            seed='https://api-emea.eventscloud.com/api/v2/global/listEvents.json',
+            account_id='something',
+            api_key='else',
+            auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
+            whitelisted_folders='Archive',
+            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
+            .should_include(context, json_null_event)
+        self.assertFalse(actual, 'filter_events should return empty for null event')
+
+    def test_single_event_filter(self):
+        context = Context(logger=MagicMock(), metrics=MagicMock(),
+                          raven_client=MagicMock(), redis_client=MagicMock(), session=MagicMock())
+        json_single_event = {
+            'eventid': '200183890', 'accountid': '200008108', 'folderid': '200090383',
+            'name': 'test event1', 'code': '', 'department': '0', 'division': '0',
+            'businessunit': '0', 'city': '', 'startdate': '2020-02-19', 'enddate': '2020-02-20',
+            'include_calendar': '1', 'include_internal_calendar': None, 'timezoneid': '27',
+            'dateformat': 'l, j F Y', 'timeformat': 'g:i a', 'currency_dec_point': '.',
+            'currency_thousands_sep': ',', 'approval_status': None, 'status': 'Live',
+            'event_type': None, 'description': '<p>Click through to learn more.</p>',
+            'programmanager': '', 'languages': 'a:1:{s:3:"eng";s:7:"English";}',
+            'defaultlanguage': 'eng', 'createdby': '200045907', 'deleted': '0',
+            'useehomepage': None, 'ePlanning': None, 'eRFP': None, 'eBudget': None,
+            'eProject': None, 'eScheduler': None, 'eWiki': None, 'eHome': None, 'eMobile': '0',
+            'eReg': '1', 'eConnect': None, 'eSocial': '0', 'eSeating': None, 'eBooth': None,
+            'calendar_country': '', 'country': '', 'use_template': None, 'revenue_status': None,
+            'wrapservices': None, 'callcenter': None, 'event_setup_hours': None,
+            'event_setup_date': None, 'modifiedby': 't.money@t.g.uk', 'live_date': None,
+            'domainid': None, 'api_trigger_url': None, 'locationname': '', 'state': '',
+            'eSelect': '0', 'api_trigger_type': None, 'ipreoid': '0', 'emailSuffixes': None,
+            'blackListFailureMessage': None, 'clonedfrom': None,
+            'url': 'https://eu.eventscloud.com/200183890', 'max_reg': '0',
+            'statusmessage': None, 'clientcontact': '', 'lodgingnotes': '',
+            'location': {
+                'name': '', 'address1': '', 'address2': '', 'address3': '', 'city': '',
+                'state': '', 'postcode': '', 'country': '', 'phone': '', 'email': '', 'map': ''},
+            'starttime': '09:00:00', 'endtime': '17:00:00', 'closedate': '0000-00-00',
+            'closetime': None, 'timezonedescription': None, 'homepage': '',
+            'linktohomepage': None,
+            'timeoutlinktohomepage': None, 'logolinktohomepage': None,
+            'tellafriendlinktohomepage': None, 'contactinfo': 'a:1:{s:3:"eng";s:0:"";}',
+            'adminemails': None, 'force_agenda_selection_min': None,
+            'force_agenda_selection_max': None, 'force_option_selection': None,
+            'nolodgingrequired': None, 'pricepoints': None, 'use_account_codes': None,
+            'viral_ticketing': None, 'standardcurrency': 'Sterling', 'cardacceptance': None,
+            'logoalign': None, 'logo_textid': None, 'allow_other_fonts': None,
+            'approval_required': None, 'scansettings': None, 'headercustomcode': None,
+            'footercustomcode': None, 'customstats': None, 'emailSuffixData': None,
+            'facebook_eventid': None, 'allowedEmailSuffixes': None, 'line_item_tax': '0',
+            'taxid': None, 'tax_rounding': None, 'customhtml': None, 'price_type': None,
+            'foldername': 'Archive', 'eventclosemessage': '',
+            'timezone': '[GMT] Greenwich Mean Time: Dublin, Edinburgh, Lisbon, London',
+            'createddatetime': '2018-10-30 06:06:26', 'modifieddatetime': '2019-03-04 03:46:23',
+            'login1': 'email', 'login2': 'attendeeid'}
+        actual = EventFeed(
+            unique_id='aventri',
+            seed='https://api-emea.eventscloud.com/api/v2/global/listEvents.json',
+            account_id='something',
+            api_key='else',
+            auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
+            whitelisted_folders='Archive',
+            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
+            .should_include(context, json_single_event)
+        self.assertTrue(actual, 'filter_events should return the event with formatted fields')
+
+    def test_single_invalid_event(self):
+        json_single_invalid_event = {'deleted': '0', }
+        context = Context(logger=MagicMock(), metrics=MagicMock(),
+                          raven_client=MagicMock(), redis_client=MagicMock(), session=MagicMock())
+        actual = EventFeed(
+            unique_id='aventri',
+            seed='https://api-emea.eventscloud.com/api/v2/global/listEvents.json',
+            account_id='something',
+            api_key='else',
+            auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
+            whitelisted_folders='Archive',
+            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
+            .should_include(context, json_single_invalid_event)
+        self.assertFalse(actual, 'filter_events should return empty for invalid event')
+
+    @async_test
     async def test_on_bad_json_retries(self):
         sent_broken = False
 
@@ -1126,7 +1368,7 @@ class TestApplication(TestBase):
             await fetch_all_es_data_until(has_at_least(2))
 
         async with aiohttp.ClientSession() as session:
-            for _ in range(0, 20):
+            for _ in range(0, 90):
                 url = 'http://127.0.0.1:8080/metrics'
                 result = await session.get(url)
                 text = await result.text()
@@ -1139,8 +1381,7 @@ class TestApplication(TestBase):
         self.assertIn('ingest_feed_duration_seconds_count', text)
         self.assertIn('feed_unique_id="first_feed"', text)
         self.assertIn('status="success"', text)
-        self.assertIn('ingest_activities_nonunique_total{feed_unique_id="first_feed"}',
-                      text)
+        self.assertIn('ingest_activities_nonunique_total{', text)
 
         # The order of labels is apparently not deterministic
         self.assertIn('ingest_page_duration_seconds_bucket{', text)

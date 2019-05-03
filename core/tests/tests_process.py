@@ -104,7 +104,7 @@ class TestProcess(unittest.TestCase):
         return \
             (server_out, get_server_out_stdout), \
             (server_inc, get_server_inc_stdout), \
-            feed_runner_2,
+            feed_runner_2
 
     @async_test
     async def test_http_and_exit_clean(self):
@@ -187,18 +187,25 @@ class TestProcess(unittest.TestCase):
         def check_is_up(text):
             return '__UP__' in text
 
-        check_url = 'http://127.0.0.1:8080/check'
-        check, _, _ = await get_until_raw(check_url, x_forwarded_for, check_is_up)
-        self.assertIn('__UP__', check)
+        check_p1_url = 'http://127.0.0.1:8080/checks/p1'
+        check_p1, _, _ = await get_until_raw(check_p1_url, x_forwarded_for, check_is_up)
+        self.assertIn('__UP__', check_p1)
+
+        check_p2_url = 'http://127.0.0.1:8080/checks/p2'
+        check_p2, _, _ = await get_until_raw(check_p2_url, x_forwarded_for, check_is_up)
+        self.assertIn('__UP__', check_p2)
 
         def check_verification_is_green(text):
             return 'verification:GREEN' in text
-        _, _, _ = await get_until_raw(check_url, x_forwarded_for,
+        _, _, _ = await get_until_raw(check_p2_url, x_forwarded_for,
                                       check_verification_is_green)
 
         def check_is_not_up(text):
             return '__UP__' not in text
 
         verification_feed.terminate()
-        check_down, _, _ = await get_until_raw(check_url, x_forwarded_for, check_is_not_up)
-        self.assertIn('__DOWN__', check_down)
+        check_p1_down, _, _ = await get_until_raw(check_p1_url, x_forwarded_for, check_is_not_up)
+        self.assertIn('__DOWN__', check_p1_down)
+
+        check_p2_down, _, _ = await get_until_raw(check_p2_url, x_forwarded_for, check_is_not_up)
+        self.assertIn('__DOWN__', check_p2_down)
