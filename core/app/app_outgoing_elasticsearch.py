@@ -214,7 +214,7 @@ async def create_activities_index(context, index_name):
                             'type': 'text',
                         },
                         'object.dit:greatDomesticUI:searchResultType': {
-                            'type': 'text',
+                            'type': 'keyword',
                         },
                         'actor.dit:companiesHouseNumber': {
                             'type': 'keyword',
@@ -268,7 +268,7 @@ async def create_objects_index(context, index_name):
                             'type': 'text',
                         },
                         'dit:greatDomesticUI:searchResultType': {
-                            'type': 'text'
+                            'type': 'keyword'
                         }
                     },
                 },
