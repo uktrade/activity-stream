@@ -213,6 +213,9 @@ async def create_activities_index(context, index_name):
                         'object.keywords': {
                             'type': 'text',
                         },
+                        'object.dit:greatDomesticUI:searchResultType': {
+                            'type': 'text',
+                        },
                         'actor.dit:companiesHouseNumber': {
                             'type': 'keyword',
                         },
@@ -263,6 +266,9 @@ async def create_objects_index(context, index_name):
                         # list of keywords
                         'keywords': {
                             'type': 'text',
+                        },
+                        'dit:greatDomesticUI:searchResultType': {
+                            'type': 'text'
                         }
                     },
                 },
