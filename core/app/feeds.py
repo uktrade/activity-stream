@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-import json
 import re
 import aiohttp
 import yarl
@@ -14,7 +13,10 @@ from .http import (
 from .logger import (
     logged,
 )
-from .utils import sub_dict_lower
+from .utils import (
+    json_loads,
+    sub_dict_lower,
+)
 
 
 def parse_feed_config(feed_config):
@@ -28,7 +30,7 @@ def parse_feed_config(feed_config):
 
 class ActivityStreamFeed:
 
-    max_interval_before_reporting_down = 60
+    down_grace_period = 60
 
     full_ingest_page_interval = 0.25
     updates_page_interval = 1
@@ -72,7 +74,7 @@ class ActivityStreamFeed:
 
 class ZendeskFeed:
 
-    max_interval_before_reporting_down = 400
+    down_grace_period = 400
 
     # The staging API is severely rate limited
     # Could be higher on prod, but KISS
@@ -139,7 +141,7 @@ class ZendeskFeed:
 
 class EventFeed:
 
-    max_interval_before_reporting_down = 60 * 60 * 4
+    down_grace_period = 60 * 60 * 4
 
     full_ingest_page_interval = 3
     updates_page_interval = 60 * 60 * 24 * 30
@@ -177,7 +179,7 @@ class EventFeed:
             }, headers={})
         result.raise_for_status()
 
-        self.accesstoken = json.loads(result._body.decode('utf-8'))['accesstoken']
+        self.accesstoken = json_loads(result._body)['accesstoken']
         return {
             'accesstoken': self.accesstoken,
         }
@@ -193,7 +195,7 @@ class EventFeed:
                     headers={'accesstoken': self.accesstoken})
                 result.raise_for_status()
 
-            return json.loads(result._body.decode('utf-8'))
+            return json_loads(result._body)
 
         now = datetime.datetime.now().isoformat()
         return [

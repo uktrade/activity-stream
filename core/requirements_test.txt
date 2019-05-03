@@ -4,7 +4,7 @@
 #
 #    pip-compile --output-file requirements_test.txt requirements_test.in
 #
-aiodns==1.1.1
+aiodnsresolver==0.0.120
 aiohttp==3.5.4
 aioredis==1.1.0
 aspy.yaml==1.2.0          # via pre-commit
@@ -27,7 +27,6 @@ multidict==4.3.1          # via aiohttp, yarl
 nodeenv==1.3.3            # via pre-commit
 pre-commit==1.14.4
 prometheus_client==0.3.0
-pycares==2.3.0            # via aiodns
 pylint==2.3.1
 python-dateutil==2.7.3    # via freezegun
 pyyaml==5.1               # via aspy.yaml, pre-commit
@@ -35,7 +34,6 @@ raven==6.9.0
 six==1.11.0               # via astroid, cfgv, freezegun, mohawk, pre-commit, python-dateutil
 toml==0.10.0              # via pre-commit
 typed-ast==1.3.1          # via astroid
-ujson==1.35
 virtualenv==16.4.3        # via pre-commit
 wrapt==1.10.11            # via astroid
 yarl==1.2.6               # via aiohttp

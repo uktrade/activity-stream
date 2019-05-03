@@ -50,7 +50,7 @@ def random_url_safe(count):
 
 
 def get_common_config(env):
-    vcap_services = json.loads(env['VCAP_SERVICES'])
+    vcap_services = json_loads(env['VCAP_SERVICES'])
     es_uri = vcap_services['elasticsearch'][0]['credentials']['uri']
     redis_uri = vcap_services['redis'][0]['credentials']['uri']
     sentry = {
@@ -162,6 +162,18 @@ def normalise_environment(key_values):
     return \
         list_sorted_by_int_key() if all_keys_are_ints() else \
         nested_structured_dict
+
+
+def json_dumps(data_dict):
+    return json.dumps(
+        data_dict,
+        sort_keys=True,
+        check_circular=False,
+        ensure_ascii=False).encode('utf-8')
+
+
+def json_loads(data):
+    return json.loads(data)
 
 
 def main(run_application_coroutine):
