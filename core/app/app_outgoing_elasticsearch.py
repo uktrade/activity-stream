@@ -225,6 +225,9 @@ async def create_activities_index(context, index_name):
                         'object.keywords': {
                             'type': 'text',
                         },
+                        'object.attributedTo.id': {
+                            'type': 'keyword',
+                        },
                         'actor.dit:companiesHouseNumber': {
                             'type': 'keyword',
                         },
@@ -281,7 +284,10 @@ async def create_objects_index(context, index_name):
                         # list of keywords
                         'keywords': {
                             'type': 'text',
-                        }
+                        },
+                        'attributedTo.id': {
+                            'type': 'keyword',
+                        },
                     },
                 },
             },
