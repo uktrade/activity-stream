@@ -196,6 +196,12 @@ async def create_activities_index(context, index_name):
                         'type': {
                             'type': 'keyword',
                         },
+                        'startTime': {
+                            'type': 'date',
+                        },
+                        'endTime': {
+                            'type': 'date',
+                        },
                         'object.type': {
                             'type': 'keyword',
                         },
@@ -207,6 +213,12 @@ async def create_activities_index(context, index_name):
                         },
                         'object.name': {
                             'type': 'text',
+                        },
+                        'object.startTime': {
+                            'type': 'date',
+                        },
+                        'object.endTime': {
+                            'type': 'date',
                         },
                         # Not AS 2.0, but is used, and is a space-separated
                         # list of keywords
@@ -258,6 +270,12 @@ async def create_objects_index(context, index_name):
                         },
                         'name': {
                             'type': 'text',
+                        },
+                        'startTime': {
+                            'type': 'date',
+                        },
+                        'endTime': {
+                            'type': 'date',
                         },
                         # Not AS 2.0, but is used, and is a space-separated
                         # list of keywords
