@@ -406,6 +406,30 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 403)
         self.assertEqual(text, '{"details": "You are not authorized to perform this action."}')
 
+    @async_test
+    async def test_allows_ip_subnet(self):
+
+        mock_env_with_whitelist = mock_env()
+        mock_env_with_whitelist['INCOMING_IP_WHITELIST__3'] = '0.0.0.0/0'
+        url = 'http://127.0.0.1:8080/v1/'
+        x_forwarded_for = '7.7.7.7, 127.0.0.0'
+
+        path = 'tests_fixture_activity_stream_1.json'
+
+        def read_specific_file(_):
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as file:
+                return file.read().decode('utf-8')
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=mock_env_with_whitelist, mock_feed=read_specific_file,
+                                    mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await fetch_all_es_data_until(has_at_least(2))
+
+        result, status, headers = await get_until(url, x_forwarded_for,
+                                                  has_at_least_ordered_items(2))
+        self.assertEqual(status, 200)
+
 
 class TestApplication(TestBase):
 
