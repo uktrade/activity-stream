@@ -1,6 +1,8 @@
 import hmac
 import time
 
+from ipaddress import IPv4Network, IPv4Address
+
 from aiohttp import web
 
 from .app_incoming_elasticsearch import (
@@ -358,7 +360,11 @@ def authenticate_by_ip(incorrect, ip_whitelist):
 
         remote_address = ip_addesses[-2].strip()
 
-        if remote_address not in ip_whitelist:
+        is_allowed = any(
+            IPv4Address(remote_address) in IPv4Network(address_or_subnet)
+            for address_or_subnet in ip_whitelist
+        )
+        if not is_allowed:
             request['logger'].warning(
                 'Failed authentication: the IP address derived from the '
                 'X-Forwarded-For header is not in the whitelist'

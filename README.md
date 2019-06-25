@@ -71,7 +71,7 @@ export VCAP_SERVICES='{"redis":[{"credentials":{"uri":"redis://127.0.0.1:6379"}}
 And add to the bottom of the `deactivate ()` function in that file.
 
 ```
-    # unset environment variables - this must match "unset" list at top
+    # unset environment variables
     unset PORT
     unset FEEDS__1__UNIQUE_ID
     unset FEEDS__1__SEED

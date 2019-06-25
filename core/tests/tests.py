@@ -406,6 +406,46 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 403)
         self.assertEqual(text, '{"details": "You are not authorized to perform this action."}')
 
+    @async_test
+    async def test_ip_within_subnet_gets_200(self):
+        mock_env_with_whitelist = mock_env()
+        mock_env_with_whitelist['INCOMING_IP_WHITELIST__3'] = '10.0.0.0/8'
+        url = 'http://127.0.0.1:8080/v1/'
+        x_forwarded_for = '10.1.1.1, 127.0.0.0'
+
+        path = 'tests_fixture_activity_stream_1.json'
+
+        def read_specific_file(_):
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as file:
+                return file.read().decode('utf-8')
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=mock_env_with_whitelist, mock_feed=read_specific_file,
+                                    mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await fetch_all_es_data_until(has_at_least(2))
+
+        _, status, _ = await get_until(url, x_forwarded_for,
+                                       has_at_least_ordered_items(2))
+        self.assertEqual(status, 200)
+
+    @async_test
+    async def test_ip_outside_subnet_gets_401(self):
+        mock_env_with_whitelist = mock_env()
+        mock_env_with_whitelist['INCOMING_IP_WHITELIST__3'] = '10.0.0.0/8'
+        await self.setup_manual(env=mock_env_with_whitelist, mock_feed=read_file,
+                                mock_feed_status=lambda: 200, mock_headers=lambda: {})
+
+        url = 'http://127.0.0.1:8080/v1/'
+        x_forwarded_for = '9.1.1.1, 127.0.0.0'
+
+        auth = hawk_auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
+        )
+        text, status, _ = await get(url, auth, x_forwarded_for, b'')
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
 
 class TestApplication(TestBase):
 
