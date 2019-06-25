@@ -426,7 +426,7 @@ class TestAuthentication(TestBase):
             await fetch_all_es_data_until(has_at_least(2))
 
         _, status, _ = await get_until(url, x_forwarded_for,
-                                                  has_at_least_ordered_items(2))
+                                       has_at_least_ordered_items(2))
         self.assertEqual(status, 200)
 
     @async_test
@@ -434,8 +434,7 @@ class TestAuthentication(TestBase):
         mock_env_with_whitelist = mock_env()
         mock_env_with_whitelist['INCOMING_IP_WHITELIST__3'] = '10.0.0.0/8'
         await self.setup_manual(env=mock_env_with_whitelist, mock_feed=read_file,
-                                mock_feed_status=lambda: 200,
-                                mock_headers=lambda: {})
+                                mock_feed_status=lambda: 200, mock_headers=lambda: {})
 
         url = 'http://127.0.0.1:8080/v1/'
         x_forwarded_for = '9.1.1.1, 127.0.0.0'
