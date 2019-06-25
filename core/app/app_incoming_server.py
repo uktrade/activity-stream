@@ -1,8 +1,9 @@
 import hmac
 import time
 
-from aiohttp import web
 from ipaddress import IPv4Network, IPv4Address
+
+from aiohttp import web
 
 from .app_incoming_elasticsearch import (
     es_request,
