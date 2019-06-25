@@ -433,7 +433,8 @@ class TestAuthentication(TestBase):
     async def test_ip_outside_subnet_gets_401(self):
         mock_env_with_whitelist = mock_env()
         mock_env_with_whitelist['INCOMING_IP_WHITELIST__3'] = '10.0.0.0/8'
-        await self.setup_manual(env=mock_env_with_whitelist, mock_feed=read_file, mock_feed_status=lambda: 200,
+        await self.setup_manual(env=mock_env_with_whitelist, mock_feed=read_file,
+                                mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
         url = 'http://127.0.0.1:8080/v1/'
