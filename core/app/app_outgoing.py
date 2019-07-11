@@ -343,6 +343,7 @@ async def fetch_and_ingest_page(context, ingest_type, feed, activity_index_names
         with logged(context.logger, 'Converting to activities', []):
             activities = await feed.get_activities(context, feed_parsed)
 
+        context.logger.debug('Found (%s) activities', len(activities))
         num_es_documents = len(activities) * (len(activity_index_names) + len(objects_index_names))
         with \
                 metric_timer(context.metrics['ingest_page_duration_seconds'],
