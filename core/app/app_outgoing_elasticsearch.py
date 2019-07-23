@@ -202,6 +202,9 @@ async def create_activities_index(context, index_name):
                         'endTime': {
                             'type': 'date',
                         },
+                        'generator.name': {
+                            'type': 'keyword',
+                        },
                         'object.type': {
                             'type': 'keyword',
                         },
