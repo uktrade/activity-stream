@@ -41,7 +41,7 @@ UNKNOWN_ERROR = 'An unknown error occurred.'
 
 def authenticator(context, incoming_key_pairs, nonce_expire):
 
-    def _lookup_credentials(passed_access_key_id):
+    async def _lookup_credentials(passed_access_key_id):
         return lookup_credentials(incoming_key_pairs, passed_access_key_id)
 
     @web.middleware

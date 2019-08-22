@@ -34,7 +34,7 @@ async def authenticate_hawk_header(context, nonce_expire, lookup_credentials,
     if not re.match(r'^\d+$', parsed_header['ts']):
         return False, 'Invalid ts', None
 
-    matching_credentials = lookup_credentials(parsed_header['id'])
+    matching_credentials = await lookup_credentials(parsed_header['id'])
     if not matching_credentials:
         return False, 'Unidentified id', None
 
