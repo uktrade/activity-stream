@@ -1,6 +1,6 @@
 aiodnsresolver==0.0.120
 aiohttp==3.5.4
 aioredis==1.1.0
-hawk-server-asyncio==0.0.1
+hawk-server-asyncio==0.0.3
 prometheus_client==0.3.0
 raven==6.9.0

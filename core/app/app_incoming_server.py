@@ -67,6 +67,7 @@ def authenticator(context, incoming_key_pairs, nonce_expire):
         is_authentic, private_error_message, credentials = await authenticate_hawk_header(
             seen_nonce=_seen_nonce,
             lookup_credentials=_lookup_credentials,
+            max_skew=60,
             header=request.headers['Authorization'],
             method=request.method,
             host=request.url.host,
