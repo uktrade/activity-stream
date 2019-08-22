@@ -4,6 +4,9 @@ import time
 from ipaddress import IPv4Network, IPv4Address
 
 from aiohttp import web
+from hawkserver import (
+    authenticate_hawk_header,
+)
 
 from .app_incoming_elasticsearch import (
     es_request,
@@ -13,9 +16,6 @@ from .app_incoming_elasticsearch import (
 )
 from .elasticsearch import (
     es_min_verification_age,
-)
-from .app_incoming_hawk import (
-    authenticate_hawk_header,
 )
 from .logger import (
     logged,
@@ -28,6 +28,7 @@ from .utils import (
 from .app_incoming_redis import (
     redis_get_metrics,
     get_feeds_status,
+    set_nonce_nx,
 )
 
 NOT_PROVIDED = 'Authentication credentials were not provided.'
@@ -40,6 +41,11 @@ UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
 def authenticator(context, incoming_key_pairs, nonce_expire):
+
+    async def _seen_nonce(nonce, access_key_id):
+        nonce_key = f'nonce-{access_key_id}-{nonce}'
+        redis_response = await set_nonce_nx(context, nonce_key, nonce_expire)
+        return redis_response == b'OK'
 
     async def _lookup_credentials(passed_access_key_id):
         return lookup_credentials(incoming_key_pairs, passed_access_key_id)
@@ -59,8 +65,7 @@ def authenticator(context, incoming_key_pairs, nonce_expire):
             raise web.HTTPUnauthorized(text=MISSING_CONTENT_TYPE)
 
         is_authentic, private_error_message, credentials = await authenticate_hawk_header(
-            context=context,
-            nonce_expire=nonce_expire,
+            seen_nonce=_seen_nonce,
             lookup_credentials=_lookup_credentials,
             header=request.headers['Authorization'],
             method=request.method,
