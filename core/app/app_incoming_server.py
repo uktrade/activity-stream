@@ -45,7 +45,7 @@ def authenticator(context, incoming_key_pairs, nonce_expire):
     async def _seen_nonce(nonce, access_key_id):
         nonce_key = f'nonce-{access_key_id}-{nonce}'
         redis_response = await set_nonce_nx(context, nonce_key, nonce_expire)
-        return redis_response == b'OK'
+        return redis_response != b'OK'
 
     async def _lookup_credentials(passed_access_key_id):
         return lookup_credentials(incoming_key_pairs, passed_access_key_id)
