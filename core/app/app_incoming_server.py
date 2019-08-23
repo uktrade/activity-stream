@@ -73,7 +73,7 @@ def authenticator(context, incoming_key_pairs, nonce_expire):
             host=request.url.host,
             port=str(request.url.with_scheme(request.headers['X-Forwarded-Proto']).port),
             path=request.url.raw_path_qs,
-            content_type=request.headers['Content-Type'].encode('utf-8'),
+            content_type=request.headers['Content-Type'],
             content=await request.read()
         )
 
