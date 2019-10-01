@@ -66,7 +66,8 @@ async def es_request_non_200_exception(context, method, path, query, headers, pa
 
 async def es_request(context, method, path, query, headers, payload):
     with logged(
-            context.logger, 'Elasticsearch request (%s) (%s) (%s) (%s)',
+            context.logger.debug, context.logger.warning,
+            'Elasticsearch request (%s) (%s) (%s) (%s)',
             [settings.ES_URI, method, path, query],
     ):
         query_string = '&'.join([key + '=' + query[key] for key in query.keys()])

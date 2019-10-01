@@ -62,7 +62,7 @@ NONCE_EXPIRE = 120
 async def run_incoming_application():
     logger = get_root_logger('incoming')
 
-    with logged(logger, 'Examining environment', []):
+    with logged(logger.info, logger.warning, 'Examining environment', []):
         env = normalise_environment(os.environ)
         es_uri, redis_uri, sentry = get_common_config(env)
         feeds = [parse_feed_config(feed) for feed in env['FEEDS']]
@@ -89,7 +89,8 @@ async def run_incoming_application():
         logger=logger, metrics=metrics,
         raven_client=raven_client, redis_client=redis_client, session=session)
 
-    with logged(context.logger, 'Creating listening web application', []):
+    with logged(context.logger.info, context.logger.warning, 'Creating listening web application',
+                []):
         runner = await create_incoming_application(
             context, port, ip_whitelist, incoming_key_pairs, feeds,
         )
