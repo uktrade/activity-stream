@@ -69,7 +69,7 @@ async def get_feed_updates_url(context, feed_id):
 
     updates_seed_url_key = 'feed-updates-seed-url-' + feed_id
     updates_latest_url_key = 'feed-updates-latest-url-' + feed_id
-    with logged(context.logger, 'Getting updates url', []):
+    with logged(context.logger.debug, context.logger.warning, 'Getting updates url', []):
         while True:
             # We want the equivalent of an atomic GET/DEL, to avoid the race condition that the
             # full ingest sets the updates seed URL, but the updates chain then overwrites it
@@ -98,7 +98,8 @@ async def get_feed_updates_url(context, feed_id):
 
 async def set_feed_updates_seed_url_init(context, feed_id):
     updates_seed_url_key = 'feed-updates-seed-url-' + feed_id
-    with logged(context.logger, 'Setting updates seed url initial to (%s)', [NOT_EXISTS]):
+    with logged(context.logger.debug, context.logger.warning,
+                'Setting updates seed url initial to (%s)', [NOT_EXISTS]):
         result = await context.redis_client.execute(
             'SET', updates_seed_url_key, NOT_EXISTS,
             'EX', FEED_UPDATE_URL_EXPIRE,
@@ -110,20 +111,22 @@ async def set_feed_updates_seed_url_init(context, feed_id):
 
 async def set_feed_updates_seed_url(context, feed_id, updates_url):
     updates_seed_url_key = 'feed-updates-seed-url-' + feed_id
-    with logged(context.logger, 'Setting updates seed url to (%s)', [updates_url]):
+    with logged(context.logger.debug, context.logger.warning, 'Setting updates seed url to (%s)',
+                [updates_url]):
         await context.redis_client.execute('SET', updates_seed_url_key, updates_url,
                                            'EX', FEED_UPDATE_URL_EXPIRE)
 
 
 async def set_feed_updates_url(context, feed_id, updates_url):
     updates_latest_url_key = 'feed-updates-latest-url-' + feed_id
-    with logged(context.logger, 'Setting updates url to (%s)', [updates_url]):
+    with logged(context.logger.debug, context.logger.warning, 'Setting updates url to (%s)',
+                [updates_url]):
         await context.redis_client.execute('SET', updates_latest_url_key, updates_url,
                                            'EX', FEED_UPDATE_URL_EXPIRE)
 
 
 async def redis_set_metrics(context, metrics):
-    with logged(context.logger, 'Saving to Redis', []):
+    with logged(context.logger.debug, context.logger.warning, 'Saving to Redis', []):
         await context.redis_client.execute('SET', 'metrics', metrics)
 
 

@@ -93,7 +93,7 @@ async def get_old_index_names(context):
             index_name.startswith(f'{ALIAS_OBJECTS}_')
         )
 
-    with logged(context.logger, 'Finding existing index names', []):
+    with logged(context.logger.debug, context.logger.warning, 'Finding existing index names', []):
         results = await es_request_non_200_exception(
             context=context,
             method='GET',
@@ -121,7 +121,8 @@ async def get_old_index_names(context):
 
 async def add_remove_aliases_atomically(context, activity_index_name, object_index_name,
                                         feed_unique_id):
-    with logged(context.logger, 'Atomically flipping {ALIAS_ACTIVITIES} alias to (%s)',
+    with logged(context.logger.debug, context.logger.warning,
+                'Atomically flipping {ALIAS_ACTIVITIES} alias to (%s)',
                 [feed_unique_id]):
         activities_remove_pattern = f'{ALIAS_ACTIVITIES}__feed_id_{feed_unique_id}__*'
         objects_remove_pattern = f'{ALIAS_OBJECTS}__feed_id_{feed_unique_id}__*'
@@ -149,7 +150,8 @@ async def delete_indexes(context, index_names):
     # its _more_ important to wait until its deleted before continuing with
     # ingest. If we still can't delete, we abort and raise
 
-    with logged(context.logger, 'Deleting indexes (%s)', [index_names]):
+    with logged(context.logger.debug, context.logger.warning, 'Deleting indexes (%s)',
+                [index_names]):
         if not index_names:
             return
         index_names_comma_separated = ','.join(index_names)
@@ -174,7 +176,7 @@ async def delete_indexes(context, index_names):
 
 
 async def create_activities_index(context, index_name):
-    with logged(context.logger, 'Creating index (%s)', [index_name]):
+    with logged(context.logger.debug, context.logger.warning, 'Creating index (%s)', [index_name]):
         index_definition = json_dumps({
             'settings': {
                 'index': {
@@ -249,7 +251,7 @@ async def create_activities_index(context, index_name):
 
 
 async def create_objects_index(context, index_name):
-    with logged(context.logger, 'Creating index (%s)', [index_name]):
+    with logged(context.logger.debug, context.logger.warning, 'Creating index (%s)', [index_name]):
         index_definition = json_dumps({
             'settings': {
                 'index': {
@@ -308,7 +310,8 @@ async def create_objects_index(context, index_name):
 async def refresh_index(context, index_name, *metric_labels):
     metric = context.metrics['elasticsearch_refresh_duration_seconds']
     with \
-            logged(context.logger, 'Refreshing index (%s)', [index_name]), \
+            logged(context.logger.debug, context.logger.warning, 'Refreshing index (%s)',
+                   [index_name]), \
             metric_timer(metric, [metric_labels]):
 
         await es_request_non_200_exception(
@@ -322,11 +325,13 @@ async def refresh_index(context, index_name, *metric_labels):
 
 
 async def es_bulk_ingest(context, activities, activity_index_names, object_index_names):
-    with logged(context.logger, 'Pushing (%s) activities into Elasticsearch', [len(activities)]):
+    with logged(context.logger.debug, context.logger.warning,
+                'Pushing (%s) activities into Elasticsearch', [len(activities)]):
         if not activities:
             return
 
-        with logged(context.logger, 'Converting to Elasticsearch bulk ingest commands', []):
+        with logged(context.logger.debug, context.logger.warning,
+                    'Converting to Elasticsearch bulk ingest commands', []):
             es_bulk_contents = b''.join(itertools.chain(
                 flatten_generator(
                     [
@@ -364,7 +369,8 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
                 ),
             ))
 
-        with logged(context.logger, 'POSTing bulk ingest to Elasticsearch', []):
+        with logged(context.logger.debug, context.logger.warning,
+                    'POSTing bulk ingest to Elasticsearch', []):
             await es_request_non_200_exception(
                 context=context, method='POST', path='/_bulk', query={},
                 headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,

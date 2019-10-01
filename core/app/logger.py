@@ -19,19 +19,19 @@ def get_child_logger(logger, child_context):
 
 
 @contextlib.contextmanager
-def logged(logger, message, logger_args):
+def logged(logger_regular, logger_fail, message, logger_args):
     try:
-        logger.debug(message + '...', *logger_args)
+        logger_regular(message + '...', *logger_args)
         status = 'done'
-        logger_func = logger.debug
+        logger_func = logger_regular
         yield
     except asyncio.CancelledError:
         status = 'cancelled'
-        logger_func = logger.debug
+        logger_func = logger_fail
         raise
     except BaseException:
         status = 'failed'
-        logger_func = logger.warning
+        logger_func = logger_fail
         raise
     finally:
         logger_func(message + '... (%s)', *(logger_args + [status]))

@@ -189,7 +189,8 @@ class EventFeed:
             await asyncio.sleep(3)
             url = self.event_url.format(event_id=event_id)
 
-            with logged(context.logger, 'Fetching event (%s)', [url]):
+            with logged(context.logger.debug, context.logger.warning,
+                        'Fetching event (%s)', [url]):
                 result = await http_make_request(
                     context.session, context.metrics, 'GET', url, data=b'',
                     headers={'accesstoken': self.accesstoken})

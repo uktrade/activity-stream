@@ -186,7 +186,7 @@ def handle_get_p1_check(parent_context):
     async def handle(_):
         context = get_child_context(parent_context, 'check')
 
-        with logged(context.logger, 'Checking', []):
+        with logged(context.logger.debug, context.logger.warning, 'Checking', []):
             await context.redis_client.execute('SET', 'redis-check', b'GREEN', 'EX', 1)
             redis_result = await context.redis_client.execute('GET', 'redis-check')
             is_redis_green = redis_result == b'GREEN'
@@ -218,7 +218,7 @@ def handle_get_p2_check(parent_context, feeds):
     async def handle(_):
         context = get_child_context(parent_context, 'check')
 
-        with logged(context.logger, 'Checking', []):
+        with logged(context.logger.debug, context.logger.warning, 'Checking', []):
             uptime = time.perf_counter() - start_counter
             in_grace_period = uptime <= grace
 
@@ -313,7 +313,7 @@ def server_logger(logger):
     async def _server_logger(request, handler):
         child_logger = get_child_logger(logger, random_url_safe(8))
         request['logger'] = child_logger
-        child_logger.debug('Receiving request (%s) (%s %s HTTP/%s.%s) (%s) (%s)', *(
+        child_logger.info('Receiving request (%s) (%s %s HTTP/%s.%s) (%s) (%s)', *(
             (
                 request.remote,
                 request.method,
@@ -326,7 +326,7 @@ def server_logger(logger):
             )
         ))
 
-        with logged(child_logger, 'Processing request', []):
+        with logged(child_logger.info, child_logger.error, 'Processing request', []):
             response = await handler(request)
 
         child_logger.debug(

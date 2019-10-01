@@ -116,7 +116,7 @@ async def run_outgoing_application():
     """
     logger = get_root_logger('outgoing')
 
-    with logged(logger, 'Examining environment', []):
+    with logged(logger.debug, logger.error, 'Examining environment', []):
         env = normalise_environment(os.environ)
         es_uri, redis_uri, sentry = get_common_config(env)
         feeds = [parse_feed_config(feed) for feed in env['FEEDS']]
@@ -232,7 +232,7 @@ async def ingest_full(parent_context, feed):
     context = get_child_context(parent_context, f'{feed.unique_id},full')
     metrics = context.metrics
     with \
-            logged(context.logger, 'Full ingest', []), \
+            logged(context.logger.debug, context.logger.warning, 'Full ingest', []), \
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'full']), \
             metric_inprogress(metrics['ingest_inprogress_ingests_total']):
 
@@ -293,7 +293,7 @@ async def ingest_updates(parent_context, feed):
     context = get_child_context(parent_context, f'{feed.unique_id},updates')
     metrics = context.metrics
     with \
-            logged(context.logger, 'Updates ingest', []), \
+            logged(context.logger.debug, context.logger.warning, 'Updates ingest', []), \
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'updates']):
 
         href = await get_feed_updates_url(context, feed.unique_id)
@@ -326,24 +326,25 @@ async def fetch_and_ingest_page(context, ingest_type, feed, activity_index_names
     The url of the next page is returned or `None` if there is no next page
     """
     with \
-            logged(context.logger, 'Polling/pushing page', []), \
+            logged(context.logger.debug, context.logger.warning, 'Polling/pushing page', []), \
             metric_timer(context.metrics['ingest_page_duration_seconds'],
                          [feed.unique_id, ingest_type, 'total']):
 
         # Lock so there is only 1 request per feed at any given time
         async with feed.lock:
             with \
-                    logged(context.logger, 'Polling page (%s)', [href]), \
+                    logged(context.logger.info, context.logger.warning, 'Polling page (%s)',
+                           [href]), \
                     metric_timer(context.metrics['ingest_page_duration_seconds'],
                                  [feed.unique_id, ingest_type, 'pull']):
                 feed_contents = await fetch_page(
                     context, href, await feed.auth_headers(context, href),
                 )
 
-        with logged(context.logger, 'Parsing JSON', []):
+        with logged(context.logger.debug, context.logger.warning, 'Parsing JSON', []):
             feed_parsed = json_loads(feed_contents)
 
-        with logged(context.logger, 'Converting to activities', []):
+        with logged(context.logger.debug, context.logger.warning, 'Converting to activities', []):
             activities = await feed.get_activities(context, feed_parsed)
 
         num_es_documents = len(activities) * (len(activity_index_names) + len(objects_index_names))
@@ -403,7 +404,7 @@ async def create_metrics_application(parent_context, metrics_registry, feeds):
     metrics = context.metrics
 
     async def poll_metrics():
-        with logged(context.logger, 'Polling', []):
+        with logged(context.logger.debug, context.logger.warning, 'Polling', []):
             searchable = await es_searchable_total(context)
             metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
 
