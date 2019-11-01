@@ -488,6 +488,78 @@ class TestApplication(TestBase):
         self.assertEqual(headers['Server'], 'activity-stream')
 
     @async_test
+    async def test_v2_activities_get_returns_feed_data(self):
+        url = 'http://127.0.0.1:8080/v2/activities'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
+        path = 'tests_fixture_activity_stream_1.json'
+
+        def read_specific_file(_):
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as file:
+                return file.read().decode('utf-8')
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=mock_env(), mock_feed=read_specific_file,
+                                    mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await fetch_all_es_data_until(has_at_least(2))
+
+        result, status, _ = await get_until(url, x_forwarded_for,
+                                            has_at_least(2))
+        self.assertEqual(status, 200)
+        ids = [item['_source']['id'] for item in result['hits']['hits']]
+        self.assertIn('dit:exportOpportunities:Enquiry:49863:Create', ids)
+        self.assertIn('dit:exportOpportunities:Enquiry:49862:Create', ids)
+
+        def does_not_have_previous_items(results):
+            return '49863' not in str(results)
+
+        path = 'tests_fixture_activity_stream_2.json'
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            result, status, _ = await get_until(url, x_forwarded_for,
+                                                does_not_have_previous_items)
+        self.assertEqual(status, 200)
+        ids = [item['_source']['id'] for item in result['hits']['hits']]
+        self.assertIn('dit:exportOpportunities:Enquiry:42863:Create', ids)
+        self.assertIn('dit:exportOpportunities:Enquiry:42862:Create', ids)
+
+    @async_test
+    async def test_v2_objects_get_returns_feed_data(self):
+        url = 'http://127.0.0.1:8080/v2/objects'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
+        path = 'tests_fixture_activity_stream_1.json'
+
+        def read_specific_file(_):
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as file:
+                return file.read().decode('utf-8')
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=mock_env(), mock_feed=read_specific_file,
+                                    mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await fetch_all_es_data_until(has_at_least(2))
+
+        result, status, _ = await get_until(url, x_forwarded_for,
+                                            has_at_least(2))
+        self.assertEqual(status, 200)
+        ids = [item['_source']['id'] for item in result['hits']['hits']]
+        self.assertIn('dit:exportOpportunities:Enquiry:49863', ids)
+        self.assertIn('dit:exportOpportunities:Enquiry:49862', ids)
+
+        def does_not_have_previous_items(results):
+            return '49863' not in str(results)
+
+        path = 'tests_fixture_activity_stream_2.json'
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            result, status, _ = await get_until(url, x_forwarded_for,
+                                                does_not_have_previous_items)
+        self.assertEqual(status, 200)
+        ids = [item['_source']['id'] for item in result['hits']['hits']]
+        self.assertIn('dit:exportOpportunities:Enquiry:42863', ids)
+        self.assertIn('dit:exportOpportunities:Enquiry:42862', ids)
+
+    @async_test
     async def test_pagination(self):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
