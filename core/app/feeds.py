@@ -206,7 +206,7 @@ class EventFeed:
                 'eventid': event['eventid'],
                 'dit:application': 'aventri',
                 'object': {
-                    'type': 'Event',
+                    'type': ['Event', 'dit:aventri:Event'],
                     'id': 'dit:aventri:Event:' + event['eventid'],
                     'name': event['name'],
                     'url': event['url'],
