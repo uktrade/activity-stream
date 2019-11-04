@@ -166,7 +166,11 @@ async def get(url, auth, x_forwarded_for, body):
 
 
 async def get_until(url, x_forwarded_for, condition):
-    body = b'{"size": 1000, "sort": [{"published": {"order": "desc"}}]}'
+    return await get_until_with_body(url, x_forwarded_for, condition,
+                                     b'{"size": 1000, "sort": [{"published": {"order": "desc"}}]}')
+
+
+async def get_until_with_body(url, x_forwarded_for, condition, body):
     while True:
         auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', body, 'application/json',
