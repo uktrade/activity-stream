@@ -233,6 +233,9 @@ async def create_activities_index(context, index_name):
                         'object.attributedTo.id': {
                             'type': 'keyword',
                         },
+                        'object.attributedTo.type': {
+                            'type': 'keyword',
+                        },
                         'actor.dit:companiesHouseNumber': {
                             'type': 'keyword',
                         },
@@ -291,6 +294,9 @@ async def create_objects_index(context, index_name):
                             'type': 'text',
                         },
                         'attributedTo.id': {
+                            'type': 'keyword',
+                        },
+                        'attributedTo.type': {
                             'type': 'keyword',
                         },
                     },
