@@ -270,10 +270,7 @@ def handle_get_search_v1(context, alias):
 
 def handle_get_search_v2(context, alias):
 
-    def ensure_filter(search):
-        # Ensure we have a filter, even if it's empty. Ready for when we add
-        # granular permissions that adds a filter to each request
-
+    def filtered(permissions, search):
         try:
             query = search['query']
         except KeyError:
@@ -290,10 +287,19 @@ def handle_get_search_v2(context, alias):
             bool_filter_maybe_list if isinstance(bool_filter_maybe_list, list) else \
             [bool_filter_maybe_list]
 
+        alias_permissions = permissions[alias]
+        bool_filter_with_permissions = bool_filter + \
+            [{'match_all': {}}] if alias_permissions == '__MATCH_ALL__' else \
+            [{'match_none': {}}] if alias_permissions == '__MATCH_NONE__' else \
+            [
+                {'terms': {permission['TERMS_KEY']: permission['TERMS_VALUES']}}
+                for permission in alias_permissions
+            ]
+
         return {
             'query': {
                 'bool': {
-                    'filter': bool_filter,
+                    'filter': bool_filter_with_permissions,
                     **{key: value for key, value in bool_query['bool'].items() if key != 'filter'},
                 },
             },
@@ -307,7 +313,7 @@ def handle_get_search_v2(context, alias):
             path=f'/{alias}/_search',
             query={},
             headers={'Content-Type': request.headers['Content-Type']},
-            payload=json_dumps(ensure_filter(json_loads(await request.read()))),
+            payload=json_dumps(filtered(request['permissions'], json_loads(await request.read()))),
         )
 
         return web.Response(body=results._body, status=results.status, headers={
