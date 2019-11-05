@@ -27,7 +27,6 @@ from .app_incoming_server import (
     INCORRECT,
     authenticate_by_ip,
     authenticator,
-    authorizer,
     convert_errors_to_json,
     handle_get_existing,
     handle_get_metrics,
@@ -36,7 +35,6 @@ from .app_incoming_server import (
     handle_get_p2_check,
     handle_get_search_v1,
     handle_get_search_v2,
-    handle_post,
     raven_reporter,
     server_logger,
 )
@@ -121,7 +119,6 @@ async def create_incoming_application(
     private_app_v1 = web.Application(middlewares=[
         authenticate_by_ip(INCORRECT, ip_whitelist),
         authenticator(context, incoming_key_pairs, NONCE_EXPIRE),
-        authorizer(),
     ])
     private_app_v1.add_routes([
         web.get(
@@ -137,7 +134,6 @@ async def create_incoming_application(
             handle_get_existing(context),
             name='scroll',
         ),
-        web.post('/', handle_post),
         web.get(
             '/',
             handle_get_new(context)
@@ -152,7 +148,6 @@ async def create_incoming_application(
     private_app_v2 = web.Application(middlewares=[
         authenticate_by_ip(INCORRECT, ip_whitelist),
         authenticator(context, incoming_key_pairs, NONCE_EXPIRE),
-        authorizer(),
     ])
     private_app_v2.add_routes([
         web.get(

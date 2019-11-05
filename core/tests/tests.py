@@ -366,34 +366,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
     @async_test
-    async def test_second_id_returns_object(self):
-        await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
-                                mock_headers=lambda: {})
-
-        url = 'http://127.0.0.1:8080/v1/'
-        auth = hawk_auth_header(
-            'incoming-some-id-2', 'incoming-some-secret-2', url, 'POST', '', '',
-        )
-        x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        text, status = await post(url, auth, x_forwarded_for)
-        self.assertEqual(status, 200)
-        self.assertEqual(text, '{"secret": "to-be-hidden"}')
-
-    @async_test
-    async def test_post_returns_object(self):
-        await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
-                                mock_headers=lambda: {})
-
-        url = 'http://127.0.0.1:8080/v1/'
-        auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
-        )
-        x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        text, status = await post(url, auth, x_forwarded_for)
-        self.assertEqual(status, 200)
-        self.assertEqual(text, '{"secret": "to-be-hidden"}')
-
-    @async_test
     async def test_post_creds_get_403(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
