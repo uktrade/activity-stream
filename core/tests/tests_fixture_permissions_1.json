@@ -1,0 +1,32 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "dit": "https://www.trade.gov.uk/ns/activitystreams/v1"
+    }
+  ],
+  "orderedItems": [
+    {
+      "id": "1:create",
+      "object": {
+        "id": "1",
+        "type": "object-type-a"
+      }
+    },
+    {
+      "id": "2:create",
+      "object": {
+        "id": "2",
+        "type": "object-type-b"
+      }
+    },
+    {
+      "id": "3:create",
+      "object": {
+        "id": "3",
+        "type": "object-type-c"
+      }
+    }
+  ],
+  "type": "Collection"
+}

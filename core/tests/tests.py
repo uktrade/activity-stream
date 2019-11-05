@@ -713,6 +713,226 @@ class TestApplication(TestBase):
         self.assertEqual(result['aggregations']['my_agg']['buckets'], [])
 
     @async_test
+    async def test_v2_activities_permissioned_empty_query(self):
+        url = 'http://127.0.0.1:8080/v2/activities'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
+        path = 'tests_fixture_permissions_1.json'
+        env = {
+            'FEEDS__1__SEED': 'http://localhost:8081/' + path,
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1__TERMS_KEY':
+                'object.type',
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1__TERMS_VALUES__1':
+                'object-type-b',
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1__TERMS_VALUES__2':
+                'object-type-c',
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1': '__MATCH_NONE__',
+            **{key: value for key, value in mock_env().items() if key not in [
+                'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1',
+                'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1']},
+        }
+
+        def read_specific_file(_):
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as _file:
+                return _file.read().decode('utf-8')
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_specific_file,
+                                    mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await fetch_all_es_data_until(has_at_least(3))
+
+        result, status, _ = await get_until_with_body(
+            url, x_forwarded_for, has_at_least(1), json.dumps({
+            }).encode('utf-8'))
+
+        self.assertEqual(status, 200)
+        self.assertEqual(len(result['hits']['hits']), 2)
+
+    @async_test
+    async def test_v2_activities_permissioned_filtered_query(self):
+        url = 'http://127.0.0.1:8080/v2/activities'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
+        path = 'tests_fixture_permissions_1.json'
+        env = {
+            'FEEDS__1__SEED': 'http://localhost:8081/' + path,
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1__TERMS_KEY':
+                'object.type',
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1__TERMS_VALUES__1':
+                'object-type-b',
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1__TERMS_VALUES__2':
+                'object-type-c',
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1': '__MATCH_NONE__',
+            **{key: value for key, value in mock_env().items() if key not in [
+                'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1',
+                'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1']},
+        }
+
+        def read_specific_file(_):
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as _file:
+                return _file.read().decode('utf-8')
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_specific_file,
+                                    mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await fetch_all_es_data_until(has_at_least(3))
+
+        result, status, _ = await get_until_with_body(
+            url, x_forwarded_for, has_at_least(1), json.dumps({
+                'query': {
+                    'bool': {
+                        'filter': {'term': {'object.type': 'object-type-b'}},
+                    }
+                },
+            }).encode('utf-8'))
+
+        self.assertEqual(status, 200)
+        self.assertEqual(len(result['hits']['hits']), 1)
+
+    @async_test
+    async def test_v2_activities_permissioned_empty_query_match_none(self):
+        url = 'http://127.0.0.1:8080/v2/activities'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
+        path = 'tests_fixture_permissions_1.json'
+        env = {
+            'FEEDS__1__SEED': 'http://localhost:8081/' + path,
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1': '__MATCH_NONE__',
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1': '__MATCH_NONE__',
+            **{key: value for key, value in mock_env().items() if key not in [
+                'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1',
+                'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1']},
+        }
+
+        def read_specific_file(_):
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as _file:
+                return _file.read().decode('utf-8')
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_specific_file,
+                                    mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await fetch_all_es_data_until(has_at_least(3))
+
+        result, status, _ = await get_until_with_body(
+            url, x_forwarded_for, has_at_least(0), json.dumps({
+            }).encode('utf-8'))
+
+        self.assertEqual(status, 200)
+        self.assertEqual(len(result['hits']['hits']), 0)
+
+    @async_test
+    async def test_v2_objects_permissioned_empty_query(self):
+        url = 'http://127.0.0.1:8080/v2/objects'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
+        path = 'tests_fixture_permissions_1.json'
+        env = {
+            'FEEDS__1__SEED': 'http://localhost:8081/' + path,
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1': '__MATCH_NONE__',
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1__TERMS_KEY': 'type',
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1__TERMS_VALUES__1':
+                'object-type-b',
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1__TERMS_VALUES__2':
+                'object-type-c',
+            **{key: value for key, value in mock_env().items() if key not in [
+                'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1',
+                'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1']},
+        }
+
+        def read_specific_file(_):
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as _file:
+                return _file.read().decode('utf-8')
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_specific_file,
+                                    mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await fetch_all_es_data_until(has_at_least(3))
+
+        result, status, _ = await get_until_with_body(
+            url, x_forwarded_for, has_at_least(1), json.dumps({
+            }).encode('utf-8'))
+
+        self.assertEqual(status, 200)
+        self.assertEqual(len(result['hits']['hits']), 2)
+
+    @async_test
+    async def test_v2_objects_permissioned_filtered_query(self):
+        url = 'http://127.0.0.1:8080/v2/objects'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
+        path = 'tests_fixture_permissions_1.json'
+        env = {
+            'FEEDS__1__SEED': 'http://localhost:8081/' + path,
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1': '__MATCH_NONE__',
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1__TERMS_KEY': 'type',
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1__TERMS_VALUES__1':
+                'object-type-b',
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1__TERMS_VALUES__2':
+                'object-type-c',
+            **{key: value for key, value in mock_env().items() if key not in [
+                'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1',
+                'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1']},
+        }
+
+        def read_specific_file(_):
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as _file:
+                return _file.read().decode('utf-8')
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_specific_file,
+                                    mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await fetch_all_es_data_until(has_at_least(3))
+
+        result, status, _ = await get_until_with_body(
+            url, x_forwarded_for, has_at_least(1), json.dumps({
+                'query': {
+                    'bool': {
+                        'filter': {'term': {'type': 'object-type-b'}},
+                    }
+                },
+            }).encode('utf-8'))
+
+        self.assertEqual(status, 200)
+        self.assertEqual(len(result['hits']['hits']), 1)
+
+    @async_test
+    async def test_v2_objects_permissioned_empty_query_match_none(self):
+        url = 'http://127.0.0.1:8080/v2/objects'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
+        path = 'tests_fixture_permissions_1.json'
+        env = {
+            'FEEDS__1__SEED': 'http://localhost:8081/' + path,
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1': '__MATCH_NONE__',
+            'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1': '__MATCH_NONE__',
+            **{key: value for key, value in mock_env().items() if key not in [
+                'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__activities__1',
+                'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__objects__1']},
+        }
+
+        def read_specific_file(_):
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as _file:
+                return _file.read().decode('utf-8')
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_specific_file,
+                                    mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await fetch_all_es_data_until(has_at_least(3))
+
+        result, status, _ = await get_until_with_body(
+            url, x_forwarded_for, has_at_least(0), json.dumps({
+            }).encode('utf-8'))
+
+        self.assertEqual(status, 200)
+        self.assertEqual(len(result['hits']['hits']), 0)
+
+    @async_test
     async def test_v2_objects_get_returns_feed_data(self):
         url = 'http://127.0.0.1:8080/v2/objects'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
