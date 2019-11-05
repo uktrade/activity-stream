@@ -213,6 +213,12 @@ async def post_with_headers(url, headers):
     return (await result.text(), result.status)
 
 
+async def get_with_headers(url, headers):
+    async with aiohttp.ClientSession(skip_auto_headers=['Content-Type']) as session:
+        result = await session.get(url, headers=headers, timeout=1)
+    return (await result.text(), result.status)
+
+
 def respond_http(text, status):
     async def response(_):
         return web.Response(text=text, status=status, content_type='application/json')
@@ -307,13 +313,13 @@ def mock_env():
         'FEEDS__1__TYPE': 'activity_stream',
         'INCOMING_ACCESS_KEY_PAIRS__1__KEY_ID': 'incoming-some-id-1',
         'INCOMING_ACCESS_KEY_PAIRS__1__SECRET_KEY': 'incoming-some-secret-1',
-        'INCOMING_ACCESS_KEY_PAIRS__1__PERMISSIONS__1': 'POST',
+        'INCOMING_ACCESS_KEY_PAIRS__1__PERMISSIONS__1': '__ANYTHING__',
         'INCOMING_ACCESS_KEY_PAIRS__2__KEY_ID': 'incoming-some-id-2',
         'INCOMING_ACCESS_KEY_PAIRS__2__SECRET_KEY': 'incoming-some-secret-2',
-        'INCOMING_ACCESS_KEY_PAIRS__2__PERMISSIONS__1': 'POST',
+        'INCOMING_ACCESS_KEY_PAIRS__2__PERMISSIONS__1': '__ANYTHING__',
         'INCOMING_ACCESS_KEY_PAIRS__3__KEY_ID': 'incoming-some-id-3',
         'INCOMING_ACCESS_KEY_PAIRS__3__SECRET_KEY': 'incoming-some-secret-3',
-        'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__1': 'GET',
+        'INCOMING_ACCESS_KEY_PAIRS__3__PERMISSIONS__1': '__ANYTHING__',
         'INCOMING_IP_WHITELIST__1': '1.2.3.4',
         'INCOMING_IP_WHITELIST__2': '2.3.4.5',
         'SENTRY_DSN': 'http://abc:cvb@localhost:9872/123',
