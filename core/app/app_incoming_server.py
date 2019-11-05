@@ -23,6 +23,8 @@ from .logger import (
 )
 from .utils import (
     get_child_context,
+    json_loads,
+    json_dumps,
     random_url_safe,
 )
 from .app_incoming_redis import (
@@ -282,16 +284,45 @@ def handle_get_search_v1(context, alias):
 
 
 def handle_get_search_v2(context, alias):
-    async def handle(request):
-        body = await request.read()
 
+    def ensure_filter(search):
+        # Ensure we have a filter, even if it's empty. Ready for when we add
+        # granular permissions that adds a filter to each request
+
+        try:
+            query = search['query']
+        except KeyError:
+            query = {
+                'match_all': {},
+            }
+
+        bool_query = \
+            query if list(query.keys()) == ['bool'] else \
+            {'bool': {'must': [query]}}
+
+        bool_filter_maybe_list = bool_query['bool'].get('filter', [])
+        bool_filter = \
+            bool_filter_maybe_list if isinstance(bool_filter_maybe_list, list) else \
+            [bool_filter_maybe_list]
+
+        return {
+            'query': {
+                'bool': {
+                    'filter': bool_filter,
+                    **{key: value for key, value in bool_query['bool'].items() if key != 'filter'},
+                },
+            },
+            **{key: value for key, value in search.items() if key != 'query'},
+        }
+
+    async def handle(request):
         results = await es_request(
             context=context,
             method='GET',
             path=f'/{alias}/_search',
             query={},
             headers={'Content-Type': request.headers['Content-Type']},
-            payload=body,
+            payload=json_dumps(ensure_filter(json_loads(await request.read()))),
         )
 
         return web.Response(body=results._body, status=results.status, headers={
