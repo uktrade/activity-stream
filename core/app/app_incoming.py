@@ -33,7 +33,6 @@ from .app_incoming_server import (
     handle_get_new,
     handle_get_p1_check,
     handle_get_p2_check,
-    handle_get_search_v1,
     handle_get_search_v2,
     raven_reporter,
     server_logger,
@@ -123,7 +122,8 @@ async def create_incoming_application(
     private_app_v1.add_routes([
         web.get(
             '/objects',
-            handle_get_search_v1(context, ALIAS_OBJECTS)
+            # /objects v1 and v2 are identical
+            handle_get_search_v2(context, ALIAS_OBJECTS)
         ),
         web.get(
             '/activities',
