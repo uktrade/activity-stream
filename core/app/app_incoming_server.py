@@ -37,7 +37,6 @@ INCORRECT = 'Incorrect authentication credentials.'
 MISSING_CONTENT_TYPE = 'Content-Type header was not set. ' + \
                        'It must be set for authentication, even if as the empty string.'
 MISSING_X_FORWARDED_PROTO = 'The X-Forwarded-Proto header was not set.'
-NOT_AUTHORIZED = 'You are not authorized to perform this action.'
 UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
@@ -101,17 +100,6 @@ def lookup_credentials(incoming_key_pairs, passed_access_key_id):
     } if matching_key_pairs else None
 
 
-def authorizer():
-    @web.middleware
-    async def authorize(request, handler):
-        if request.method not in request['permissions']:
-            raise web.HTTPForbidden(text=NOT_AUTHORIZED)
-
-        return await handler(request)
-
-    return authorize
-
-
 def raven_reporter(context):
     @web.middleware
     async def _raven_reporter(request, handler):
@@ -147,10 +135,6 @@ def convert_errors_to_json():
         return response
 
     return _convert_errors_to_json
-
-
-async def handle_post(_):
-    return json_response({'secret': 'to-be-hidden'}, status=200)
 
 
 def handle_get_new(context):
