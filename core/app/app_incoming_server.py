@@ -142,7 +142,7 @@ def handle_get_new(context):
     async def handle(request):
         incoming_body = await request.read()
         path, query, body = await es_search_query_new_scroll(
-            context, request.match_info, incoming_body)
+            request['permissions']['activities'], incoming_body)
 
         results, status = await es_search_activities(
             context, path, query, body, {'Content-Type': request.headers['Content-Type']},

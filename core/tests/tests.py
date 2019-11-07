@@ -109,11 +109,11 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
-            'incoming-some-id-incorrect', 'incoming-some-secret-1', url, 'GET', '',
+            'incoming-some-id-incorrect', 'incoming-some-secret-1', url, 'GET', '{}',
             'application/json',
         )
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        text, status, _ = await get(url, auth, x_forwarded_for, b'')
+        text, status, _ = await get(url, auth, x_forwarded_for, b'{}')
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -124,10 +124,10 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-2', url, 'GET', '', '',
+            'incoming-some-id-1', 'incoming-some-secret-2', url, 'GET', '', '{}',
         )
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        text, status, _ = await get(url, auth, x_forwarded_for, b'')
+        text, status, _ = await get(url, auth, x_forwarded_for, b'{}')
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -138,10 +138,10 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', 'application/json',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '{}', 'application/json',
         )
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        text, status, _ = await get(url, auth, x_forwarded_for, b'')
+        text, status, _ = await get(url, auth, x_forwarded_for, b'{}')
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -156,7 +156,7 @@ class TestAuthentication(TestBase):
             'application/json',
         )
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        text, status, _ = await get(url, auth, x_forwarded_for, b'')
+        text, status, _ = await get(url, auth, x_forwarded_for, b'{}')
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -199,7 +199,7 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
         text, status = await get_with_headers(url, {
             'Authorization': auth,
@@ -218,10 +218,11 @@ class TestAuthentication(TestBase):
         past = datetime.datetime.now() + datetime.timedelta(seconds=-61)
         with freeze_time(past):
             auth = hawk_auth_header(
-                'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
+                'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}',
+                'application/json',
             )
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        text, status, _ = await get(url, auth, x_forwarded_for, b'')
+        text, status, _ = await get(url, auth, x_forwarded_for, b'{}')
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -233,10 +234,10 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        _, status_1, _ = await get(url, auth, x_forwarded_for, b'')
+        _, status_1, _ = await get(url, auth, x_forwarded_for, b'{}')
         self.assertEqual(status_1, 200)
 
         text_2, status_2, _ = await get(url, auth, x_forwarded_for, b'')
@@ -250,11 +251,11 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
         bad_auth = re.sub(r'Hawk ', 'Something ', auth)
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        _, status_1, _ = await get(url, bad_auth, x_forwarded_for, b'')
+        _, status_1, _ = await get(url, bad_auth, x_forwarded_for, b'{}')
         self.assertEqual(status_1, 401)
 
     @async_test
@@ -264,11 +265,11 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
         bad_auth = re.sub(r'ts="[^"]+"', 'ts="non-numeric"', auth)
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        _, status_1, _ = await get(url, bad_auth, x_forwarded_for, b'')
+        _, status_1, _ = await get(url, bad_auth, x_forwarded_for, b'{}')
         self.assertEqual(status_1, 401)
 
     @async_test
@@ -278,11 +279,11 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
         bad_auth = re.sub(r', nonce="[^"]+"', '', auth)
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        _, status_1, _ = await get(url, bad_auth, x_forwarded_for, b'')
+        _, status_1, _ = await get(url, bad_auth, x_forwarded_for, b'{}')
         self.assertEqual(status_1, 401)
 
     @async_test
@@ -300,15 +301,15 @@ class TestAuthentication(TestBase):
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
 
         auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
 
-        _, status_1, _ = await get(url, auth, x_forwarded_for, b'')
+        _, status_1, _ = await get(url, auth, x_forwarded_for, b'{}')
         self.assertEqual(status_1, 200)
 
         await asyncio.sleep(2)
 
-        _, status_2, _ = await get(url, auth, x_forwarded_for, b'')
+        _, status_2, _ = await get(url, auth, x_forwarded_for, b'{}')
         self.assertEqual(status_2, 200)
 
     @async_test
@@ -318,7 +319,7 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
         text, status = await get_with_headers(url, {
             'Authorization': auth,
@@ -334,10 +335,10 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
         x_forwarded_for = '3.4.5.6, 127.0.0.0'
-        text, status, _ = await get(url, auth, x_forwarded_for, b'')
+        text, status, _ = await get(url, auth, x_forwarded_for, b'{}')
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -348,10 +349,10 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
         x_forwarded_for = '1.2.3.4, 3.4.5.6, 127.0.0.0'
-        text, status, _ = await get(url, auth, x_forwarded_for, b'')
+        text, status, _ = await get(url, auth, x_forwarded_for, b'{}')
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -362,10 +363,10 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
         x_forwarded_for = '1.2.3.4'
-        text, status, _ = await get(url, auth, x_forwarded_for, b'')
+        text, status, _ = await get(url, auth, x_forwarded_for, b'{}')
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
@@ -417,7 +418,7 @@ class TestAuthentication(TestBase):
         x_forwarded_for = '9.1.1.1, 127.0.0.0'
 
         auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'application/json',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
         text, status, _ = await get(url, auth, x_forwarded_for, b'')
         self.assertEqual(status, 401)
@@ -1274,7 +1275,10 @@ class TestApplication(TestBase):
 
         async def return_200_and_callback(request):
             content, headers = (await request.content.read(), request.headers)
-            if content == b'{}':
+            query =  \
+                b'{"query": {"bool": {"filter": [{"match_all": {}}], ' + \
+                b'"must": [{"match_all": {}}]}}}'
+            if content == query:
                 asyncio.get_event_loop().call_soon(append_es, (content, headers))
             return await respond_http('{"hits":{},"_scroll_id":{}}', 200)(request)
 
@@ -1316,10 +1320,10 @@ class TestApplication(TestBase):
 
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
-            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '{}', 'application/json',
         )
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        text, status, _ = await get(url, auth, x_forwarded_for, b'')
+        text, status, _ = await get(url, auth, x_forwarded_for, b'{}')
         await es_runner.cleanup()
 
         self.assertEqual(status, 401)
@@ -1585,10 +1589,10 @@ class TestApplication(TestBase):
         await es_runner.cleanup()
         url = 'http://127.0.0.1:8080/v1/'
         auth = hawk_auth_header(
-            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '', 'application/json',
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '{}', 'application/json',
         )
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        text, status, _ = await get(url, auth, x_forwarded_for, b'')
+        text, status, _ = await get(url, auth, x_forwarded_for, b'{}')
 
         self.assertEqual(status, 500)
         self.assertEqual(text, '{"details": "An unknown error occurred."}')

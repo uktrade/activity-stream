@@ -215,7 +215,7 @@ async def post_with_headers(url, headers):
 
 async def get_with_headers(url, headers):
     async with aiohttp.ClientSession(skip_auto_headers=['Content-Type']) as session:
-        result = await session.get(url, headers=headers, timeout=1)
+        result = await session.get(url, headers=headers, timeout=1, data=b'{}')
     return (await result.text(), result.status)
 
 

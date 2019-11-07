@@ -56,8 +56,9 @@ def es_search_filtered(permissions, search):
     }
 
 
-async def es_search_query_new_scroll(_, __, query):
-    return f'/{ALIAS_ACTIVITIES}/_search', {'scroll': '15s'}, query
+async def es_search_query_new_scroll(permissions, query):
+    filtered_query = json_dumps(es_search_filtered(permissions, json_loads(query)))
+    return f'/{ALIAS_ACTIVITIES}/_search', {'scroll': '15s'}, filtered_query
 
 
 async def es_search_query_existing_scroll(context, match_info, _):
