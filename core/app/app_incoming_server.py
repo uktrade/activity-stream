@@ -266,14 +266,13 @@ def handle_get_search_v2(context, alias):
             bool_filter_maybe_list if isinstance(bool_filter_maybe_list, list) else \
             [bool_filter_maybe_list]
 
-        alias_permissions = permissions[alias]
         bool_filter_with_permissions = bool_filter + [
             (
                 {'match_all': {}} if perm == '__MATCH_ALL__' else
                 {'match_none': {}} if perm == '__MATCH_NONE__' else
                 {'terms': {perm['TERMS_KEY']: perm['TERMS_VALUES']}}
             )
-            for perm in alias_permissions
+            for perm in permissions
         ]
 
         return {
@@ -293,7 +292,8 @@ def handle_get_search_v2(context, alias):
             path=f'/{alias}/_search',
             query={},
             headers={'Content-Type': request.headers['Content-Type']},
-            payload=json_dumps(filtered(request['permissions'], json_loads(await request.read()))),
+            payload=json_dumps(
+                filtered(request['permissions'][alias], json_loads(await request.read()))),
         )
 
         return web.Response(body=results._body, status=results.status, headers={
