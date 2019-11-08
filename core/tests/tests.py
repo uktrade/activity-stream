@@ -287,6 +287,27 @@ class TestAuthentication(TestBase):
         self.assertEqual(status_1, 401)
 
     @async_test
+    async def test_reused_nonce_then_401(self):
+        await self.setup_manual(env=mock_env(), mock_feed=read_file,
+                                mock_feed_status=lambda: 200, mock_headers=lambda: {})
+        await fetch_all_es_data_until(has_at_least(1))
+
+        url = 'http://127.0.0.1:8080/v2/activities'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
+        auth = hawk_auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
+        )
+
+        _, status_1, _ = await get(url, auth, x_forwarded_for, b'{}')
+        self.assertEqual(status_1, 200)
+
+        await asyncio.sleep(1)
+
+        _, status_2, _ = await get(url, auth, x_forwarded_for, b'{}')
+        self.assertEqual(status_2, 401)
+
+    @async_test
     async def test_nonces_cleared(self):
         ''' Makes duplicate requests, but with the code patched so the nonce expiry time
             is shorter then the allowed Hawk skew. The second request succeeding gives
