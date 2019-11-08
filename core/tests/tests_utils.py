@@ -55,7 +55,7 @@ async def wait_until_get_working():
     attempts = 0
     while attempts < 50:
         async with aiohttp.ClientSession() as session:
-            url = 'http://127.0.0.1:8080/v1/'
+            url = 'http://127.0.0.1:8080/v2/activities'
             auth = hawk_auth_header(
                 'incoming-some-id-3', 'incoming-some-secret-3', url,
                 'GET', '{}', 'application/json',
@@ -68,7 +68,7 @@ async def wait_until_get_working():
             }, data='{}', timeout=1)
             content = await result.content.read()
 
-        if 'orderedItems' in json.loads(content):
+        if 'hits' in json.loads(content):
             return True
         attempts += 1
         # Each call makes a new ES scroll context, which is expensive
@@ -299,8 +299,8 @@ def has_exactly(num_results):
     )
 
 
-def has_at_least_ordered_items(num_results):
-    return lambda results: len(results['orderedItems']) >= num_results
+def has_at_least_hits(num_results):
+    return lambda results: len(results['hits']['hits']) >= num_results
 
 
 def mock_env():

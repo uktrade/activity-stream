@@ -33,7 +33,7 @@ from .tests_utils import (
     get_until,
     get_until_with_body,
     has_at_least,
-    has_at_least_ordered_items,
+    has_at_least_hits,
     hawk_auth_header,
     mock_env,
     post,
@@ -93,7 +93,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         text, status = await get_with_headers(url, {
             'Content-Type': '',
             'X-Forwarded-For': '1.2.3.4, 127.0.0.0',
@@ -107,7 +107,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-incorrect', 'incoming-some-secret-1', url, 'GET', '{}',
             'application/json',
@@ -122,7 +122,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-2', url, 'GET', '', '{}',
         )
@@ -136,7 +136,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '{}', 'application/json',
         )
@@ -150,7 +150,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', 'content',
             'application/json',
@@ -165,7 +165,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'some-type',
         )
@@ -179,7 +179,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '', 'some-type',
         )
@@ -197,7 +197,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
@@ -214,7 +214,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         past = datetime.datetime.now() + datetime.timedelta(seconds=-61)
         with freeze_time(past):
             auth = hawk_auth_header(
@@ -232,7 +232,7 @@ class TestAuthentication(TestBase):
                                 mock_headers=lambda: {})
         await fetch_all_es_data_until(has_at_least(1))
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
@@ -249,7 +249,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
@@ -263,7 +263,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
@@ -277,7 +277,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
@@ -297,7 +297,7 @@ class TestAuthentication(TestBase):
                                     mock_feed_status=lambda: 200, mock_headers=lambda: {})
             await fetch_all_es_data_until(has_at_least(1))
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
 
         auth = hawk_auth_header(
@@ -317,7 +317,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                 mock_feed_status=lambda: 200, mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
@@ -333,7 +333,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
@@ -347,7 +347,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
@@ -361,7 +361,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'GET', '{}', 'application/json',
         )
@@ -375,7 +375,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
         )
@@ -388,7 +388,7 @@ class TestAuthentication(TestBase):
     async def test_ip_within_subnet_gets_200(self):
         mock_env_with_whitelist = mock_env()
         mock_env_with_whitelist['INCOMING_IP_WHITELIST__3'] = '10.0.0.0/8'
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '10.1.1.1, 127.0.0.0'
 
         path = 'tests_fixture_activity_stream_1.json'
@@ -404,7 +404,7 @@ class TestAuthentication(TestBase):
             await fetch_all_es_data_until(has_at_least(2))
 
         _, status, _ = await get_until(url, x_forwarded_for,
-                                       has_at_least_ordered_items(2))
+                                       has_at_least_hits(2))
         self.assertEqual(status, 200)
 
     @async_test
@@ -414,7 +414,7 @@ class TestAuthentication(TestBase):
         await self.setup_manual(env=mock_env_with_whitelist, mock_feed=read_file,
                                 mock_feed_status=lambda: 200, mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '9.1.1.1, 127.0.0.0'
 
         auth = hawk_auth_header(
@@ -429,7 +429,7 @@ class TestApplication(TestBase):
 
     @async_test
     async def test_get_returns_feed_data(self):
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
 
         path = 'tests_fixture_activity_stream_1.json'
@@ -445,9 +445,9 @@ class TestApplication(TestBase):
             await fetch_all_es_data_until(has_at_least(2))
 
         result, status, headers = await get_until(url, x_forwarded_for,
-                                                  has_at_least_ordered_items(2))
+                                                  has_at_least_hits(2))
         self.assertEqual(status, 200)
-        ids = [item['id'] for item in result['orderedItems']]
+        ids = [item['_source']['id'] for item in result['hits']['hits']]
         self.assertIn('dit:exportOpportunities:Enquiry:49863:Create', ids)
         self.assertIn('dit:exportOpportunities:Enquiry:49862:Create', ids)
         self.assertEqual(headers['Server'], 'activity-stream')
@@ -460,7 +460,7 @@ class TestApplication(TestBase):
             result, status, headers = await get_until(url, x_forwarded_for,
                                                       does_not_have_previous_items)
         self.assertEqual(status, 200)
-        ids = [item['id'] for item in result['orderedItems']]
+        ids = [item['_source']['id'] for item in result['hits']['hits']]
         self.assertIn('dit:exportOpportunities:Enquiry:42863:Create', ids)
         self.assertIn('dit:exportOpportunities:Enquiry:42862:Create', ids)
         self.assertEqual(headers['Server'], 'activity-stream')
@@ -976,9 +976,9 @@ class TestApplication(TestBase):
                                     mock_feed_status=lambda: 200, mock_headers=lambda: {})
             await fetch_all_es_data_until(has_at_least(2))
 
-        url_1 = 'http://127.0.0.1:8080/v1/'
+        url_1 = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        await get_until(url_1, x_forwarded_for, has_at_least_ordered_items(2))
+        await get_until(url_1, x_forwarded_for, has_at_least_hits(2))
 
         query = json.dumps({
             'size': '1',
@@ -993,58 +993,28 @@ class TestApplication(TestBase):
         result_1, status_1, _ = await get(url_1, auth, x_forwarded_for, query)
         result_1_json = json.loads(result_1)
         self.assertEqual(status_1, 200)
-        self.assertEqual(len(result_1_json['orderedItems']), 1)
-        self.assertEqual(result_1_json['orderedItems'][0]['id'],
+        self.assertEqual(len(result_1_json['hits']['hits']), 1)
+        self.assertEqual(result_1_json['hits']['hits'][0]['_source']['id'],
                          'dit:exportOpportunities:Enquiry:49863:Create')
-        self.assertIn('next', result_1_json)
+        search_after = result_1_json['hits']['hits'][0]['sort']
 
-        url_2 = result_1_json['next']
+        query = json.dumps({
+            'size': '1',
+            'sort': [
+                {'published': {'order': 'desc'}},
+            ],
+            'search_after': search_after,
+        }).encode('utf-8')
         auth_2 = hawk_auth_header(
-            'incoming-some-id-3', 'incoming-some-secret-3', url_2, 'GET', b'', 'application/json',
+            'incoming-some-id-3', 'incoming-some-secret-3', url_1,
+            'GET', query, 'application/json',
         )
-        result_2, status_2, _ = await get(url_2, auth_2, x_forwarded_for, b'')
+        result_2, status_2, _ = await get(url_1, auth_2, x_forwarded_for, query)
         result_2_json = json.loads(result_2)
         self.assertEqual(status_2, 200)
-        self.assertEqual(len(result_2_json['orderedItems']), 1)
-        self.assertEqual(result_2_json['orderedItems'][0]['id'],
+        self.assertEqual(len(result_2_json['hits']['hits']), 1)
+        self.assertEqual(result_2_json['hits']['hits'][0]['_source']['id'],
                          'dit:exportOpportunities:Enquiry:49862:Create')
-        self.assertIn('next', result_2_json)
-
-    @async_test
-    async def test_pagination_expiry(self):
-        with \
-                patch('core.app.settings.PAGINATION_EXPIRE', 1), \
-                patch('asyncio.sleep', wraps=fast_sleep):
-            await self.setup_manual(env=mock_env(), mock_feed=read_file,
-                                    mock_feed_status=lambda: 200, mock_headers=lambda: {})
-            await wait_until_get_working()
-
-            url_1 = 'http://127.0.0.1:8080/v1/'
-            x_forwarded_for = '1.2.3.4, 127.0.0.0'
-            await get_until(url_1, x_forwarded_for, has_at_least_ordered_items(2))
-
-            query = json.dumps({
-                'size': '1',
-            }).encode('utf-8')
-
-            auth = hawk_auth_header(
-                'incoming-some-id-3', 'incoming-some-secret-3', url_1,
-                'GET', query, 'application/json',
-            )
-            result_1, _, _ = await get(url_1, auth, x_forwarded_for, query)
-            result_1_json = json.loads(result_1)
-            url_2 = result_1_json['next']
-
-            await ORIGINAL_SLEEP(1)
-
-            auth_2 = hawk_auth_header(
-                'incoming-some-id-3', 'incoming-some-secret-3', url_2,
-                'GET', b'', 'application/json',
-            )
-            result_2, status_2, _ = await get(url_2, auth_2, x_forwarded_for, b'')
-
-        self.assertEqual(json.loads(result_2)['details'], 'Scroll ID not found.')
-        self.assertEqual(status_2, 404)
 
     @async_test
     async def test_get_can_filter(self):
@@ -1066,7 +1036,7 @@ class TestApplication(TestBase):
                                     mock_headers=lambda: {})
             await fetch_all_es_data_until(has_at_least(4))
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
 
         query = json.dumps({
@@ -1089,9 +1059,9 @@ class TestApplication(TestBase):
         result, status, _ = await get(url, auth, x_forwarded_for, query)
         self.assertEqual(status, 200)
         data = json.loads(result)
-        self.assertEqual(len(data['orderedItems']), 2)
-        self.assertIn('2011-04-12', data['orderedItems'][0]['published'])
-        self.assertIn('2011-04-12', data['orderedItems'][1]['published'])
+        self.assertEqual(len(data['hits']['hits']), 2)
+        self.assertIn('2011-04-12', data['hits']['hits'][0]['_source']['published'])
+        self.assertIn('2011-04-12', data['hits']['hits'][1]['_source']['published'])
 
         query = json.dumps({
             'query': {
@@ -1121,10 +1091,11 @@ class TestApplication(TestBase):
         result, status, _ = await get(url, auth, x_forwarded_for, query)
         self.assertEqual(status, 200)
         data = json.loads(result)
-        self.assertEqual(len(data['orderedItems']), 1)
-        self.assertIn('2011-04-12', data['orderedItems'][0]['published'])
-        self.assertEqual('Create', data['orderedItems'][0]['type'])
-        self.assertIn('dit:exportOpportunities:Enquiry', data['orderedItems'][0]['object']['type'])
+        self.assertEqual(len(data['hits']['hits']), 1)
+        self.assertIn('2011-04-12', data['hits']['hits'][0]['_source']['published'])
+        self.assertEqual('Create', data['hits']['hits'][0]['_source']['type'])
+        self.assertIn('dit:exportOpportunities:Enquiry',
+                      data['hits']['hits'][0]['_source']['object']['type'])
 
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
@@ -1192,7 +1163,7 @@ class TestApplication(TestBase):
                          ['type'][1], 'dit:exportOpportunities:Enquiry')
         self.assertEqual(es_bulk_request_dicts[3]['actor']['dit:companiesHouseNumber'], '82312')
 
-    # Performs search to /v1/objects and expects JSON response in format
+    # Performs search to /v2/objects and expects JSON response in format
     # [
     #   {
     #     heading: String
@@ -1251,7 +1222,7 @@ class TestApplication(TestBase):
                         'url']
         })
 
-        response = await _get('/v1/objects', body)
+        response = await _get('/v2/objects', body)
 
         # Response has: status: 200, type: application/json, 5 results
         # First results has: header, title, url and introduction
@@ -1294,7 +1265,7 @@ class TestApplication(TestBase):
                                 mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '{}',
             'application/json',
@@ -1318,7 +1289,7 @@ class TestApplication(TestBase):
                                 mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '{}', 'application/json',
         )
@@ -1384,14 +1355,14 @@ class TestApplication(TestBase):
 
             await wait_until_get_working()
 
-            url = 'http://127.0.0.1:8080/v1/'
+            url = 'http://127.0.0.1:8080/v2/activities'
             x_forwarded_for = '1.2.3.4, 127.0.0.0'
             result, status, _ = await get_until(url, x_forwarded_for,
-                                                has_at_least_ordered_items(2))
+                                                has_at_least_hits(2))
             server.close()
             await server.wait_closed()
             self.assertEqual(status, 200)
-            self.assertEqual(set(item['id'] for item in result['orderedItems']), {
+            self.assertEqual(set(item['_source']['id'] for item in result['hits']['hits']), {
                 'dit:exportOpportunities:Enquiry:49862:Create',
                 'dit:exportOpportunities:Enquiry:49863:Create',
             })
@@ -1453,9 +1424,9 @@ class TestApplication(TestBase):
                                     mock_feed=read_file, mock_feed_status=lambda: 200,
                                     mock_headers=lambda: {})
             await wait_until_get_working()
-            url = 'http://127.0.0.1:8080/v1/'
+            url = 'http://127.0.0.1:8080/v2/activities'
             x_forwarded_for = '1.2.3.4, 127.0.0.0'
-            await get_until(url, x_forwarded_for, has_at_least_ordered_items(2))
+            await get_until(url, x_forwarded_for, has_at_least_hits(2))
 
             # This is the point of the test: the exception should _not_ have been
             # captured, since this error is expected
@@ -1511,9 +1482,9 @@ class TestApplication(TestBase):
                                     mock_feed=read_file, mock_feed_status=lambda: 200,
                                     mock_headers=lambda: {})
             await wait_until_get_working()
-            url = 'http://127.0.0.1:8080/v1/'
+            url = 'http://127.0.0.1:8080/v2/activities'
             x_forwarded_for = '1.2.3.4, 127.0.0.0'
-            await get_until(url, x_forwarded_for, has_at_least_ordered_items(2))
+            await get_until(url, x_forwarded_for, has_at_least_hits(2))
 
             # This is the point of the test: the exception should have been
             # captured, since this error is not expected
@@ -1560,15 +1531,15 @@ class TestApplication(TestBase):
             await wait_until_get_working()
             await ORIGINAL_SLEEP(3)
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
         result, status, _ = await get_until(url, x_forwarded_for,
-                                            has_at_least_ordered_items(2))
+                                            has_at_least_hits(2))
         mock_sleep.assert_any_call(2)
         server.close()
         await server.wait_closed()
         self.assertEqual(status, 200)
-        self.assertEqual(result['orderedItems'][0]['id'],
+        self.assertEqual(result['hits']['hits'][0]['_source']['id'],
                          'dit:exportOpportunities:Enquiry:49863:Create')
 
     @async_test
@@ -1587,7 +1558,7 @@ class TestApplication(TestBase):
         )
 
         await es_runner.cleanup()
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
             'incoming-some-id-3', 'incoming-some-secret-3', url, 'GET', '{}', 'application/json',
         )

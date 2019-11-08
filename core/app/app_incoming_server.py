@@ -6,13 +6,10 @@ from ipaddress import IPv4Network, IPv4Address
 from aiohttp import web
 
 from .app_incoming_elasticsearch import (
-    es_request,
-    es_search_query_existing_scroll,
-    es_search_query_new_scroll,
-    es_search_activities,
     es_search_filtered,
 )
 from .elasticsearch import (
+    es_request,
     es_min_verification_age,
 )
 from .app_incoming_hawk import (
@@ -138,36 +135,6 @@ def convert_errors_to_json():
     return _convert_errors_to_json
 
 
-def handle_get_new(context):
-    async def handle(request):
-        incoming_body = await request.read()
-        path, query, body = await es_search_query_new_scroll(
-            request['permissions']['activities'], incoming_body)
-
-        results, status = await es_search_activities(
-            context, path, query, body, {'Content-Type': request.headers['Content-Type']},
-            request)
-
-        return json_response(results, status=status)
-
-    return handle
-
-
-def handle_get_existing(context):
-    async def handle(request):
-        incoming_body = await request.read()
-        path, query, body = await es_search_query_existing_scroll(
-            context, request.match_info, incoming_body)
-
-        results, status = await es_search_activities(
-            context, path, query, body, {'Content-Type': request.headers['Content-Type']},
-            request)
-
-        return json_response(results, status=status)
-
-    return handle
-
-
 def handle_get_p1_check(parent_context):
 
     async def handle(_):
@@ -266,6 +233,7 @@ def handle_get_search_v2(context, alias):
 
         return web.Response(body=results._body, status=results.status, headers={
             'Content-Type': 'application/json; charset=utf-8',
+            'Server': 'activity-stream'
         })
 
     return handle
