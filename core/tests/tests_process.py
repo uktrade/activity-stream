@@ -12,7 +12,7 @@ from .tests_utils import (
     delete_all_redis_data,
     is_http_accepted_eventually,
     wait_until_get_working,
-    has_at_least_ordered_items,
+    has_at_least_hits,
     get_until,
     get_until_raw,
     mock_env,
@@ -112,11 +112,11 @@ class TestProcess(unittest.TestCase):
         self.assertTrue(await is_http_accepted_eventually())
         await wait_until_get_working()
 
-        url = 'http://127.0.0.1:8080/v1/'
+        url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
         result, _, _ = await get_until(url, x_forwarded_for,
-                                       has_at_least_ordered_items(500))
-        ids = [item['id'] for item in result['orderedItems']]
+                                       has_at_least_hits(500))
+        ids = [item['_source']['id'] for item in result['hits']['hits']]
         self.assertIn('dit:activityStreamVerificationFeed:Verifier', str(ids))
 
         await self.terminate(server_out, server_inc)

@@ -28,9 +28,7 @@ from .app_incoming_server import (
     authenticate_by_ip,
     authenticator,
     convert_errors_to_json,
-    handle_get_existing,
     handle_get_metrics,
-    handle_get_new,
     handle_get_p1_check,
     handle_get_p2_check,
     handle_get_search_v2,
@@ -124,23 +122,6 @@ async def create_incoming_application(
             '/objects',
             # /objects v1 and v2 are identical
             handle_get_search_v2(context, ALIAS_OBJECTS)
-        ),
-        web.get(
-            '/activities',
-            handle_get_new(context)
-        ),
-        web.get(
-            '/activities/{public_scroll_id}',
-            handle_get_existing(context),
-            name='scroll',
-        ),
-        web.get(
-            '/',
-            handle_get_new(context)
-        ),
-        web.get(
-            '/{public_scroll_id}',
-            handle_get_existing(context),
         ),
     ])
     app.add_subapp('/v1/', private_app_v1)
