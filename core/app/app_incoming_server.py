@@ -9,7 +9,8 @@ from .app_incoming_elasticsearch import (
     es_request,
     es_search_query_existing_scroll,
     es_search_query_new_scroll,
-    es_search_activities
+    es_search_activities,
+    es_search_filtered,
 )
 from .elasticsearch import (
     es_min_verification_age,
@@ -141,7 +142,7 @@ def handle_get_new(context):
     async def handle(request):
         incoming_body = await request.read()
         path, query, body = await es_search_query_new_scroll(
-            context, request.match_info, incoming_body)
+            request['permissions']['activities'], incoming_body)
 
         results, status = await es_search_activities(
             context, path, query, body, {'Content-Type': request.headers['Content-Type']},
@@ -249,43 +250,6 @@ def handle_get_metrics(context):
 
 def handle_get_search_v2(context, alias):
 
-    def filtered(permissions, search):
-        try:
-            query = search['query']
-        except KeyError:
-            query = {
-                'match_all': {},
-            }
-
-        bool_query = \
-            query if list(query.keys()) == ['bool'] else \
-            {'bool': {'must': [query]}}
-
-        bool_filter_maybe_list = bool_query['bool'].get('filter', [])
-        bool_filter = \
-            bool_filter_maybe_list if isinstance(bool_filter_maybe_list, list) else \
-            [bool_filter_maybe_list]
-
-        alias_permissions = permissions[alias]
-        bool_filter_with_permissions = bool_filter + [
-            (
-                {'match_all': {}} if perm == '__MATCH_ALL__' else
-                {'match_none': {}} if perm == '__MATCH_NONE__' else
-                {'terms': {perm['TERMS_KEY']: perm['TERMS_VALUES']}}
-            )
-            for perm in alias_permissions
-        ]
-
-        return {
-            'query': {
-                'bool': {
-                    'filter': bool_filter_with_permissions,
-                    **{key: value for key, value in bool_query['bool'].items() if key != 'filter'},
-                },
-            },
-            **{key: value for key, value in search.items() if key != 'query'},
-        }
-
     async def handle(request):
         results = await es_request(
             context=context,
@@ -293,7 +257,11 @@ def handle_get_search_v2(context, alias):
             path=f'/{alias}/_search',
             query={},
             headers={'Content-Type': request.headers['Content-Type']},
-            payload=json_dumps(filtered(request['permissions'], json_loads(await request.read()))),
+            payload=json_dumps(
+                es_search_filtered(
+                    request['permissions'][alias], json_loads(await request.read())
+                )
+            ),
         )
 
         return web.Response(body=results._body, status=results.status, headers={
