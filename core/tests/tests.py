@@ -132,6 +132,34 @@ class TestAuthentication(TestBase):
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
     @async_test
+    async def test_bad_secret_then_401_v3_activities(self):
+        await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
+                                mock_headers=lambda: {})
+
+        url = 'http://127.0.0.1:8080/v3/activities/_search'
+        auth = hawk_auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-2', url, 'GET', '', '{}',
+        )
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+        text, status, _ = await get(url, auth, x_forwarded_for, b'{}')
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    @async_test
+    async def test_bad_secret_then_401_v3_objects(self):
+        await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
+                                mock_headers=lambda: {})
+
+        url = 'http://127.0.0.1:8080/v3/objects/_search'
+        auth = hawk_auth_header(
+            'incoming-some-id-1', 'incoming-some-secret-2', url, 'GET', '', '{}',
+        )
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+        text, status, _ = await get(url, auth, x_forwarded_for, b'{}')
+        self.assertEqual(status, 401)
+        self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
+
+    @async_test
     async def test_bad_method_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -529,6 +557,33 @@ class TestApplication(TestBase):
         self.assertEqual([desired_id], ids)
 
     @async_test
+    async def test_v3_objects_get_term_query(self):
+        url = 'http://127.0.0.1:8080/v3/objects/_search'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
+        path = 'tests_fixture_activity_stream_1.json'
+
+        def read_specific_file(_):
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as file:
+                return file.read().decode('utf-8')
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=mock_env(), mock_feed=read_specific_file,
+                                    mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await fetch_all_es_data_until(has_at_least(2))
+
+        desired_id = 'dit:exportOpportunities:Enquiry:49863'
+        result, status, _ = await get_until_with_body(
+            url, x_forwarded_for, has_at_least(1), json.dumps({
+                'query': {'term': {'id': desired_id}}
+            }).encode('utf-8'))
+
+        self.assertEqual(status, 200)
+        ids = [item['_source']['id'] for item in result['hits']['hits']]
+        self.assertEqual([desired_id], ids)
+
+    @async_test
     async def test_v2_activities_get_bool_query(self):
         url = 'http://127.0.0.1:8080/v2/objects'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -651,6 +706,36 @@ class TestApplication(TestBase):
     @async_test
     async def test_v2_activities_get_aggs_query(self):
         url = 'http://127.0.0.1:8080/v2/activities'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
+        path = 'tests_fixture_activity_stream_1.json'
+
+        def read_specific_file(_):
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' + path, 'rb') as file:
+                return file.read().decode('utf-8')
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=mock_env(), mock_feed=read_specific_file,
+                                    mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            await fetch_all_es_data_until(has_at_least(2))
+
+        result, status, _ = await get_until_with_body(
+            url, x_forwarded_for, has_at_least(2), json.dumps({
+                'aggs': {
+                    'my_agg': {
+                        'terms': {'field': 'published', 'size': 3},
+                    }
+                },
+            }).encode('utf-8'))
+
+        self.assertEqual(status, 200)
+        self.assertEqual(len(result['hits']['hits']), 2)
+        self.assertEqual(len(result['aggregations']['my_agg']['buckets']), 2)
+
+    @async_test
+    async def test_v3_activities_get_aggs_query(self):
+        url = 'http://127.0.0.1:8080/v3/activities/_search'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
 
         path = 'tests_fixture_activity_stream_1.json'
