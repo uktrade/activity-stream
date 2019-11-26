@@ -141,6 +141,23 @@ async def create_incoming_application(
         ),
     ])
     app.add_subapp('/v2/', private_app_v2)
+
+    private_app_v3 = web.Application(middlewares=[
+        authenticate_by_ip(INCORRECT, ip_whitelist),
+        authenticator(context, incoming_key_pairs, NONCE_EXPIRE),
+    ])
+    private_app_v3.add_routes([
+        web.get(
+            '/activities/_search',
+            handle_get_search_v2(context, ALIAS_ACTIVITIES),
+        ),
+        web.get(
+            '/objects/_search',
+            handle_get_search_v2(context, ALIAS_OBJECTS),
+        ),
+    ])
+    app.add_subapp('/v3/', private_app_v3)
+
     app.add_routes([
         web.get('/checks/p1', handle_get_p1_check(context)),
         web.get('/checks/p2', handle_get_p2_check(context, feeds)),
