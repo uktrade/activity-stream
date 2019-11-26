@@ -1,15 +1,3 @@
-from . import settings
-
-
-async def set_private_scroll_id(context, public_scroll_id, private_scroll_id):
-    await context.redis_client.execute('SET', f'private-scroll-id-{public_scroll_id}',
-                                       private_scroll_id, 'EX', settings.PAGINATION_EXPIRE)
-
-
-async def get_private_scroll_id(context, public_scroll_id):
-    return await context.redis_client.execute('GET', f'private-scroll-id-{public_scroll_id}')
-
-
 async def redis_get_metrics(context):
     return await context.redis_client.execute('GET', 'metrics')
 
