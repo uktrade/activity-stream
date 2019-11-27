@@ -14,7 +14,9 @@ from .utils import (
 from . import settings
 
 ALIAS_ACTIVITIES = 'activities'
+ALIAS_ACTIVITIES_SCHEMAS = 'activities_schemas'
 ALIAS_OBJECTS = 'objects'
+ALIAS_OBJECTS_SCHEMAS = 'objects_schemas'
 
 
 async def es_min_verification_age(context):
