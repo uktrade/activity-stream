@@ -30,7 +30,7 @@ def parse_feed_config(feed_config):
 
 class ActivityStreamFeed:
 
-    down_grace_period = 60
+    down_grace_period = 60 * 2
 
     full_ingest_page_interval = 0.25
     updates_page_interval = 1
