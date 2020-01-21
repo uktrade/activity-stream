@@ -19,6 +19,10 @@ ALIAS_OBJECTS = 'objects'
 ALIAS_OBJECTS_SCHEMAS = 'objects_schemas'
 
 
+class ESNon200Exception(Exception):
+    pass
+
+
 async def es_min_verification_age(context):
     payload = json_dumps({
         'size': 0,
@@ -62,7 +66,7 @@ async def es_min_verification_age(context):
 async def es_request_non_200_exception(context, method, path, query, headers, payload):
     results = await es_request(context, method, path, query, headers, payload)
     if results.status not in [200, 201]:
-        raise Exception(results._body.decode('utf-8'))
+        raise ESNon200Exception(results._body.decode('utf-8'), results.status)
     return results
 
 
