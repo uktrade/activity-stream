@@ -1768,7 +1768,7 @@ class TestApplication(TestBase):
     @async_test
     async def test_aventri(self):
         def aventri_base_fetch(results):
-            if 'hits' not in results or 'hits' not in results['hits']:
+            if 'hits' not in results or 'hits' not in results['hits'] or len(results['hits']['hits']) < 2:
                 return False
 
             if str(results).find('aventri') != -1:

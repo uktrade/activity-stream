@@ -204,7 +204,7 @@ class EventFeed:
                 # Search Reddis first
                 redis_lookup = await context.redis_client.execute('GET', f'address-{postcode}')
                 if redis_lookup:
-                    split_lat_lng = str(redis_lookup).split(',')
+                    split_lat_lng = redis_lookup.decode('ascii').split(',')
                     event['location']['latitude'] = split_lat_lng[0]
                     event['location']['longitude'] = split_lat_lng[1]
                 else:  # Try AddressLookup API
