@@ -1768,7 +1768,8 @@ class TestApplication(TestBase):
     @async_test
     async def test_aventri(self):
         def aventri_base_fetch(results):
-            if 'hits' not in results or 'hits' not in results['hits'] or len(results['hits']['hits']) < 2:
+            if 'hits' not in results or 'hits' \
+                    not in results['hits'] or len(results['hits']['hits']) < 2:
                 return False
 
             if str(results).find('aventri') != -1:
@@ -1778,6 +1779,7 @@ class TestApplication(TestBase):
 
         env = {
             **mock_env(),
+            'GETADDRESS_API_KEY': os.environ['GETADDRESS_API_KEY'],
             'FEEDS__1__UNIQUE_ID': 'aventri',
             'FEEDS__1__API_EMAIL': 'some@email.com',
             'FEEDS__1__ACCOUNT_ID': '1234',

@@ -24,6 +24,8 @@ Install [Virtualenv](https://virtualenv.pypa.io) if you haven't got it installed
 
 You will need environment variables activated to run the main scripts. One time saving approach is to automatically set the environment variables when you start your virtual environment, one approach to which is described in the section below.
 
+Note that GETADDRESS_API_KEY needs to be set to the a working API key for the tests to pass.
+
 Finally, start the virtual environment with
 
     $ source .venv/bin/activate
@@ -65,6 +67,7 @@ export INCOMING_IP_WHITELIST__1=1.2.3.4
 export INCOMING_IP_WHITELIST__2=2.3.4.5
 export SENTRY_DSN=http://abc:cvb@localhost:9872/123
 export SENTRY_ENVIRONMENT=test
+export GETADDRESS_API_KEY=NEEDS_TO_BE_SET
 export VCAP_SERVICES='{"redis":[{"credentials":{"uri":"redis://127.0.0.1:6379"}}],"elasticsearch":[{"credentials":{"uri":"http://some-id:some-secret@127.0.0.1:9200"}}]}'
 ```
 
@@ -102,6 +105,7 @@ And add to the bottom of the `deactivate ()` function in that file.
     unset SENTRY_DSN
     unset SENTRY_ENVIRONMENT
     unset VCAP_SERVICES
+    unset GETADDRESS_API_KEY
 ```
 
 # Running the apps locally

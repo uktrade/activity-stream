@@ -17,6 +17,7 @@ from .utils import (
     json_loads,
     sub_dict_lower,
 )
+from . import settings
 
 
 def parse_feed_config(feed_config):
@@ -153,8 +154,8 @@ class EventFeed:
             config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL', 'EVENT_URL',
                      'WHITELISTED_FOLDERS']))
 
-    def __init__(self, unique_id, seed, account_id, api_key, auth_url, event_url,
-                 whitelisted_folders):
+    def __init__(self, unique_id, seed, account_id, api_key,
+                 auth_url, event_url, whitelisted_folders):
         self.lock = asyncio.Lock()
         self.unique_id = unique_id
         self.seed = seed
@@ -208,9 +209,8 @@ class EventFeed:
                     event['location']['latitude'] = split_lat_lng[0]
                     event['location']['longitude'] = split_lat_lng[1]
                 else:  # Try AddressLookup API
-                    api_key = 'aYLQksc0c0-LW47yyqFQyg24253'
-
                     async with aiohttp.ClientSession() as session:
+                        api_key = settings.GETADDRESS_API_KEY
                         async with session.get(
                                 f'https://api.getaddress.io/find/{postcode}?api-key={api_key}'
                         ) as resp:
