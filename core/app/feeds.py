@@ -196,7 +196,35 @@ class EventFeed:
                     headers={'accesstoken': self.accesstoken})
                 result.raise_for_status()
 
-            return json_loads(result._body)
+            event = json_loads(result._body)
+
+            if ('location' in event.keys()) and ('postcode' in event['location'].keys()):
+                postcode = event['location']['postcode']
+
+                # Search Reddis first
+                redis_lookup = await context.redis_client.execute('GET', f'address-{postcode}')
+                if redis_lookup:
+                    split_lat_lng = str(redis_lookup).split(',')
+                    event['location']['latitude'] = split_lat_lng[0]
+                    event['location']['longitude'] = split_lat_lng[1]
+                else:  # Try AddressLookup API
+                    api_key = 'aYLQksc0c0-LW47yyqFQyg24253'
+
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(
+                                f'https://api.getaddress.io/find/{postcode}?api-key={api_key}'
+                        ) as resp:
+                            resp_body = await resp.text()
+                            geo_result = json_loads(resp_body)
+                            if 'latitude' in geo_result.keys():
+                                event['location']['latitude'] = str(geo_result['latitude'])
+                                event['location']['longitude'] = str(geo_result['longitude'])
+                                joined_lat_lng = ','.join(
+                                    [str(geo_result['latitude']), str(geo_result['longitude'])])
+                                await context.redis_client.execute(
+                                    'SET', 'address-{postcode}', joined_lat_lng)
+
+            return event
 
         now = datetime.datetime.now().isoformat()
         return [

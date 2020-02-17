@@ -1794,10 +1794,28 @@ class TestApplication(TestBase):
             await self.setup_manual(env=env, mock_feed=read_file, mock_feed_status=lambda: 200,
                                     mock_headers=lambda: {})
 
+        redis_client = await aioredis.create_redis('redis://127.0.0.1:6379')
+        await redis_client.execute('DEL', 'address-N5 2RT')
+        await redis_client.execute('SET', 'address-MADEUPPOSTCODENOTFINDABLE', '123,456')
+
         results_dict = await fetch_all_es_data_until(aventri_base_fetch)
         self.assertEqual(
             results_dict['hits']['hits'][0]['_source']['object']['id'],
             'dit:aventri:Event:1')
+
+        # Without Redis
+        self.assertEqual(
+            results_dict['hits']['hits'][0]['_source']['object']['location']['latitude'],
+            '51.554874420166016')
+
+        # With Redis
+        self.assertEqual(
+            results_dict['hits']['hits'][1]['_source']['object']['id'],
+            'dit:aventri:Event:3')
+
+        self.assertEqual(
+            results_dict['hits']['hits'][1]['_source']['object']['location']['latitude'],
+            '123')
 
     def test_base_event_should_include(self):
         json_null_event = {}
@@ -1839,8 +1857,11 @@ class TestApplication(TestBase):
             'url': 'https://eu.eventscloud.com/200183890', 'max_reg': '0',
             'statusmessage': None, 'clientcontact': '', 'lodgingnotes': '',
             'location': {
-                'name': '', 'address1': '', 'address2': '', 'address3': '', 'city': '',
-                'state': '', 'postcode': '', 'country': '', 'phone': '', 'email': '', 'map': ''},
+                'name': '', 'address1': '106 Petherton Road',
+                'address2': '', 'address3': '', 'city': 'London',
+                'state': '', 'postcode': 'N5 2RT',
+                'country': '', 'phone': '', 'email': '', 'map': ''
+            },
             'starttime': '09:00:00', 'endtime': '17:00:00', 'closedate': '0000-00-00',
             'closetime': None, 'timezonedescription': None, 'homepage': '',
             'linktohomepage': None,

@@ -310,6 +310,12 @@ async def create_activities_index(context, index_name):
                         'actor.dit:companiesHouseNumber': {
                             'type': 'keyword',
                         },
+                        'object.location.latitude': {
+                            'type': 'float',
+                        },
+                        'object.location.longitude': {
+                            'type': 'float',
+                        },
                     },
                 },
             },
