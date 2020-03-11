@@ -1483,65 +1483,6 @@ class TestApplication(TestBase):
             self.assertIn('status="success"', metrics_text)
 
     @async_test
-    async def test_delete_fail_snapshot(self):
-        http_400 = b'HTTP/1.1 400 Bad Request\r\ncontent-type: application/json; charset=UTF-8' \
-                   b'\r\ncontent-length: 60\r\n\r\n' \
-                   b'{"error":"Cannot delete indices that are being snapshotted"}'
-
-        previous_data = {}
-
-        def modify(data, direction, client_id):
-            nonlocal previous_data
-            previous_data[(direction, client_id)] = data
-            be_400 = direction == 'response' and b'DELETE' in previous_data[('request', client_id)]
-            return (
-                http_400 if be_400 else
-                data
-            )
-
-        client_id = 0
-
-        async def handle_client(local_reader, local_writer):
-            nonlocal client_id
-            client_id += 1
-            local_client_id = client_id
-            try:
-                remote_reader, remote_writer = await asyncio.open_connection('127.0.0.1', 9200)
-                await asyncio.gather(
-                    pipe(local_reader, remote_writer, 'request', local_client_id),  # Upstream
-                    pipe(remote_reader, local_writer, 'response', local_client_id),  # Downstream
-                )
-            finally:
-                local_writer.close()
-
-        async def pipe(reader, writer, direction, client_id):
-            try:
-                while not reader.at_eof():
-                    writer.write(modify(await reader.read(16384), direction, client_id))
-            finally:
-                writer.close()
-
-        server = await asyncio.start_server(handle_client, '0.0.0.0', 9201)
-        original_env = mock_env()
-        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
-
-        with patch('asyncio.sleep', wraps=fast_sleep), patch('raven.Client') as raven_client:
-            await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
-                                    mock_feed=read_file, mock_feed_status=lambda: 200,
-                                    mock_headers=lambda: {})
-            await wait_until_get_working()
-            url = 'http://127.0.0.1:8080/v2/activities'
-            x_forwarded_for = '1.2.3.4, 127.0.0.0'
-            await get_until(url, x_forwarded_for, has_at_least_hits(2))
-
-            # This is the point of the test: the exception should _not_ have been
-            # captured, since this error is expected
-            raven_client().captureException.assert_not_called()
-
-            server.close()
-            await server.wait_closed()
-
-    @async_test
     async def test_delete_fail_not_snapshot(self):
         http_400 = b'HTTP/1.1 400 OK\r\ncontent-type: application/json; charset=UTF-8' \
                    b'\r\ncontent-length: 30\r\n\r\n' \

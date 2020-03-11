@@ -19,6 +19,7 @@ from .elasticsearch import (
     ALIAS_ACTIVITIES_SCHEMAS,
     ALIAS_OBJECTS,
     ALIAS_OBJECTS_SCHEMAS,
+    ESNon200Exception,
     ESMetricsUnavailable,
     es_request,
     es_request_non_200_exception,
@@ -220,30 +221,44 @@ async def delete_indexes(context, index_names):
     # If the snapshot is taking a long time, it's likely large, and so
     # its _more_ important to wait until its deleted before continuing with
     # ingest. If we still can't delete, we abort and raise
+    #
+    # We might have a lot of indexes to delete, and we make as much effort
+    # as possible to delete as many of them as possible before raising
 
     with logged(context.logger.debug, context.logger.warning, 'Deleting indexes (%s)',
                 [index_names]):
         if not index_names:
             return
-        index_names_comma_separated = ','.join(index_names)
-        for i, timeout in enumerate(DELETE_TIMEOUTS):
-            try:
-                return await es_request_non_200_exception(
-                    context=context,
-                    method='DELETE',
-                    path=f'/{index_names_comma_separated}',
-                    query={},
-                    headers={'Content-Type': 'application/json'},
-                    payload=b'',
-                )
-            except Exception as exception:
-                is_snapshot = exception.args and \
-                    'Cannot delete indices that are being snapshotted' in exception.args[0]
-                if not is_snapshot or i == len(DELETE_TIMEOUTS):
-                    raise
-                context.logger.debug(
-                    'Attempted to delete indices being snapshotted (%s)', [exception.args[0]])
-                await sleep(context, timeout)
+        failed_index_names = []
+        for index_name in index_names:
+            for i, timeout in enumerate(DELETE_TIMEOUTS):
+                try:
+                    await es_request_non_200_exception(
+                        context=context,
+                        method='DELETE',
+                        path=f'/{index_name}',
+                        query={},
+                        headers={'Content-Type': 'application/json'},
+                        payload=b'',
+                    )
+                except ESNon200Exception as exception:
+                    status = exception.args[1]
+                    context.logger.exception('Failed index DELETE of (%s)', [index_name])
+                    if 400 <= status < 500:
+                        failed_index_names.append(index_name)
+                        break
+                    await sleep(context, timeout)
+                except Exception:
+                    context.logger.exception('Failed index DELETE of (%s)', [index_name])
+                    if i == len(DELETE_TIMEOUTS):
+                        failed_index_names.append(index_name)
+                        continue
+                    await sleep(context, timeout)
+                else:
+                    break
+
+        if failed_index_names:
+            raise Exception('Failed DELETE of indexes ({})'.format(failed_index_names))
 
 
 async def create_activities_index(context, index_name):
