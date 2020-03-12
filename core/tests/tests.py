@@ -1798,16 +1798,17 @@ class TestApplication(TestBase):
 
         redis_client = await aioredis.create_redis('redis://127.0.0.1:6379')
         await redis_client.execute('DEL', 'address-N5 2RT')
-        await redis_client.execute('SET', 'address-MADEUPPOSTCODENOTFINDABLE', '123,456')
+        await redis_client.execute('SET', 'address-MADEUPPOSTCODENOTFINDABLE', '1.3,12.3')
 
         results_dict = await fetch_all_es_data_until(aventri_base_fetch)
+
         self.assertEqual(
             results_dict['hits']['hits'][0]['_source']['object']['id'],
             'dit:aventri:Event:1')
 
         # Without Redis
         self.assertEqual(
-            results_dict['hits']['hits'][0]['_source']['object']['location']['latitude'],
+            results_dict['hits']['hits'][0]['_source']['object']['geocoordinates']['lat'],
             '51.554874420166016')
 
         # With Redis
@@ -1816,8 +1817,8 @@ class TestApplication(TestBase):
             'dit:aventri:Event:3')
 
         self.assertEqual(
-            results_dict['hits']['hits'][1]['_source']['object']['location']['latitude'],
-            '123')
+            results_dict['hits']['hits'][1]['_source']['object']['geocoordinates']['lat'],
+            '1.3')
 
     def test_base_event_should_include(self):
         json_null_event = {}
@@ -1840,7 +1841,7 @@ class TestApplication(TestBase):
         json_single_event = {
             'eventid': '200183890', 'accountid': '200008108', 'folderid': '200090383',
             'name': 'test event1', 'code': '', 'department': '0', 'division': '0',
-            'businessunit': '0', 'city': '', 'startdate': '2020-02-19', 'enddate': '2020-02-20',
+            'businessunit': '0', 'city': '', 'startdate': '2030-02-19', 'enddate': '2030-02-20',
             'include_calendar': '1', 'include_internal_calendar': None, 'timezoneid': '27',
             'dateformat': 'l, j F Y', 'timeformat': 'g:i a', 'currency_dec_point': '.',
             'currency_thousands_sep': ',', 'approval_status': None, 'status': 'Live',
