@@ -1740,18 +1740,18 @@ class TestApplication(TestBase):
         await redis_client.execute('DEL', 'address-N5 2RT')
         await redis_client.execute('SET', 'address-MADEUPPOSTCODENOTFINDABLE', '1.3,12.3')
 
-        # # Setup Mock Getaddress Servde
-        # loop = asyncio.get_event_loop()
-        # app = web.Application()
+        # Setup Mock Getaddress Servde
+        loop = asyncio.get_event_loop()
+        app = web.Application()
 
-        # routes = web.RouteTableDef()
-        # @routes.get('/find/{postcode}')
-        # async def mock_find_postcode(request):
-        #     import pdb; pdb.set_trace()
-        #     return web.Response(text="Hello, world")
-        # app.add_routes(routes)
+        routes = web.RouteTableDef()
+        @routes.get('/find/{postcode}')
+        async def mock_find_postcode(request):
+            # import pdb; pdb.set_trace()
+            return web.Response(text="Hello, world")
+        app.add_routes(routes)
 
-        # await loop.create_server(app, host='localhost', port='6099')
+        await loop.create_server(app, host='localhost', port='6099')
 
         results_dict = await fetch_all_es_data_until(aventri_base_fetch)
 

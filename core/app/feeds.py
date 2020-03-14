@@ -188,7 +188,6 @@ class EventFeed:
 
     async def get_activities(self, context, page):
         async def get_event(event_id):
-            context.logger.error('Event ' + str(event_id))
             event_lookup = await context.redis_client.execute('GET', f'event-{event_id}')
             if event_lookup:
                 try:
@@ -236,23 +235,19 @@ class EventFeed:
             return event
 
         async def fetch_address_from_getaddressio(event, postcode):
-            async with aiohttp.ClientSession() as session:
-                api_key = settings.GETADDRESS_API_KEY
-                async with session.get(
-                            # settings.GETADDRESS_API_URL + f'/find/{postcode}?api-key={api_key}'
-
-                    f'https://api.getaddress.io/find/{postcode}?api-key={api_key}'
-                ) as resp:
-                    if resp.status == 200:
-                        geo_result = json_loads(await resp.text())
-                        if 'latitude' in geo_result.keys():
-                            event['geocoordinates'] = {}
-                            event['geocoordinates']['lat'] = str(geo_result['latitude'])
-                            event['geocoordinates']['lon'] = str(geo_result['longitude'])
-                            joined_lat_lng = ','.join(
-                                [str(geo_result['latitude']), str(geo_result['longitude'])])
-                            await context.redis_client.execute(
-                                'SET', f'address-{postcode}', joined_lat_lng)
+            api_key = settings.GETADDRESS_API_KEY
+            url = settings.GETADDRESS_API_URL + f'/find/{postcode}?api-key={api_key}'
+            resp = await http_make_request(context.session, context.metrics, 'GET', url, data=b'', headers={})
+            if resp.status == 200:
+                geo_result = json_loads(await resp.text())
+                if geo_result.get('latitude'):
+                    event['geocoordinates'] = {}
+                    event['geocoordinates']['lat'] = str(geo_result['latitude'])
+                    event['geocoordinates']['lon'] = str(geo_result['longitude'])
+                    joined_lat_lng = ','.join(
+                        [str(geo_result['latitude']), str(geo_result['longitude'])])
+                    await context.redis_client.execute(
+                        'SET', f'address-{postcode}', joined_lat_lng)
             return event
 
         now = datetime.datetime.now().isoformat()

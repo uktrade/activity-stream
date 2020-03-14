@@ -24,8 +24,6 @@ Install [Virtualenv](https://virtualenv.pypa.io) if you haven't got it installed
 
 You will need environment variables activated to run the main scripts. One time saving approach is to automatically set the environment variables when you start your virtual environment, one approach to which is described in the section below.
 
-Note that GETADDRESS_API_KEY needs to be set to the a working API key for the tests to pass.
-
 Finally, start the virtual environment with
 
     $ source .venv/bin/activate
