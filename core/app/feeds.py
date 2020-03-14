@@ -237,7 +237,8 @@ class EventFeed:
         async def fetch_address_from_getaddressio(event, postcode):
             api_key = settings.GETADDRESS_API_KEY
             url = settings.GETADDRESS_API_URL + f'/find/{postcode}?api-key={api_key}'
-            resp = await http_make_request(context.session, context.metrics, 'GET', url, data=b'', headers={})
+            resp = await http_make_request(context.session, context.metrics, 'GET', url,
+                                           data=b'', headers={})
             if resp.status == 200:
                 geo_result = json_loads(await resp.text())
                 if geo_result.get('latitude'):

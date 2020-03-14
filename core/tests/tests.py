@@ -43,6 +43,7 @@ from .tests_utils import (
     run_feed_application,
     run_sentry_application,
     wait_until_get_working,
+    _web_application
 )
 
 
@@ -1741,17 +1742,16 @@ class TestApplication(TestBase):
         await redis_client.execute('SET', 'address-MADEUPPOSTCODENOTFINDABLE', '1.3,12.3')
 
         # Setup Mock Getaddress Servde
-        loop = asyncio.get_event_loop()
-        app = web.Application()
-
-        routes = web.RouteTableDef()
-        @routes.get('/find/{postcode}')
-        async def mock_find_postcode(request):
+        async def mock_find_postcode(_):
             # import pdb; pdb.set_trace()
-            return web.Response(text="Hello, world")
-        app.add_routes(routes)
-
-        await loop.create_server(app, host='localhost', port='6099')
+            return web.Response(text=json.dumps({
+                'latitude': 51.554874420166016,
+                'longitude': 1.3,
+            }))
+        await _web_application(
+            port=6099,
+            routes=[web.get('/find/{postcode}', mock_find_postcode)],
+        )
 
         results_dict = await fetch_all_es_data_until(aventri_base_fetch)
 
