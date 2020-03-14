@@ -59,7 +59,7 @@ async def run_incoming_application():
 
     with logged(logger.info, logger.warning, 'Examining environment', []):
         env = normalise_environment(os.environ)
-        es_uri, redis_uri, sentry, getaddress_api_key = get_common_config(env)
+        es_uri, redis_uri, sentry, getaddress_api_key, getaddress_api_url = get_common_config(env)
         feeds = [parse_feed_config(feed) for feed in env['FEEDS']]
         port = env['PORT']
         incoming_key_pairs = [{
@@ -71,6 +71,7 @@ async def run_incoming_application():
 
     settings.ES_URI = es_uri
     settings.GETADDRESS_API_KEY = getaddress_api_key
+    settings.GETADDRESS_API_URL = getaddress_api_url
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
     conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=AioHttpDnsResolver(metrics))

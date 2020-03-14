@@ -121,11 +121,12 @@ async def run_outgoing_application():
 
     with logged(logger.debug, logger.error, 'Examining environment', []):
         env = normalise_environment(os.environ)
-        es_uri, redis_uri, sentry, get_address_api_key = get_common_config(env)
+        es_uri, redis_uri, sentry, get_address_api_key, getaddress_api_url = get_common_config(env)
         feeds = [parse_feed_config(feed) for feed in env['FEEDS']]
 
     settings.ES_URI = es_uri
     settings.GETADDRESS_API_KEY = get_address_api_key
+    settings.GETADDRESS_API_URL = getaddress_api_url
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
     conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=AioHttpDnsResolver(metrics))

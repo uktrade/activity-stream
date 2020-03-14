@@ -4,8 +4,7 @@ import json
 import os
 import re
 import unittest
-from unittest.mock import patch
-from unittest.mock import MagicMock
+from unittest.mock import patch, MagicMock
 
 import aiohttp
 from aiohttp import web
@@ -1720,7 +1719,6 @@ class TestApplication(TestBase):
 
         env = {
             **mock_env(),
-            'GETADDRESS_API_KEY': os.environ['GETADDRESS_API_KEY'],
             'FEEDS__1__UNIQUE_ID': 'aventri',
             'FEEDS__1__API_EMAIL': 'some@email.com',
             'FEEDS__1__ACCOUNT_ID': '1234',
@@ -1731,6 +1729,7 @@ class TestApplication(TestBase):
                 'http://localhost:8081/tests_fixture_aventri_auth.json',
             'FEEDS__1__EVENT_URL': 'http://localhost:8081/tests_fixture_aventri_{event_id}.json',
             'FEEDS__1__WHITELISTED_FOLDERS': 'Archive',
+            'GETADDRESS_API_URL': 'http://localhost:6099'
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -1740,6 +1739,19 @@ class TestApplication(TestBase):
         redis_client = await aioredis.create_redis('redis://127.0.0.1:6379')
         await redis_client.execute('DEL', 'address-N5 2RT')
         await redis_client.execute('SET', 'address-MADEUPPOSTCODENOTFINDABLE', '1.3,12.3')
+
+        # # Setup Mock Getaddress Servde
+        # loop = asyncio.get_event_loop()
+        # app = web.Application()
+
+        # routes = web.RouteTableDef()
+        # @routes.get('/find/{postcode}')
+        # async def mock_find_postcode(request):
+        #     import pdb; pdb.set_trace()
+        #     return web.Response(text="Hello, world")
+        # app.add_routes(routes)
+
+        # await loop.create_server(app, host='localhost', port='6099')
 
         results_dict = await fetch_all_es_data_until(aventri_base_fetch)
 

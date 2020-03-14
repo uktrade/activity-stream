@@ -200,12 +200,7 @@ class EventFeed:
                 return await fetch_from_aventri(event_id)
 
         def can_get_location(event):
-            return ('location' in event.keys()) and \
-                event['location'] is not None and \
-                event['location'] != '' and \
-                'postcode' in event['location'].keys() and \
-                event['location']['postcode'] is not None and \
-                event['location']['postcode'] != ''
+            return event.get('location') and event['location'].get('postcode')
 
         async def fetch_from_aventri(event_id):
             url = self.event_url.format(event_id=event_id)
@@ -222,7 +217,7 @@ class EventFeed:
                 event = await get_location(event)
 
             await context.redis_client.execute(
-                'SET', f'event-{event_id}', json_dumps(event))
+                'SETEX', f'event-{event_id}', 60*60*24*7, json_dumps(event))
             return event
 
         async def get_location(event):
@@ -244,7 +239,9 @@ class EventFeed:
             async with aiohttp.ClientSession() as session:
                 api_key = settings.GETADDRESS_API_KEY
                 async with session.get(
-                        f'https://api.getaddress.io/find/{postcode}?api-key={api_key}'
+                            # settings.GETADDRESS_API_URL + f'/find/{postcode}?api-key={api_key}'
+
+                    f'https://api.getaddress.io/find/{postcode}?api-key={api_key}'
                 ) as resp:
                     if resp.status == 200:
                         geo_result = json_loads(await resp.text())
