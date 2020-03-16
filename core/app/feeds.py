@@ -218,7 +218,7 @@ class EventFeed:
                 event = await get_location(event)
 
             await context.redis_client.execute(
-                'SETEX', f'event-{event_id}', 60*60*24*7, json_dumps(event).encode('utf-8'))
+                'SETEX', f'event-{event_id}', 60*60*24*7, json_dumps(event))
             return event
 
         async def get_location(event):
