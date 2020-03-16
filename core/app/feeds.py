@@ -193,7 +193,7 @@ class EventFeed:
             event_lookup = await context.redis_client.execute('GET', f'event-{event_id}')
             if event_lookup:
                 try:
-                    return json_loads(event_lookup.decode('ascii'))
+                    return json_loads(event_lookup.decode('utf-8'))
                 except UnicodeDecodeError:
                     await context.redis_client.execute('DEL', f'event-{event_id}')
                     return await fetch_from_aventri(event_id)
@@ -218,7 +218,7 @@ class EventFeed:
                 event = await get_location(event)
 
             await context.redis_client.execute(
-                'SETEX', f'event-{event_id}', 60*60*24*7, json_dumps(event))
+                'SETEX', f'event-{event_id}', 60*60*24*7, json_dumps(event).encode('utf-8'))
             return event
 
         async def get_location(event):
@@ -227,7 +227,7 @@ class EventFeed:
             # Search Reddis first
             redis_lookup = await context.redis_client.execute('GET', f'address-{postcode}')
             if redis_lookup:
-                split_lat_lng = redis_lookup.decode('ascii').split(',')
+                split_lat_lng = redis_lookup.decode('utf-8').split(',')
                 event['geocoordinates'] = {}
                 event['geocoordinates']['lat'] = split_lat_lng[0]
                 event['geocoordinates']['lon'] = split_lat_lng[1]
@@ -246,7 +246,9 @@ class EventFeed:
                     event['geocoordinates']['lat'] = str(geo_result['latitude'])
                     event['geocoordinates']['lon'] = str(geo_result['longitude'])
                     joined_lat_lng = ','.join(
-                        [str(geo_result['latitude']), str(geo_result['longitude'])])
+                        [str(geo_result['latitude']),
+                         str(geo_result['longitude'])]
+                    ).encode('utf-8')
                     await context.redis_client.execute(
                         'SET', f'address-{postcode}', joined_lat_lng)
             return event
