@@ -1730,7 +1730,8 @@ class TestApplication(TestBase):
                 'http://localhost:8081/tests_fixture_aventri_auth.json',
             'FEEDS__1__EVENT_URL': 'http://localhost:8081/tests_fixture_aventri_{event_id}.json',
             'FEEDS__1__WHITELISTED_FOLDERS': 'Archive',
-            'GETADDRESS_API_URL': 'http://localhost:6099'
+            'FEEDS__1__GETADDRESS_API_URL': 'http://localhost:6099',
+            'FEEDS__1__GETADDRESS_API_KEY': ''
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -1741,9 +1742,8 @@ class TestApplication(TestBase):
         await redis_client.execute('DEL', 'address-N5 2RT')
         await redis_client.execute('SET', 'address-MADEUPPOSTCODENOTFINDABLE', '1.3,12.3')
 
-        # Setup Mock Getaddress Servde
+        # Setup Mock Getaddress Server
         async def mock_find_postcode(_):
-            # import pdb; pdb.set_trace()
             return web.Response(text=json.dumps({
                 'latitude': 51.554874420166016,
                 'longitude': 1.3,
@@ -1784,7 +1784,9 @@ class TestApplication(TestBase):
             api_key='else',
             auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
             whitelisted_folders='Archive',
-            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
+            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json',
+            getaddress_api_key='',
+            getaddress_api_url='')\
             .should_include(context, json_null_event)
         self.assertFalse(actual, 'filter_events should return empty for null event')
 
@@ -1843,7 +1845,10 @@ class TestApplication(TestBase):
             api_key='else',
             auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
             whitelisted_folders='Archive',
-            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
+            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json',
+            getaddress_api_key='',
+            getaddress_api_url=''
+        )\
             .should_include(context, json_single_event)
         self.assertTrue(actual, 'filter_events should return the event with formatted fields')
 
@@ -1858,7 +1863,9 @@ class TestApplication(TestBase):
             api_key='else',
             auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
             whitelisted_folders='Archive',
-            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
+            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json',
+            getaddress_api_key='',
+            getaddress_api_url='')\
             .should_include(context, json_single_invalid_event)
         self.assertFalse(actual, 'filter_events should return empty for invalid event')
 

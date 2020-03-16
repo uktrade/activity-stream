@@ -18,7 +18,6 @@ from .utils import (
     json_dumps,
     sub_dict_lower,
 )
-from . import settings
 
 
 def parse_feed_config(feed_config):
@@ -153,10 +152,11 @@ class EventFeed:
     def parse_config(cls, config):
         return cls(**sub_dict_lower(
             config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL', 'EVENT_URL',
-                     'WHITELISTED_FOLDERS']))
+                     'WHITELISTED_FOLDERS', 'GETADDRESS_API_KEY', 'GETADDRESS_API_URL'
+                     ]))
 
     def __init__(self, unique_id, seed, account_id, api_key,
-                 auth_url, event_url, whitelisted_folders):
+                 auth_url, event_url, whitelisted_folders, getaddress_api_key, getaddress_api_url):
         self.lock = asyncio.Lock()
         self.unique_id = unique_id
         self.seed = seed
@@ -164,6 +164,8 @@ class EventFeed:
         self.api_key = api_key
         self.auth_url = auth_url
         self.event_url = event_url
+        self.getaddress_api_key = getaddress_api_key
+        self.getaddress_api_url = getaddress_api_url
         self.accesstoken = None
         self.whitelisted_folders = whitelisted_folders
 
@@ -231,12 +233,10 @@ class EventFeed:
                 event['geocoordinates']['lon'] = split_lat_lng[1]
             else:  # Try AddressLookup API
                 event = await fetch_address_from_getaddressio(event, postcode)
-
             return event
 
         async def fetch_address_from_getaddressio(event, postcode):
-            api_key = settings.GETADDRESS_API_KEY
-            url = settings.GETADDRESS_API_URL + f'/find/{postcode}?api-key={api_key}'
+            url = self.getaddress_api_url + f'/find/{postcode}?api-key={self.getaddress_api_key}'
             resp = await http_make_request(context.session, context.metrics, 'GET', url,
                                            data=b'', headers={})
             if resp.status == 200:

@@ -58,9 +58,7 @@ def get_common_config(env):
         'dsn': env['SENTRY_DSN'],
         'environment': env['SENTRY_ENVIRONMENT'],
     }
-    getaddress_api_key = env['GETADDRESS_API_KEY']
-    getaddress_api_url = env['GETADDRESS_API_URL']
-    return es_uri, redis_uri, sentry, getaddress_api_key, getaddress_api_url
+    return es_uri, redis_uri, sentry
 
 
 def normalise_environment(key_values):
