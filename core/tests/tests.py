@@ -1743,6 +1743,9 @@ class TestApplication(TestBase):
         await redis_client.execute('SET', 'address-MADEUPPOSTCODENOTFINDABLE', '1.3,12.3')
 
         # Setup Mock Getaddress Server
+
+        print('Before creating application')
+
         async def mock_find_postcode(_):
             return web.Response(text=json.dumps({
                 'latitude': 51.554874420166016,
@@ -1752,6 +1755,7 @@ class TestApplication(TestBase):
             port=6099,
             routes=[web.get('/find/{postcode}', mock_find_postcode)],
         )
+        print('Before fetching data')
 
         results_dict = await fetch_all_es_data_until(aventri_base_fetch)
 

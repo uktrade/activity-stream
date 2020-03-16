@@ -190,6 +190,7 @@ class EventFeed:
 
     async def get_activities(self, context, page):
         async def get_event(event_id):
+            print('in get_event for ' + event_id)
             event_lookup = await context.redis_client.execute('GET', f'event-{event_id}')
             if event_lookup:
                 try:
@@ -204,6 +205,7 @@ class EventFeed:
             return event.get('location') and event['location'].get('postcode')
 
         async def fetch_from_aventri(event_id):
+            print('in fetch_from_aventri')
             url = self.event_url.format(event_id=event_id)
 
             with logged(context.logger.debug, context.logger.warning,
@@ -236,6 +238,8 @@ class EventFeed:
             return event
 
         async def fetch_address_from_getaddressio(event, postcode):
+            print('in fetch_address_from_getaddressio')
+
             url = self.getaddress_api_url + f'/find/{postcode}?api-key={self.getaddress_api_key}'
             resp = await http_make_request(context.session, context.metrics, 'GET', url,
                                            data=b'', headers={})
