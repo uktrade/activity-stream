@@ -4,8 +4,7 @@ import json
 import os
 import re
 import unittest
-from unittest.mock import patch
-from unittest.mock import MagicMock
+from unittest.mock import patch, MagicMock
 
 import aiohttp
 from aiohttp import web
@@ -44,6 +43,7 @@ from .tests_utils import (
     run_feed_application,
     run_sentry_application,
     wait_until_get_working,
+    _web_application
 )
 
 
@@ -1709,7 +1709,8 @@ class TestApplication(TestBase):
     @async_test
     async def test_aventri(self):
         def aventri_base_fetch(results):
-            if 'hits' not in results or 'hits' not in results['hits']:
+            if 'hits' not in results or 'hits' \
+                    not in results['hits'] or len(results['hits']['hits']) < 2:
                 return False
 
             if str(results).find('aventri') != -1:
@@ -1729,16 +1730,48 @@ class TestApplication(TestBase):
                 'http://localhost:8081/tests_fixture_aventri_auth.json',
             'FEEDS__1__EVENT_URL': 'http://localhost:8081/tests_fixture_aventri_{event_id}.json',
             'FEEDS__1__WHITELISTED_FOLDERS': 'Archive',
+            'FEEDS__1__GETADDRESS_API_URL': 'http://localhost:6099',
+            'FEEDS__1__GETADDRESS_API_KEY': ''
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=env, mock_feed=read_file, mock_feed_status=lambda: 200,
                                     mock_headers=lambda: {})
 
+        redis_client = await aioredis.create_redis('redis://127.0.0.1:6379')
+        await redis_client.execute('DEL', 'address-N5 2RT')
+        await redis_client.execute('SET', 'address-MADEUPPOSTCODENOTFINDABLE', '1.3,12.3')
+
+        # Setup Mock Getaddress Server
+        async def mock_find_postcode(_):
+            return web.Response(text=json.dumps({
+                'latitude': 51.554874420166016,
+                'longitude': 1.3,
+            }))
+        await _web_application(
+            port=6099,
+            routes=[web.get('/find/{postcode}', mock_find_postcode)],
+        )
+
         results_dict = await fetch_all_es_data_until(aventri_base_fetch)
+
         self.assertEqual(
             results_dict['hits']['hits'][0]['_source']['object']['id'],
             'dit:aventri:Event:1')
+
+        # Without Redis
+        self.assertEqual(
+            results_dict['hits']['hits'][0]['_source']['object']['geocoordinates']['lat'],
+            '51.554874420166016')
+
+        # With Redis
+        self.assertEqual(
+            results_dict['hits']['hits'][1]['_source']['object']['id'],
+            'dit:aventri:Event:3')
+
+        self.assertEqual(
+            results_dict['hits']['hits'][1]['_source']['object']['geocoordinates']['lat'],
+            '1.3')
 
     def test_base_event_should_include(self):
         json_null_event = {}
@@ -1751,7 +1784,9 @@ class TestApplication(TestBase):
             api_key='else',
             auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
             whitelisted_folders='Archive',
-            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
+            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json',
+            getaddress_api_key='',
+            getaddress_api_url='')\
             .should_include(context, json_null_event)
         self.assertFalse(actual, 'filter_events should return empty for null event')
 
@@ -1761,7 +1796,7 @@ class TestApplication(TestBase):
         json_single_event = {
             'eventid': '200183890', 'accountid': '200008108', 'folderid': '200090383',
             'name': 'test event1', 'code': '', 'department': '0', 'division': '0',
-            'businessunit': '0', 'city': '', 'startdate': '2020-02-19', 'enddate': '2020-02-20',
+            'businessunit': '0', 'city': '', 'startdate': '2030-02-19', 'enddate': '2030-02-20',
             'include_calendar': '1', 'include_internal_calendar': None, 'timezoneid': '27',
             'dateformat': 'l, j F Y', 'timeformat': 'g:i a', 'currency_dec_point': '.',
             'currency_thousands_sep': ',', 'approval_status': None, 'status': 'Live',
@@ -1780,8 +1815,11 @@ class TestApplication(TestBase):
             'url': 'https://eu.eventscloud.com/200183890', 'max_reg': '0',
             'statusmessage': None, 'clientcontact': '', 'lodgingnotes': '',
             'location': {
-                'name': '', 'address1': '', 'address2': '', 'address3': '', 'city': '',
-                'state': '', 'postcode': '', 'country': '', 'phone': '', 'email': '', 'map': ''},
+                'name': '', 'address1': '106 Petherton Road',
+                'address2': '', 'address3': '', 'city': 'London',
+                'state': '', 'postcode': 'N5 2RT',
+                'country': '', 'phone': '', 'email': '', 'map': ''
+            },
             'starttime': '09:00:00', 'endtime': '17:00:00', 'closedate': '0000-00-00',
             'closetime': None, 'timezonedescription': None, 'homepage': '',
             'linktohomepage': None,
@@ -1807,7 +1845,10 @@ class TestApplication(TestBase):
             api_key='else',
             auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
             whitelisted_folders='Archive',
-            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
+            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json',
+            getaddress_api_key='',
+            getaddress_api_url=''
+        )\
             .should_include(context, json_single_event)
         self.assertTrue(actual, 'filter_events should return the event with formatted fields')
 
@@ -1822,7 +1863,9 @@ class TestApplication(TestBase):
             api_key='else',
             auth_url='https://api-emea.eventscloud.com/api/v2/global/authorize.json',
             whitelisted_folders='Archive',
-            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json')\
+            event_url='https://api-emea.eventscloud.com/api/v2/ereg/getEvent.json',
+            getaddress_api_key='',
+            getaddress_api_url='')\
             .should_include(context, json_single_invalid_event)
         self.assertFalse(actual, 'filter_events should return empty for invalid event')
 

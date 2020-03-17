@@ -325,6 +325,9 @@ async def create_activities_index(context, index_name):
                         'actor.dit:companiesHouseNumber': {
                             'type': 'keyword',
                         },
+                        'object.geocoordinates': {
+                            'type': 'geo_point'
+                        }
                     },
                 },
             },
@@ -385,6 +388,9 @@ async def create_objects_index(context, index_name):
                         'attributedTo.type': {
                             'type': 'keyword',
                         },
+                        'geocoordinates': {
+                            'type': 'geo_point'
+                        }
                     },
                 },
             },

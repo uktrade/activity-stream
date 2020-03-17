@@ -327,6 +327,8 @@ def mock_env():
         'INCOMING_IP_WHITELIST__2': '2.3.4.5',
         'SENTRY_DSN': 'http://abc:cvb@localhost:9872/123',
         'SENTRY_ENVIRONMENT': 'test',
+        'GETADDRESS_API_KEY': 'debug',
+        'GETADDRESS_API_URL': 'http://localhost:6099',
         'VCAP_SERVICES': (
             '{'
             '"redis":[{"credentials":{"uri":"redis://127.0.0.1:6379"}}],'

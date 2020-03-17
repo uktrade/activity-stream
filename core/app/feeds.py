@@ -15,6 +15,7 @@ from .logger import (
 )
 from .utils import (
     json_loads,
+    json_dumps,
     sub_dict_lower,
 )
 
@@ -151,10 +152,11 @@ class EventFeed:
     def parse_config(cls, config):
         return cls(**sub_dict_lower(
             config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL', 'EVENT_URL',
-                     'WHITELISTED_FOLDERS']))
+                     'WHITELISTED_FOLDERS', 'GETADDRESS_API_KEY', 'GETADDRESS_API_URL'
+                     ]))
 
-    def __init__(self, unique_id, seed, account_id, api_key, auth_url, event_url,
-                 whitelisted_folders):
+    def __init__(self, unique_id, seed, account_id, api_key,
+                 auth_url, event_url, whitelisted_folders, getaddress_api_key, getaddress_api_url):
         self.lock = asyncio.Lock()
         self.unique_id = unique_id
         self.seed = seed
@@ -162,6 +164,8 @@ class EventFeed:
         self.api_key = api_key
         self.auth_url = auth_url
         self.event_url = event_url
+        self.getaddress_api_key = getaddress_api_key
+        self.getaddress_api_url = getaddress_api_url
         self.accesstoken = None
         self.whitelisted_folders = whitelisted_folders
 
@@ -186,7 +190,20 @@ class EventFeed:
 
     async def get_activities(self, context, page):
         async def get_event(event_id):
-            await asyncio.sleep(3)
+            event_lookup = await context.redis_client.execute('GET', f'event-{event_id}')
+            if event_lookup:
+                try:
+                    return json_loads(event_lookup.decode('utf-8'))
+                except UnicodeDecodeError:
+                    await context.redis_client.execute('DEL', f'event-{event_id}')
+                    return await fetch_from_aventri(event_id)
+            else:
+                return await fetch_from_aventri(event_id)
+
+        def can_get_location(event):
+            return event.get('location') and event['location'].get('postcode')
+
+        async def fetch_from_aventri(event_id):
             url = self.event_url.format(event_id=event_id)
 
             with logged(context.logger.debug, context.logger.warning,
@@ -196,7 +213,45 @@ class EventFeed:
                     headers={'accesstoken': self.accesstoken})
                 result.raise_for_status()
 
-            return json_loads(result._body)
+            event = json_loads(result._body)
+            if can_get_location(event):
+                event = await get_location(event)
+
+            await context.redis_client.execute(
+                'SETEX', f'event-{event_id}', 60*60*24*7, json_dumps(event))
+            return event
+
+        async def get_location(event):
+            postcode = event['location']['postcode']
+
+            # Search Reddis first
+            redis_lookup = await context.redis_client.execute('GET', f'address-{postcode}')
+            if redis_lookup:
+                split_lat_lng = redis_lookup.decode('utf-8').split(',')
+                event['geocoordinates'] = {}
+                event['geocoordinates']['lat'] = split_lat_lng[0]
+                event['geocoordinates']['lon'] = split_lat_lng[1]
+            else:  # Try AddressLookup API
+                event = await fetch_address_from_getaddressio(event, postcode)
+            return event
+
+        async def fetch_address_from_getaddressio(event, postcode):
+            url = self.getaddress_api_url + f'/find/{postcode}?api-key={self.getaddress_api_key}'
+            resp = await http_make_request(context.session, context.metrics, 'GET', url,
+                                           data=b'', headers={})
+            if resp.status == 200:
+                geo_result = json_loads(await resp.text())
+                if geo_result.get('latitude'):
+                    event['geocoordinates'] = {}
+                    event['geocoordinates']['lat'] = str(geo_result['latitude'])
+                    event['geocoordinates']['lon'] = str(geo_result['longitude'])
+                    joined_lat_lng = ','.join(
+                        [str(geo_result['latitude']),
+                         str(geo_result['longitude'])]
+                    ).encode('utf-8')
+                    await context.redis_client.execute(
+                        'SET', f'address-{postcode}', joined_lat_lng)
+            return event
 
         now = datetime.datetime.now().isoformat()
         return [
@@ -215,6 +270,7 @@ class EventFeed:
                     'enddate': event['enddate'],
                     'foldername': event['foldername'],
                     'location': event['location'],
+                    'geocoordinates': event.get('geocoordinates'),
                     'language': event['defaultlanguage'],
                     'timezone': event['timezone'],
                     'currency': event['standardcurrency'],
