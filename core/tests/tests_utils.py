@@ -232,7 +232,7 @@ async def run_es_application(port, override_routes):
         web.put('/{index_name}', respond_http('{}', 200)),
         web.get('/{index_names}/_count', respond_http('{"count":0}', 200)),
         web.delete('/{index_names}', respond_http('{}', 200)),
-        web.get(f'/activities/_search', respond_http('{"hits":{},"_scroll_id":"test"}', 200)),
+        web.get('/activities/_search', respond_http('{"hits":{},"_scroll_id":"test"}', 200)),
         web.post('/_bulk', respond_http('{}', 200)),
         web.get('/*/_alias/{index_name}', respond_http('{}', 200)),
         web.get('/_aliases', respond_http('{}', 200)),
