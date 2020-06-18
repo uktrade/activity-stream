@@ -122,7 +122,7 @@ async def get_old_index_names(context):
         results = await es_request_non_200_exception(
             context=context,
             method='GET',
-            path=f'/_aliases',
+            path='/_aliases',
             query={},
             headers={'Content-Type': 'application/json'},
             payload=b'',
@@ -210,7 +210,7 @@ async def add_remove_aliases_atomically(context,
         await es_request_non_200_exception(
             context=context,
             method='POST',
-            path=f'/_aliases',
+            path='/_aliases',
             query={},
             headers={'Content-Type': 'application/json'},
             payload=actions,
