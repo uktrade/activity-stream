@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: python:3.7.2
+      - image: python:3.7.5
         environment:
           PRE_COMMIT_HOME: /root/cache/pre-commit
       - image: docker.elastic.co/elasticsearch/elasticsearch:6.3.0
