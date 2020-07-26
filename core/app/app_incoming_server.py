@@ -146,7 +146,7 @@ def handle_get_p1_check(parent_context):
             is_redis_green = redis_result == b'GREEN'
 
             min_age = await es_min_verification_age(context)
-            is_elasticsearch_green = min_age < 500
+            is_elasticsearch_green = min_age < 60 * 60
 
             all_green = is_redis_green and is_elasticsearch_green
 
