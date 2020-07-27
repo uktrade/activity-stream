@@ -15,7 +15,7 @@ from .utils import (
 # ever if the feed is turned off
 FEED_UPDATE_URL_EXPIRE = 60 * 60 * 24 * 31
 NOT_EXISTS = b'__NOT_EXISTS__'
-SHOW_FEED_AS_RED_IF_NO_REQUEST_IN_SECONDS = 10
+SHOW_FEED_AS_RED_IF_NO_REQUEST_IN_SECONDS = 20 * 60
 
 
 async def acquire_and_keep_lock(parent_context, exception_intervals, key):
