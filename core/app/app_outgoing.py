@@ -128,17 +128,13 @@ async def run_outgoing_application():
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
     conn = aiohttp.TCPConnector(use_dns_cache=False,
-                                keepalive_timeout=3,
-                                limit_per_host=1,
+                                force_close=True,
                                 resolver=AioHttpDnsResolver(metrics))
     session = aiohttp.ClientSession(
         connector=conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
         timeout=aiohttp.ClientTimeout(
-            total=60.0 * 5.0,
-            connect=60.0 * 5.0,
-            sock_connect=10.0,
-            sock_read=10.0,
+            total=25.0,
         ),
     )
     redis_client = await redis_get_client(redis_uri)
