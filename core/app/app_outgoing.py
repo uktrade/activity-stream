@@ -129,6 +129,7 @@ async def run_outgoing_application():
     metrics = get_metrics(metrics_registry)
     conn = aiohttp.TCPConnector(use_dns_cache=False,
                                 keepalive_timeout=3,
+                                limit_per_host=1,
                                 resolver=AioHttpDnsResolver(metrics))
     session = aiohttp.ClientSession(
         connector=conn,
