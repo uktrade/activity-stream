@@ -268,7 +268,7 @@ async def create_activities_index(context, index_name):
             'settings': {
                 'index': {
                     'number_of_shards': 3,
-                    'number_of_replicas': 1,
+                    'number_of_replicas': 0,
                     'refresh_interval': '-1',
                 }
             },
@@ -352,7 +352,7 @@ async def create_objects_index(context, index_name):
             'settings': {
                 'index': {
                     'number_of_shards': 3,
-                    'number_of_replicas': 1,
+                    'number_of_replicas': 0,
                     'refresh_interval': '-1',
                 }
             },
