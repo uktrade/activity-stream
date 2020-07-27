@@ -19,4 +19,10 @@ async def http_make_request(session, metrics, method, url, data, headers):
             metrics['http_response_body_bytes'] \
                 .labels(parsed_url.host, str(result.status)).inc(len(result._body))
 
+            # Suspect that aiohttp tries to re-use all HTTP connections, but some
+            # servers do not expect "failure" code responses to be reused. Including
+            # redirect codes responses out of paranoia
+            if result.status >= 300:
+                result.close()
+
             return result
