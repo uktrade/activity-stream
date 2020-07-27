@@ -263,11 +263,13 @@ async def delete_indexes(context, index_names):
 
 
 async def create_activities_index(context, index_name):
+    num_desired_shards = 3
+
     with logged(context.logger.debug, context.logger.warning, 'Creating index (%s)', [index_name]):
         index_definition = json_dumps({
             'settings': {
                 'index': {
-                    'number_of_shards': 3,
+                    'number_of_shards': num_desired_shards,
                     'number_of_replicas': 0,
                     'refresh_interval': '-1',
                 }
@@ -344,14 +346,17 @@ async def create_activities_index(context, index_name):
             headers={'Content-Type': 'application/json'},
             payload=index_definition,
         )
+        await wait_intil_num_shards(context, index_name, num_desired_shards)
 
 
 async def create_objects_index(context, index_name):
+    num_desired_shards = 3
+
     with logged(context.logger.debug, context.logger.warning, 'Creating index (%s)', [index_name]):
         index_definition = json_dumps({
             'settings': {
                 'index': {
-                    'number_of_shards': 3,
+                    'number_of_shards': num_desired_shards,
                     'number_of_replicas': 0,
                     'refresh_interval': '-1',
                 }
@@ -410,14 +415,17 @@ async def create_objects_index(context, index_name):
             headers={'Content-Type': 'application/json'},
             payload=index_definition,
         )
+        await wait_intil_num_shards(context, index_name, num_desired_shards)
 
 
 async def create_schemas_index(context, index_name):
+    num_desired_shards = 1
+
     with logged(context.logger.debug, context.logger.warning, 'Creating index (%s)', [index_name]):
         index_definition = json_dumps({
             'settings': {
                 'index': {
-                    'number_of_shards': 1,
+                    'number_of_shards': num_desired_shards,
                     'number_of_replicas': 0,
                     'refresh_interval': '-1',
                 }
@@ -436,6 +444,30 @@ async def create_schemas_index(context, index_name):
             headers={'Content-Type': 'application/json'},
             payload=index_definition,
         )
+        await wait_intil_num_shards(context, index_name, num_desired_shards)
+
+
+async def wait_intil_num_shards(context, index_name, num_desired_shards):
+    with logged(context.logger.debug, context.logger.warning,
+                'Waiting until correct number of shards (%s)', [index_name]):
+        for _ in range(0, 60):
+            response = await es_request_non_200_exception(
+                context=context,
+                method='GET',
+                path=f'/_cat/shards/{index_name}?format=json',
+                query={},
+                headers={'Content-Type': 'application/json'},
+                payload=b'',
+            )
+            shard_dicts = json_loads(response._body)
+            num_shards = len(set(
+                shard_dict['shard'] for shard_dict in shard_dicts
+                if shard_dict['state'] == 'STARTED'))
+            if num_shards == num_desired_shards:
+                return
+            await asyncio.sleep(2)
+
+        raise Exception(f'Unable to create index with correct number of shards {index_name}')
 
 
 async def refresh_index(context, index_name, *metric_labels):
