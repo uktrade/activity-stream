@@ -135,7 +135,10 @@ async def run_outgoing_application():
         connector=conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
         timeout=aiohttp.ClientTimeout(
-            total=25.0,
+            total=60.0 * 5.0,
+            connect=60.0 * 5.0,
+            sock_connect=10.0,
+            sock_read=10.0,
         ),
     )
     redis_client = await redis_get_client(redis_uri)
