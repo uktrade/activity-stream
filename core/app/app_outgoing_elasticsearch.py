@@ -448,6 +448,10 @@ async def create_schemas_index(context, index_name):
 
 
 async def wait_intil_num_shards(context, index_name, num_desired_shards):
+    # It looks like Elasticsearch the request for numbers of shards is eventually applied: have
+    # witnessed the default number of shards of 5 created even if requested less, and have
+    # witnessed replicas created even if requested 0
+
     with logged(context.logger.debug, context.logger.warning,
                 'Waiting until correct number of shards (%s)', [index_name]):
         for _ in range(0, 60):
@@ -462,7 +466,10 @@ async def wait_intil_num_shards(context, index_name, num_desired_shards):
             shard_dicts = json_loads(response._body)
             num_shards = len(set(
                 shard_dict['shard'] for shard_dict in shard_dicts))
-            if num_shards == num_desired_shards:
+            num_shards_started = len(set(
+                shard_dict['shard'] for shard_dict in shard_dicts
+                if shard_dict['state'] == 'STARTED'))
+            if num_shards == num_desired_shards and num_shards_started == num_desired_shards:
                 return
             await asyncio.sleep(2)
 
