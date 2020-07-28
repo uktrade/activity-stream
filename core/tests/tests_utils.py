@@ -226,8 +226,18 @@ def respond_http(text, status):
     return response
 
 
+def respond_shards(request):
+    is_schema = 'schema' in request.match_info['index_name']
+    shard_state = \
+        [{'state': 'STARTED'}] * 1 if is_schema else \
+        [{'state': 'STARTED'}] * 6
+    return web.Response(text=json.dumps(shard_state), status=200, content_type='application/json')
+
+
 async def run_es_application(port, override_routes):
     default_routes = [
+        web.get('/_cat/nodes', respond_http('[{},{},{}]', 200)),
+        web.get('/_cat/shards/{index_name}', respond_shards),
         web.put('/{index_name}/_mapping/_doc', respond_http('{}', 200)),
         web.put('/{index_name}', respond_http('{}', 200)),
         web.get('/{index_names}/_count', respond_http('{"count":0}', 200)),
