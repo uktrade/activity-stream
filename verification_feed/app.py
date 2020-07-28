@@ -66,7 +66,7 @@ def get_page(timestamp, get_next_page_href):
     first_timestamp = int(one_day_ago.timestamp())
     final_timestamp = int(now.timestamp())
 
-    max_per_page = 1000
+    max_per_page = 100
     first_timestamp_of_page = max(first_timestamp, timestamp)
     final_timestamp_of_page = min(first_timestamp_of_page + max_per_page, final_timestamp)
     timestamps = range(first_timestamp_of_page, final_timestamp_of_page)
