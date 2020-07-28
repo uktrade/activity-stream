@@ -461,8 +461,7 @@ async def wait_intil_num_shards(context, index_name, num_desired_shards):
             )
             shard_dicts = json_loads(response._body)
             num_shards = len(set(
-                shard_dict['shard'] for shard_dict in shard_dicts
-                if shard_dict['state'] == 'STARTED'))
+                shard_dict['shard'] for shard_dict in shard_dicts))
             if num_shards == num_desired_shards:
                 return
             await asyncio.sleep(2)
