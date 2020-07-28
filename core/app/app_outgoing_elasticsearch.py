@@ -261,6 +261,29 @@ async def delete_indexes(context, index_names):
         if failed_index_names:
             raise Exception('Failed DELETE of indexes ({})'.format(failed_index_names))
 
+    await wait_for_indexes_to_delete(context, index_names)
+
+
+async def wait_for_indexes_to_delete(context, index_names):
+    max_attempts = 60
+    with logged(context.logger.debug, context.logger.warning, 'Waiting for indexes to delete (%s)',
+                [index_names]):
+        for index_name in index_names:
+            for i in range(0, max_attempts):
+                response = await es_request(
+                    context=context,
+                    method='HEAD',
+                    path=f'/{index_name}',
+                    query={},
+                    headers={'Content-Type': 'application/json'},
+                    payload=b'',
+                )
+                if response.status == 404:
+                    continue
+                if i == max_attempts - 1:
+                    raise Exception(f'Failed waiting for deletion of index ({index_name})')
+                await asyncio.sleep(2)
+
 
 async def create_activities_index(context, index_name):
     num_primary_shards = 3
