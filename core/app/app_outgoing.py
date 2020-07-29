@@ -198,13 +198,17 @@ async def ingest_feeds(context, feeds):
         get_child_context(context, 'initial-delete'), indexes_to_delete,
     )
 
+    # Some of the full ingests run in seconds, and have concern about creating/deleting indexes so
+    # frequently: ES reports memory leaks in some versions.
+    # Using a mininum duration rather than a sleep after each full ingest to keep the ingests
+    # as homogenous as possible wrt time
     await asyncio.gather(*[
         repeat_until_cancelled(
             context, feed.exception_intervals,
-            to_repeat=ingest_func, to_repeat_args=(context, feed),
+            to_repeat=ingest_func, to_repeat_args=(context, feed)
         )
         for feed in feeds
-        for ingest_func in (ingest_full, ingest_updates)
+        for (ingest_func, min_duration) in ((ingest_full, 120), (ingest_updates, 0))
     ])
 
 
