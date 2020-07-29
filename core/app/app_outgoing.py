@@ -235,51 +235,57 @@ async def ingest_full(parent_context, feed):
     """
     context = get_child_context(parent_context, f'{feed.unique_id},full')
     metrics = context.metrics
-    with \
-            logged(context.logger.debug, context.logger.warning, 'Full ingest', []), \
-            metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'full']), \
-            metric_inprogress(metrics['ingest_inprogress_ingests_total']):
 
-        await set_feed_updates_seed_url_init(context, feed.unique_id)
+    with metric_inprogress(metrics['ingest_inprogress_ingests_total']):
+        with \
+                logged(context.logger.debug, context.logger.warning, 'Full ingest', []), \
+                metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'full']):
 
-        indexes_without_alias, _ = await get_old_index_names(context)
-        indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
-        await delete_indexes(context, indexes_to_delete)
+            await set_feed_updates_seed_url_init(context, feed.unique_id)
 
-        activities_index_name, activities_schemas_index_name, \
-            objects_index_name, objects_schemas_index_name = get_new_index_names(
-                feed.unique_id)
-        await create_activities_index(context, activities_index_name)
-        await create_schemas_index(context, activities_schemas_index_name)
-        await create_objects_index(context, objects_index_name)
-        await create_schemas_index(context, objects_schemas_index_name)
+            indexes_without_alias, _ = await get_old_index_names(context)
+            indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
+            await delete_indexes(context, indexes_to_delete)
 
-        activities_schemas = set()
-        objects_schemas = set()
+            activities_index_name, activities_schemas_index_name, \
+                objects_index_name, objects_schemas_index_name = get_new_index_names(
+                    feed.unique_id)
+            await create_activities_index(context, activities_index_name)
+            await create_schemas_index(context, activities_schemas_index_name)
+            await create_objects_index(context, objects_index_name)
+            await create_schemas_index(context, objects_schemas_index_name)
 
-        href = feed.seed
-        while href:
-            updates_href = href
-            href, activities_schemas_page, objects_schemas_page = await fetch_and_ingest_page(
-                context, 'full', feed, [activities_index_name], [objects_index_name], href,
-            )
-            activities_schemas.update(activities_schemas_page)
-            objects_schemas.update(objects_schemas_page)
+            activities_schemas = set()
+            objects_schemas = set()
 
-            await sleep(context, feed.full_ingest_page_interval)
+            href = feed.seed
+            while href:
+                updates_href = href
+                href, activities_schemas_page, objects_schemas_page = await fetch_and_ingest_page(
+                    context, 'full', feed, [activities_index_name], [objects_index_name], href,
+                )
+                activities_schemas.update(activities_schemas_page)
+                objects_schemas.update(objects_schemas_page)
 
-        await es_ingest_schemas(context, activities_schemas, [activities_schemas_index_name])
-        await refresh_index(context, activities_schemas_index_name, feed.unique_id, 'full')
+                await sleep(context, feed.full_ingest_page_interval)
 
-        await es_ingest_schemas(context, objects_schemas, [objects_schemas_index_name])
-        await refresh_index(context, objects_schemas_index_name, feed.unique_id, 'full')
+            await es_ingest_schemas(context, activities_schemas, [activities_schemas_index_name])
+            await refresh_index(context, activities_schemas_index_name, feed.unique_id, 'full')
 
-        await refresh_index(context, activities_index_name, feed.unique_id, 'full')
-        await refresh_index(context, objects_index_name, feed.unique_id, 'full')
-        await add_remove_aliases_atomically(
-            context, activities_index_name, activities_schemas_index_name,
-            objects_index_name, objects_schemas_index_name, feed.unique_id)
-        await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
+            await es_ingest_schemas(context, objects_schemas, [objects_schemas_index_name])
+            await refresh_index(context, objects_schemas_index_name, feed.unique_id, 'full')
+
+            await refresh_index(context, activities_index_name, feed.unique_id, 'full')
+            await refresh_index(context, objects_index_name, feed.unique_id, 'full')
+            await add_remove_aliases_atomically(
+                context, activities_index_name, activities_schemas_index_name,
+                objects_index_name, objects_schemas_index_name, feed.unique_id)
+            await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
+
+        # Some full ingests run in seconds. Given we have live updates, no need to run the full
+        # ingest again so soon, and there is concern about a high rate for creation/deletion of
+        # indexes in terms of performance
+        await asyncio.sleep(120)
 
 
 async def ingest_updates(parent_context, feed):
