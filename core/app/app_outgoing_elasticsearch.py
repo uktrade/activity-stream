@@ -526,7 +526,7 @@ async def wait_until_num_shards(context, index_name, num_primary_shards, num_rep
         raise Exception(f'Unable to create index with correct number of shards {index_name}')
 
 
-async def refresh_index(context, index_name, *metric_labels):
+async def refresh_index(context, index_name, timeout, *metric_labels):
     metric = context.metrics['elasticsearch_refresh_duration_seconds']
     with \
             logged(context.logger.debug, context.logger.warning, 'Refreshing index (%s)',
@@ -540,6 +540,7 @@ async def refresh_index(context, index_name, *metric_labels):
             query={'ignore_unavailable': 'true'},
             headers={'Content-Type': 'application/json'},
             payload=b'',
+            timeout=timeout,
         )
 
 
