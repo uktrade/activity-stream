@@ -202,17 +202,31 @@ async def ingest_feeds(context, feeds):
     # frequently: ES reports memory leaks in some versions.
     # Using a mininum duration rather than a sleep after each full ingest to keep the ingests
     # as homogenous as possible wrt time
+    # The updates ingest has a much shorter refresh timeout value because they can overlap with the
+    # end of a bulk ingest, when one of the indexes ingested into is deleted, and it is suspected
+    # there is an internal race condition in Elasticsearch when the request waits for an
+    # acknowledgement from shards, but they never send an acknowledgement, since the indexes are
+    # deleted. The (non-conclusive) evidence of this is that PaaS has reported seeing exceptions
+    # in the low-level Elastcisearch logs about missing indexes. At the time of writing, there is
+    # no API in Elasticsearch to control any internal timeout on refresh
+    full_ingest_refresh_timeout = aiohttp.ClientTimeout(total=60.0)
+    updates_ingest_refresh_timeout = aiohttp.ClientTimeout(total=10.0)
+
     await asyncio.gather(*[
         repeat_until_cancelled(
             context, feed.exception_intervals,
-            to_repeat=ingest_func, to_repeat_args=(context, feed), min_duration=min_duration
+            to_repeat=ingest_func, to_repeat_args=(
+                context, feed, refresh_timeout), min_duration=min_duration
         )
         for feed in feeds
-        for (ingest_func, min_duration) in ((ingest_full, 120), (ingest_updates, 0))
+        for (ingest_func, min_duration, refresh_timeout) in (
+            (ingest_full, 120, full_ingest_refresh_timeout),
+            (ingest_updates, 0, updates_ingest_refresh_timeout),
+        )
     ])
 
 
-async def ingest_full(parent_context, feed):
+async def ingest_full(parent_context, feed, refresh_timeout):
     """Perform a single "full" ingest cycle of a paginated source feed
 
     Starting at feed.seed, iteratively request all pages from the feed, and
@@ -273,20 +287,24 @@ async def ingest_full(parent_context, feed):
             await sleep(context, feed.full_ingest_page_interval)
 
         await es_ingest_schemas(context, activities_schemas, [activities_schemas_index_name])
-        await refresh_index(context, activities_schemas_index_name, feed.unique_id, 'full')
+        await refresh_index(context, activities_schemas_index_name, refresh_timeout,
+                            feed.unique_id, 'full')
 
         await es_ingest_schemas(context, objects_schemas, [objects_schemas_index_name])
-        await refresh_index(context, objects_schemas_index_name, feed.unique_id, 'full')
+        await refresh_index(context, objects_schemas_index_name, refresh_timeout,
+                            feed.unique_id, 'full')
 
-        await refresh_index(context, activities_index_name, feed.unique_id, 'full')
-        await refresh_index(context, objects_index_name, feed.unique_id, 'full')
+        await refresh_index(context, activities_index_name, refresh_timeout,
+                            feed.unique_id, 'full')
+        await refresh_index(context, objects_index_name, refresh_timeout,
+                            feed.unique_id, 'full')
         await add_remove_aliases_atomically(
             context, activities_index_name, activities_schemas_index_name,
             objects_index_name, objects_schemas_index_name, feed.unique_id)
         await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
 
 
-async def ingest_updates(parent_context, feed):
+async def ingest_updates(parent_context, feed, refresh_timeout):
     """Perform a single "updates" ingest cycle of a paginated source feed
 
     Poll the last page from the last completed "full" ingest and ingest it
@@ -348,7 +366,8 @@ async def ingest_updates(parent_context, feed):
             await es_ingest_schemas(context, objects_schemas, objects_schemas_index_names)
 
             for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
-                await refresh_index(context, index_name, feed.unique_id, 'updates')
+                await refresh_index(context, index_name, refresh_timeout,
+                                    feed.unique_id, 'updates')
             await set_feed_updates_url(context, feed.unique_id, updates_href)
 
     await sleep(context, feed.updates_page_interval)

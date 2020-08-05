@@ -63,14 +63,15 @@ async def es_min_verification_age(context):
     return age
 
 
-async def es_request_non_200_exception(context, method, path, query, headers, payload):
-    results = await es_request(context, method, path, query, headers, payload)
+async def es_request_non_200_exception(context, method, path, query, headers, payload,
+                                       timeout=None):
+    results = await es_request(context, method, path, query, headers, payload, timeout)
     if results.status not in [200, 201]:
         raise ESNon200Exception(results._body.decode('utf-8'), results.status)
     return results
 
 
-async def es_request(context, method, path, query, headers, payload):
+async def es_request(context, method, path, query, headers, payload, timeout=None):
     with logged(
             context.logger.debug, context.logger.warning,
             'Elasticsearch request (%s) (%s) (%s) (%s)',
@@ -80,7 +81,7 @@ async def es_request(context, method, path, query, headers, payload):
         return await http_make_request(
             context.session, context.metrics, method,
             settings.ES_URI + path + (('?' + query_string) if query_string != '' else ''),
-            data=payload, headers=headers,
+            data=payload, headers=headers, timeout=timeout,
         )
 
 
