@@ -1533,6 +1533,12 @@ class TestApplication(TestBase):
             x_forwarded_for = '1.2.3.4, 127.0.0.0'
             await get_until(url, x_forwarded_for, has_at_least_hits(2))
 
+            raven_client().captureException.assert_not_called()
+
+            # The full ingest has a minimum duration, and the delete is only called at the
+            # beginning of the second ingest
+            await ORIGINAL_SLEEP(1)
+
             # This is the point of the test: the exception should have been
             # captured, since this error is not expected
             raven_client().captureException.assert_called()
