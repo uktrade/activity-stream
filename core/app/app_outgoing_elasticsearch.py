@@ -355,6 +355,9 @@ async def create_activities_index(context, index_name):
                         'actor.dit:companiesHouseNumber': {
                             'type': 'keyword',
                         },
+                        'actor.dit:emailAddress': {
+                            'type': 'keyword',
+                        },
                         'object.geocoordinates': {
                             'type': 'geo_point'
                         }
