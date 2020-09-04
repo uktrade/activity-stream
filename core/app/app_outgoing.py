@@ -133,7 +133,7 @@ async def run_outgoing_application():
         connector=conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
         timeout=aiohttp.ClientTimeout(
-            total=60.0,
+            total=120.0,
         ),
     )
     redis_client = await redis_get_client(redis_uri)
@@ -208,7 +208,7 @@ async def ingest_feeds(context, feeds):
             to_repeat=ingest_func, to_repeat_args=(context, feed), min_duration=min_duration
         )
         for feed in feeds
-        for (ingest_func, min_duration) in ((ingest_full, 120), (ingest_updates, 0))
+        for (ingest_func, min_duration) in ((ingest_full, 240), (ingest_updates, 0))
     ])
 
 

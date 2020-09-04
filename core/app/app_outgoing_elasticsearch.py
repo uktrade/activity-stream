@@ -282,7 +282,7 @@ async def wait_for_indexes_to_delete(context, index_names):
                     continue
                 if i == max_attempts - 1:
                     raise Exception(f'Failed waiting for deletion of index ({index_name})')
-                await asyncio.sleep(2)
+                await asyncio.sleep(10)
 
 
 async def create_activities_index(context, index_name):
@@ -625,7 +625,11 @@ async def es_ingest_schemas(context, schemas, schema_index_names):
 
 
 async def _es_bulk_post(context, es_bulk_contents):
-    max_attempts = 5
+    # This will result in potentially a sleep of up to 20 minutes between requests if ES is
+    # being flakey. However, the alternative is to go back to the beginning of the full ingest,
+    # which is likely worse in terms of time to get to the end of the full ingest, especially
+    # for large ingests
+    max_attempts = 60
     for i in range(0, max_attempts):
         try:
             with logged(context.logger.debug, context.logger.warning,
@@ -634,12 +638,17 @@ async def _es_bulk_post(context, es_bulk_contents):
                     context=context, method='POST', path='/_bulk', query={},
                     headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,
                 )
-        except ESNon200Exception:
-            raise
+        except ESNon200Exception as exception:
+            status = exception.args[1]
+            if status < 500:
+                raise
+            if i == max_attempts - 1:
+                raise
+            await sleep(context, 60 + i * 10)
         except asyncio.TimeoutError:
             if i == max_attempts - 1:
                 raise
-            await sleep(context, 2)
+            await sleep(context, 60 + i * 10)
         else:
             return
 
