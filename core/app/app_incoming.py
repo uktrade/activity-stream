@@ -59,7 +59,7 @@ async def run_incoming_application():
 
     with logged(logger.info, logger.warning, 'Examining environment', []):
         env = normalise_environment(os.environ)
-        es_uri, redis_uri, sentry = get_common_config(env)
+        es_uri, _, redis_uri, sentry = get_common_config(env)
         feeds = [parse_feed_config(feed) for feed in env['FEEDS']]
         port = env['PORT']
         incoming_key_pairs = [{

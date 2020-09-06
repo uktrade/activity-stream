@@ -53,12 +53,13 @@ def random_url_safe(count):
 def get_common_config(env):
     vcap_services = json_loads(env['VCAP_SERVICES'])
     es_uri = vcap_services['elasticsearch'][0]['credentials']['uri']
+    es_version = vcap_services['elasticsearch'][0]['plan'].split('-')[2]
     redis_uri = vcap_services['redis'][0]['credentials']['uri']
     sentry = {
         'dsn': env['SENTRY_DSN'],
         'environment': env['SENTRY_ENVIRONMENT'],
     }
-    return es_uri, redis_uri, sentry
+    return es_uri, es_version, redis_uri, sentry
 
 
 def normalise_environment(key_values):
