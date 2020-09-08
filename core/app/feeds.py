@@ -1,3 +1,4 @@
+from abc import ABCMeta, abstractmethod
 import asyncio
 import datetime
 import re
@@ -13,10 +14,16 @@ from .http import (
 from .logger import (
     logged,
 )
+from .metrics import (
+    metric_timer,
+)
 from .utils import (
     json_loads,
     json_dumps,
     sub_dict_lower,
+)
+from .utils import (
+    sleep,
 )
 
 
@@ -29,13 +36,120 @@ def parse_feed_config(feed_config):
     return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
 
-class ActivityStreamFeed:
-
+class Feed(metaclass=ABCMeta):
+    """
+    Abstract base class for all feeds with default functionality defined
+    """
     down_grace_period = 60 * 2
 
     full_ingest_page_interval = 0.25
     updates_page_interval = 1
     exception_intervals = [1, 2, 4, 8, 16, 32, 64]
+
+    @classmethod
+    @abstractmethod
+    def parse_config(cls, config):
+        pass
+
+    @staticmethod
+    def next_href(feed):
+        return feed.get('next', None)
+
+    @abstractmethod
+    async def auth_headers(self, context, url):
+        pass
+
+    @classmethod
+    @abstractmethod
+    async def get_activities(cls, context, feed):
+        pass
+
+    @classmethod
+    async def pages(cls, context, feed, href, ingest_type):
+        """
+        async generator yielding 200 records at a time
+        """
+        logger = context.logger
+
+        async def fetch_page(context, href, headers):
+            """Fetch a single page of data from a feed, returning it as bytes
+
+            If a non-200 response is returned, an exception is raised. However, if a
+            429 is returned with a Retry-After header, the fetch is retried after this
+            time, up to 10 attempts. After 10 failed attempts, an exception is
+            raised.
+
+            Raised exceptions are expected to cause the current ingest cycle to fail,
+            but be re-attempted some time later.
+            """
+            num_attempts = 0
+            max_attempts = 10
+
+            while True:
+                num_attempts += 1
+                try:
+                    result = await http_make_request(
+                        context.session, context.metrics, 'GET', href, data=b'', headers=headers)
+                    result.raise_for_status()
+                    return result._body
+                except aiohttp.ClientResponseError as client_error:
+                    if (num_attempts >= max_attempts or client_error.status != 429 or
+                            'Retry-After' not in client_error.headers):
+                        raise
+                    logger.debug(
+                        'HTTP 429 received at attempt (%s). Will retry after (%s) seconds',
+                        num_attempts,
+                        client_error.headers['Retry-After'],
+                    )
+                    await sleep(context, int(client_error.headers['Retry-After']))
+
+        async def gen_source_pages(href):
+            updates_href = href
+            while updates_href:
+                # Lock so there is only 1 request per feed at any given time
+                async with feed.lock:
+                    with \
+                            logged(logger.info, logger.warning, 'Polling page (%s)',
+                                   [updates_href]), \
+                            metric_timer(context.metrics['ingest_page_duration_seconds'],
+                                         [feed.unique_id, ingest_type, 'pull']):
+                        feed_contents = await fetch_page(
+                            context, updates_href, await feed.auth_headers(context, updates_href),
+                        )
+
+                with logged(logger.debug, logger.warning, 'Parsing JSON', []):
+                    feed_parsed = json_loads(feed_contents)
+
+                with logged(logger.debug, logger.warning, 'Convert to activities', []):
+                    activities = await feed.get_activities(context, feed_parsed)
+
+                yield activities, updates_href
+                updates_href = feed.next_href(feed_parsed)
+
+        async def gen_evenly_sized_pages(source_pages):
+            # pylint: disable=undefined-loop-variable
+            page_size = 200
+            current = []
+            async for activities, updates_href in source_pages:
+                current.extend(activities)
+
+                while len(current) >= page_size:
+                    to_yield, current = current[:page_size], current[page_size:]
+                    yield to_yield, updates_href
+
+            if current:
+                yield current, updates_href
+
+        source_pages = gen_source_pages(href)
+        evenly_sized_pages = gen_evenly_sized_pages(source_pages)
+
+        # Would be nicer if could "yield from", but there is no
+        # language support for doing that in async generator
+        async for page, updates_href in evenly_sized_pages:
+            yield page, updates_href
+
+
+class ActivityStreamFeed(Feed):
 
     @classmethod
     def parse_config(cls, config):
@@ -49,9 +163,9 @@ class ActivityStreamFeed:
         self.access_key_id = access_key_id
         self.secret_access_key = secret_access_key
 
-    @staticmethod
-    def next_href(feed):
-        return feed.get('next', None)
+    @classmethod
+    async def get_activities(cls, _, feed):
+        return feed['orderedItems']
 
     async def auth_headers(self, _, url):
         parsed_url = yarl.URL(url)
@@ -68,13 +182,8 @@ class ActivityStreamFeed:
             )
         }
 
-    @classmethod
-    async def get_activities(cls, _, feed):
-        return feed['orderedItems']
 
-
-class ZendeskFeed:
-
+class ZendeskFeed(Feed):
     down_grace_period = 400
 
     # The staging API is severely rate limited
@@ -109,7 +218,7 @@ class ZendeskFeed:
         }
 
     @classmethod
-    async def get_activities(cls, _, page):
+    async def get_activities(cls, _, feed):
         def company_numbers(description):
             match = re.search(cls.company_number_regex, description)
             return [match[1]] if match else []
@@ -135,12 +244,12 @@ class ZendeskFeed:
                     'id': 'dit:zendesk:Ticket:' + str(ticket['id']),
                 },
             }
-            for ticket in page['tickets']
+            for ticket in feed['tickets']
             for company_number in company_numbers(ticket['description'])
         ]
 
 
-class EventFeed:
+class EventFeed(Feed):
 
     down_grace_period = 60 * 60 * 4
 
@@ -188,7 +297,7 @@ class EventFeed:
             'accesstoken': self.accesstoken,
         }
 
-    async def get_activities(self, context, page):
+    async def get_activities(self, context, feed):
         async def get_event(event_id):
             event_lookup = await context.redis_client.execute('GET', f'event-{event_id}')
             if event_lookup:
@@ -236,15 +345,18 @@ class EventFeed:
             return event
 
         async def fetch_address_from_getaddressio(event, postcode):
-            url = self.getaddress_api_url + f'/find/{postcode}?api-key={self.getaddress_api_key}'
+            url = self.getaddress_api_url + \
+                f'/find/{postcode}?api-key={self.getaddress_api_key}'
             resp = await http_make_request(context.session, context.metrics, 'GET', url,
                                            data=b'', headers={})
             if resp.status == 200:
                 geo_result = json_loads(await resp.text())
                 if geo_result.get('latitude'):
                     event['geocoordinates'] = {}
-                    event['geocoordinates']['lat'] = str(geo_result['latitude'])
-                    event['geocoordinates']['lon'] = str(geo_result['longitude'])
+                    event['geocoordinates']['lat'] = str(
+                        geo_result['latitude'])
+                    event['geocoordinates']['lon'] = str(
+                        geo_result['longitude'])
                     joined_lat_lng = ','.join(
                         [str(geo_result['latitude']),
                          str(geo_result['longitude'])]
@@ -279,7 +391,7 @@ class EventFeed:
                     'published': now,
                 }
             }
-            for page_event in page
+            for page_event in feed
             for event in [await get_event(page_event['eventid'])]
             if self.should_include(context, event)
         ]
