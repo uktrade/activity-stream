@@ -1,7 +1,10 @@
 from abc import ABCMeta, abstractmethod
 import asyncio
+import csv
+import codecs
 import datetime
 import re
+from io import StringIO
 import aiohttp
 import yarl
 
@@ -10,6 +13,7 @@ from .hawk import (
 )
 from .http import (
     http_make_request,
+    http_stream_read_lines,
 )
 from .logger import (
     logged,
@@ -32,6 +36,7 @@ def parse_feed_config(feed_config):
         'activity_stream': ActivityStreamFeed,
         'zendesk': ZendeskFeed,
         'aventri': EventFeed,
+        'maxemail': MaxemailFeed,
     }
     return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
@@ -433,3 +438,200 @@ class EventFeed(Feed):
                              loggable_event, should_include)
 
         return should_include
+
+
+class MaxemailFeed(Feed):
+
+    down_grace_period = 60 * 60 * 4
+
+    full_ingest_page_interval = 3
+    updates_page_interval = 60 * 60 * 24 * 30
+    exception_intervals = [120, 180, 240, 300]
+
+    @classmethod
+    def parse_config(cls, config):
+        return cls(**sub_dict_lower(
+            config,
+            [
+                'UNIQUE_ID',
+                'SEED',
+                'DATA_EXPORT_URL',
+                'CAMPAIGN_URL',
+                'USERNAME',
+                'PASSWORD',
+                'PAGE_SIZE'
+            ]
+        ))
+
+    def __init__(self, unique_id, seed, data_export_url,
+                 campaign_url, username, password, page_size):
+        self.lock = asyncio.Lock()
+        self.unique_id = unique_id
+        self.seed = seed
+        self.data_export_url = data_export_url
+        self.campaign_url = campaign_url
+        self.username = username
+        self.password = password
+        self.page_size = int(page_size)
+
+    @staticmethod
+    def next_href(_):
+        """
+        Maxemail API does not support GET requests with next href for pagination
+        returns (None)
+        """
+        return None
+
+    async def auth_headers(self, _, __):
+        return {
+            'Authorization': aiohttp.helpers.BasicAuth(
+                login=self.username,
+                password=self.password,
+            ).encode()
+        }
+
+    async def get_activities(self, context, feed):
+        return None
+
+    @classmethod
+    async def pages(cls, context, feed, href, ingest_type):
+        """
+        async generator for Maxemail email campaign sent records
+        """
+        # pylint: disable=too-many-statements
+        timestamp = href
+        logger = context.logger
+        campaigns = {}
+
+        async def get_email_campaign(email_campaign_id):
+            if email_campaign_id not in campaigns:
+                campaigns[email_campaign_id] = await fetch_email_campaign_from_maxemail(
+                    email_campaign_id
+                )
+            return campaigns[email_campaign_id]
+
+        async def fetch_email_campaign_from_maxemail(email_campaign_id):
+            """
+            Retrieves email campaign data for the given id
+            url: root/api/json/email_campaign
+            method': 'find'
+            param: 'emailId'
+            """
+            url = feed.campaign_url
+            payload = {'method': 'find', 'emailId': email_campaign_id}
+
+            with logged(context.logger.debug, context.logger.warning,
+                        'Fetching email campaign (%s)', [url]):
+                result = await http_make_request(
+                    context.session, context.metrics, 'POST', url, data=payload, headers={})
+                result.raise_for_status()
+
+            campaign = json_loads(result._body)
+            campaign_name = campaign.get('name')
+
+            return campaign_name
+
+        async def get_data_export_key(timestamp):
+            """
+            url: root/api/json/data_export_quick
+            method: 'sent'
+
+            sample payload {'method': 'sent', 'filter': '{"timestamp": "2020-09-10 17:00:00"}'}
+            """
+            payload_filter = json_dumps({'timestamp': str(timestamp)})
+            payload = {'method': 'sent', 'filter': f'{payload_filter}'}
+
+            url = feed.seed
+            num_attempts = 0
+            max_attempts = 10
+
+            while True:
+                num_attempts += 1
+                try:
+                    with logged(context.logger.debug, context.logger.warning,
+                                'Fetching data export key (%s)', [url]):
+                        return await http_make_request(
+                            context.session,
+                            context.metrics,
+                            'POST',
+                            url,
+                            data=payload,
+                            headers={},
+                        )
+                except aiohttp.ClientResponseError as client_error:
+                    if (num_attempts >= max_attempts or client_error.status != 429 or
+                            'Retry-After' not in client_error.headers):
+                        raise
+                    logger.debug(
+                        'HTTP 429 received at attempt (%s). Will retry after (%s) seconds',
+                        num_attempts,
+                        client_error.headers['Retry-After'],
+                    )
+                    await sleep(context, int(client_error.headers['Retry-After']))
+
+        async def gen_data_export_csv(key):
+            """
+            url: root/file/key/{key}
+            """
+            url = feed.data_export_url.format(key=key)
+            with logged(context.logger.debug, context.logger.warning,
+                        'Fetching data export csv (%s)', [url]):
+                lines = http_stream_read_lines(
+                    context.session, context.metrics, 'POST', url, data={}, headers={}
+                )
+            row_count = 0
+            async for line in lines:
+                # skip header
+                if row_count == 0:
+                    row_count += 1
+                    continue
+                yield codecs.decode(line, 'utf-8')
+
+        async def gen_parse_rows_for_bulk_insert(data_export_key):
+            parsed = []
+            async for line in gen_data_export_csv(data_export_key):
+                try:
+                    parsed_line = next(csv.reader(
+                        StringIO(line), skipinitialspace=True, delimiter=',',
+                        quotechar="'", quoting=csv.QUOTE_ALL,
+                    ))
+                except StopIteration:
+                    break
+                else:
+                    campaign_name = await get_email_campaign(parsed_line[0])
+                    # email_campaign_id-email_address
+                    line_id = f'{parsed_line[0]}-{parsed_line[1]}'
+                    parsed.append(
+                        {
+                            'id': 'dit:maxemail:Email:' + line_id + ':Create',
+                            'type': 'Create',
+                            'dit:application': 'maxemail',
+                            'object': {
+                                'type': ['Document', 'dit:maxemail:Email'],
+                                'id': 'dit:maxemail:Email:' + line_id,
+                                'dit:emailAddress': parsed_line[1],
+                                'attributedTo': {
+                                    'type': 'dit:maxemail:Campaign',
+                                    'id': 'dit:maxemail:Campaign:id' + parsed_line[0],
+                                    'name': campaign_name,
+                                    'published': parsed_line[2],
+                                }
+                            }
+                        }
+                    )
+                    if len(parsed) == feed.page_size:
+                        yield parsed
+                        parsed = []
+
+            if parsed:
+                yield parsed
+
+        now = datetime.datetime.now()
+        if ingest_type == 'full':
+            # get last 6 weeks for full ingestion
+            timestamp = now - datetime.timedelta(days=42)
+
+        data_export_key = await get_data_export_key(timestamp)
+
+        async for rows in gen_parse_rows_for_bulk_insert(data_export_key):
+            yield rows, now.strftime('%Y %m %d %H:%M:%S')
