@@ -342,7 +342,8 @@ def mock_env():
         'VCAP_SERVICES': (
             '{'
             '"redis":[{"credentials":{"uri":"redis://127.0.0.1:6379"}}],'
-            '"elasticsearch":[{"credentials":{"uri":"http://some-id:some-secret@127.0.0.1:9200"}}]'
+            '"elasticsearch":[{"credentials":{"uri":"http://some-id:some-secret@127.0.0.1:9200"},'
+            '"plan":"xlarge-ha-7.x"}]'
             '}'
         ),
     }

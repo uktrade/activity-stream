@@ -22,6 +22,7 @@ from .elasticsearch import (
     ALIAS_OBJECTS_SCHEMAS,
     ESNon200Exception,
     ESMetricsUnavailable,
+    es_mappings,
     es_request,
     es_request_non_200_exception,
 )
@@ -298,72 +299,70 @@ async def create_activities_index(context, index_name):
                     'refresh_interval': '-1',
                 }
             },
-            'mappings': {
-                '_doc': {
-                    'dynamic': False,
-                    'properties': {
-                        'id': {
-                            'type': 'keyword',
-                        },
-                        'published': {
-                            'type': 'date',
-                        },
-                        'type': {
-                            'type': 'keyword',
-                        },
-                        'startTime': {
-                            'type': 'date',
-                        },
-                        'endTime': {
-                            'type': 'date',
-                        },
-                        'generator.name': {
-                            'type': 'keyword',
-                        },
-                        'object.type': {
-                            'type': 'keyword',
-                        },
-                        'object.published': {
-                            'type': 'date',
-                        },
-                        'object.content': {
-                            'type': 'text',
-                        },
-                        'object.name': {
-                            'type': 'text',
-                        },
-                        'object.startTime': {
-                            'type': 'date',
-                        },
-                        'object.endTime': {
-                            'type': 'date',
-                        },
-                        # Not AS 2.0, but is used, and is a space-separated
-                        # list of keywords
-                        'object.keywords': {
-                            'type': 'text',
-                        },
-                        'object.dit:emailAddress': {
-                            'type': 'keyword',
-                        },
-                        'object.attributedTo.id': {
-                            'type': 'keyword',
-                        },
-                        'object.attributedTo.type': {
-                            'type': 'keyword',
-                        },
-                        'actor.dit:companiesHouseNumber': {
-                            'type': 'keyword',
-                        },
-                        'actor.dit:emailAddress': {
-                            'type': 'keyword',
-                        },
-                        'object.geocoordinates': {
-                            'type': 'geo_point'
-                        }
+            'mappings': es_mappings({
+                'dynamic': False,
+                'properties': {
+                    'id': {
+                        'type': 'keyword',
                     },
+                    'published': {
+                        'type': 'date',
+                    },
+                    'type': {
+                        'type': 'keyword',
+                    },
+                    'startTime': {
+                        'type': 'date',
+                    },
+                    'endTime': {
+                        'type': 'date',
+                    },
+                    'generator.name': {
+                        'type': 'keyword',
+                    },
+                    'object.type': {
+                        'type': 'keyword',
+                    },
+                    'object.published': {
+                        'type': 'date',
+                    },
+                    'object.content': {
+                        'type': 'text',
+                    },
+                    'object.name': {
+                        'type': 'text',
+                    },
+                    'object.startTime': {
+                        'type': 'date',
+                    },
+                    'object.endTime': {
+                        'type': 'date',
+                    },
+                    # Not AS 2.0, but is used, and is a space-separated
+                    # list of keywords
+                    'object.keywords': {
+                        'type': 'text',
+                    },
+                    'object.dit:emailAddress': {
+                        'type': 'keyword',
+                    },
+                    'object.attributedTo.id': {
+                        'type': 'keyword',
+                    },
+                    'object.attributedTo.type': {
+                        'type': 'keyword',
+                    },
+                    'actor.dit:companiesHouseNumber': {
+                        'type': 'keyword',
+                    },
+                    'actor.dit:emailAddress': {
+                        'type': 'keyword',
+                    },
+                    'object.geocoordinates': {
+                        'type': 'geo_point'
+                    }
                 },
-            },
+            }),
         })
         await es_request_non_200_exception(
             context=context,
@@ -390,51 +389,49 @@ async def create_objects_index(context, index_name):
                     'refresh_interval': '-1',
                 }
             },
-            'mappings': {
-                '_doc': {
-                    'dynamic': False,
-                    'properties': {
-                        'id': {
-                            'type': 'keyword',
-                        },
-                        'published': {
-                            'type': 'date',
-                        },
-                        'type': {
-                            'type': 'keyword',
-                        },
-                        'content': {
-                            'type': 'text',
-                        },
-                        'name': {
-                            'type': 'text',
-                        },
-                        'startTime': {
-                            'type': 'date',
-                        },
-                        'endTime': {
-                            'type': 'date',
-                        },
-                        # Not AS 2.0, but is used, and is a space-separated
-                        # list of keywords
-                        'keywords': {
-                            'type': 'text',
-                        },
-                        'dit:emailAddress': {
-                            'type': 'keyword',
-                        },
-                        'attributedTo.id': {
-                            'type': 'keyword',
-                        },
-                        'attributedTo.type': {
-                            'type': 'keyword',
-                        },
-                        'geocoordinates': {
-                            'type': 'geo_point'
-                        }
+            'mappings': es_mappings({
+                'dynamic': False,
+                'properties': {
+                    'id': {
+                        'type': 'keyword',
                     },
+                    'published': {
+                        'type': 'date',
+                    },
+                    'type': {
+                        'type': 'keyword',
+                    },
+                    'content': {
+                        'type': 'text',
+                    },
+                    'name': {
+                        'type': 'text',
+                    },
+                    'startTime': {
+                        'type': 'date',
+                    },
+                    'endTime': {
+                        'type': 'date',
+                    },
+                    # Not AS 2.0, but is used, and is a space-separated
+                    # list of keywords
+                    'keywords': {
+                        'type': 'text',
+                    },
+                    'dit:emailAddress': {
+                        'type': 'keyword',
+                    },
+                    'attributedTo.id': {
+                        'type': 'keyword',
+                    },
+                    'attributedTo.type': {
+                        'type': 'keyword',
+                    },
+                    'geocoordinates': {
+                        'type': 'geo_point'
+                    }
                 },
-            },
+            }),
         })
         await es_request_non_200_exception(
             context=context,
@@ -461,11 +458,9 @@ async def create_schemas_index(context, index_name):
                     'refresh_interval': '-1',
                 }
             },
-            'mappings': {
-                '_doc': {
-                    'dynamic': False,
-                },
-            }
+            'mappings': es_mappings({
+                'dynamic': False,
+            })
         })
         await es_request_non_200_exception(
             context=context,

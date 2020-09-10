@@ -84,5 +84,11 @@ async def es_request(context, method, path, query, headers, payload):
         )
 
 
+def es_mappings(mappings):
+    return \
+        {'_doc': mappings} if settings.ES_VERSION == '6.x' else \
+        mappings
+
+
 class ESMetricsUnavailable(Exception):
     pass

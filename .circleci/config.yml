@@ -5,7 +5,9 @@ jobs:
       - image: python:3.7.7
         environment:
           PRE_COMMIT_HOME: /root/cache/pre-commit
-      - image: docker.elastic.co/elasticsearch/elasticsearch:6.8.9
+      - image: docker.elastic.co/elasticsearch/elasticsearch:7.9.1
+        environment:
+          discovery.type: single-node
       - image: redis:4.0.10
     working_directory: ~/repo
     steps:
