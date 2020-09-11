@@ -37,9 +37,6 @@ from .elasticsearch import (
 from .feeds import (
     parse_feed_config,
 )
-from .http import (
-    http_make_request,
-)
 from .logger import (
     get_root_logger,
     logged,
@@ -73,7 +70,6 @@ from .utils import (
     cancel_non_current_tasks,
     get_child_context,
     get_common_config,
-    json_loads,
     main,
     normalise_environment,
     sleep,
@@ -206,7 +202,8 @@ async def ingest_feeds(context, feeds):
     await asyncio.gather(*[
         repeat_until_cancelled(
             context, feed.exception_intervals,
-            to_repeat=ingest_func, to_repeat_args=(context, feed), min_duration=min_duration
+            to_repeat=ingest_func, to_repeat_args=(
+                context, feed), min_duration=min_duration
         )
         for feed in feeds
         for (ingest_func, min_duration) in ((ingest_full, 120), (ingest_updates, 0))
@@ -248,7 +245,8 @@ async def ingest_full(parent_context, feed):
         await set_feed_updates_seed_url_init(context, feed.unique_id)
 
         indexes_without_alias, _ = await get_old_index_names(context)
-        indexes_to_delete = indexes_matching_feeds(indexes_without_alias, [feed.unique_id])
+        indexes_to_delete = indexes_matching_feeds(
+            indexes_without_alias, [feed.unique_id])
         await delete_indexes(context, indexes_to_delete)
 
         activities_index_name, activities_schemas_index_name, \
@@ -262,12 +260,16 @@ async def ingest_full(parent_context, feed):
         activities_schemas = set()
         objects_schemas = set()
 
-        href = feed.seed
-        while href:
+        updates_href = feed.seed
+
+        async for page_of_activities, href in feed.pages(context, feed, feed.seed, 'full'):
             updates_href = href
-            href, activities_schemas_page, objects_schemas_page = await fetch_and_ingest_page(
-                context, 'full', feed, [activities_index_name], [objects_index_name], href,
+
+            activities_schemas_page, objects_schemas_page = await ingest_page(
+                context, page_of_activities, 'full', feed, [
+                    activities_index_name], [objects_index_name]
             )
+
             activities_schemas.update(activities_schemas_page)
             objects_schemas.update(objects_schemas_page)
 
@@ -337,11 +339,15 @@ async def ingest_updates(parent_context, feed):
             activities_schemas = set()
             objects_schemas = set()
 
-            while href:
+            updates_href = feed.seed
+
+            async for page_of_activities, href in feed.pages(context, feed, href, 'updates'):
                 updates_href = href
-                href, activities_schemas_page, objects_schemas_page = await fetch_and_ingest_page(
-                    context, 'updates', feed, activities_index_names, objects_index_names, href,
+                activities_schemas_page, objects_schemas_page = await ingest_page(
+                    context, page_of_activities, 'updates', feed,
+                    activities_index_names, objects_index_names,
                 )
+
                 activities_schemas.update(activities_schemas_page)
                 objects_schemas.update(objects_schemas_page)
 
@@ -353,82 +359,6 @@ async def ingest_updates(parent_context, feed):
             await set_feed_updates_url(context, feed.unique_id, updates_href)
 
     await sleep(context, feed.updates_page_interval)
-
-
-async def fetch_and_ingest_page(context, ingest_type, feed, activity_index_names,
-                                objects_index_names, href):
-    """Ingest a page into Elasticsearch by calling fetch_page + es_bulk_ingest
-
-    The url of the next page is returned or `None` if there is no next page
-    """
-    with \
-            logged(context.logger.debug, context.logger.warning, 'Polling/pushing page', []), \
-            metric_timer(context.metrics['ingest_page_duration_seconds'],
-                         [feed.unique_id, ingest_type, 'total']):
-
-        # Lock so there is only 1 request per feed at any given time
-        async with feed.lock:
-            with \
-                    logged(context.logger.info, context.logger.warning, 'Polling page (%s)',
-                           [href]), \
-                    metric_timer(context.metrics['ingest_page_duration_seconds'],
-                                 [feed.unique_id, ingest_type, 'pull']):
-                feed_contents = await fetch_page(
-                    context, href, await feed.auth_headers(context, href),
-                )
-
-        with logged(context.logger.debug, context.logger.warning, 'Parsing JSON', []):
-            feed_parsed = json_loads(feed_contents)
-
-        with logged(context.logger.debug, context.logger.warning, 'Converting to activities', []):
-            activities = await feed.get_activities(context, feed_parsed)
-
-        num_es_documents = len(activities) * (len(activity_index_names) + len(objects_index_names))
-        with \
-                metric_timer(context.metrics['ingest_page_duration_seconds'],
-                             [feed.unique_id, ingest_type, 'push']), \
-                metric_counter(context.metrics['ingest_activities_nonunique_total'],
-                               [feed.unique_id, ingest_type], num_es_documents):
-            await es_bulk_ingest(context, activities, activity_index_names, objects_index_names)
-
-        asyncio.ensure_future(set_feed_status(
-            context, feed.unique_id, feed.down_grace_period, b'GREEN'))
-
-        activities_schemas = to_schemas(activities)
-        objects_schemas = to_schemas([activity['object'] for activity in activities])
-
-        return feed.next_href(feed_parsed), activities_schemas, objects_schemas
-
-
-async def fetch_page(context, href, headers):
-    """Fetch a single page of data from a feed, returning it as bytes
-
-    If a non-200 response is returned, an exception is raised. However, if a
-    429 is returned with a Retry-After header, the fetch is retried after this
-    time, up to 10 attempts. After 10 failed attempts, an exception is
-    raised.
-
-    Raised exceptions are expected to cause the current ingest cycle to fail,
-    but be re-attempted some time later.
-    """
-    num_attempts = 0
-    max_attempts = 10
-    logger = context.logger
-
-    while True:
-        num_attempts += 1
-        try:
-            result = await http_make_request(
-                context.session, context.metrics, 'GET', href, data=b'', headers=headers)
-            result.raise_for_status()
-            return result._body
-        except aiohttp.ClientResponseError as client_error:
-            if (num_attempts >= max_attempts or client_error.status != 429 or
-                    'Retry-After' not in client_error.headers):
-                raise
-            logger.debug('HTTP 429 received at attempt (%s). Will retry after (%s) seconds',
-                         num_attempts, client_error.headers['Retry-After'])
-            await sleep(context, int(client_error.headers['Retry-After']))
 
 
 async def create_metrics_application(parent_context, metrics_registry, feeds):
@@ -445,7 +375,8 @@ async def create_metrics_application(parent_context, metrics_registry, feeds):
     async def poll_metrics():
         with logged(context.logger.debug, context.logger.warning, 'Polling', []):
             searchable = await es_searchable_total(context)
-            metrics['elasticsearch_activities_total'].labels('searchable').set(searchable)
+            metrics['elasticsearch_activities_total'].labels(
+                'searchable').set(searchable)
 
             await set_metric_if_can(
                 metrics['elasticsearch_activities_total'],
@@ -474,8 +405,38 @@ async def create_metrics_application(parent_context, metrics_registry, feeds):
         await sleep(context, METRICS_INTERVAL)
 
     asyncio.get_event_loop().create_task(
-        repeat_until_cancelled(context, EXCEPTION_INTERVALS, to_repeat=poll_metrics)
+        repeat_until_cancelled(
+            context, EXCEPTION_INTERVALS, to_repeat=poll_metrics)
     )
+
+
+async def ingest_page(context, activities, ingest_type, feed, activity_index_names,
+                      objects_index_names):
+    """
+    Ingest a page activities into Elasticsearch by calling es_bulk_ingest
+    """
+    with \
+            logged(context.logger.debug, context.logger.warning, 'Polling/pushing page', []), \
+            metric_timer(context.metrics['ingest_page_duration_seconds'],
+                         [feed.unique_id, ingest_type, 'total']):
+
+        num_es_documents = len(
+            activities) * (len(activity_index_names) + len(objects_index_names))
+        with \
+                metric_timer(context.metrics['ingest_page_duration_seconds'],
+                             [feed.unique_id, ingest_type, 'push']), \
+                metric_counter(context.metrics['ingest_activities_nonunique_total'],
+                               [feed.unique_id, ingest_type], num_es_documents):
+            await es_bulk_ingest(context, activities, activity_index_names, objects_index_names)
+
+        asyncio.ensure_future(set_feed_status(
+            context, feed.unique_id, feed.down_grace_period, b'GREEN'))
+
+        activities_schemas = to_schemas(activities)
+        objects_schemas = to_schemas(
+            [activity['object'] for activity in activities])
+
+        return activities_schemas, objects_schemas
 
 
 async def set_metric_if_can(metric, labels, get_value_coroutine):
