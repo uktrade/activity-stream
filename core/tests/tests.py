@@ -1779,6 +1779,49 @@ class TestApplication(TestBase):
             results_dict['hits']['hits'][1]['_source']['object']['geocoordinates']['lat'],
             '1.3')
 
+    @async_test
+    async def test_maxemail(self):
+        def maxemail_base_fetch(results):
+            if 'hits' not in results or 'hits' \
+                    not in results['hits'] or len(results['hits']['hits']) < 10:
+                return False
+
+            if str(results).find('maxemail') != -1:
+                return True
+
+            return False
+
+        env = {
+            **mock_env(),
+            'FEEDS__1__UNIQUE_ID': 'maxemail',
+            'FEEDS__1__USERNAME': 'foo',
+            'FEEDS__1__PASSWORD': 'bar',
+            'FEEDS__1__PAGE_SIZE': '8',
+            'FEEDS__1__SEED': 'http://localhost:6098',
+            'FEEDS__1__DATA_EXPORT_URL': 'http://localhost:8081/tests_fixture_maxemail_csv.csv',
+            'FEEDS__1__CAMPAIGN_URL': 'http://localhost:8081/tests_fixture_maxemail_campaign.json',
+            'FEEDS__1__TYPE': 'maxemail',
+        }
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_file, mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+
+        # Setup Mock data export Server
+        async def mock_get_download_key(_):
+            return web.Response(text='123')
+
+        await _web_application(
+            port=6098,
+            routes=[web.get('/api/json/data_export_quick', mock_get_download_key)],
+        )
+
+        results_dict = await fetch_all_es_data_until(maxemail_base_fetch)
+
+        self.assertEqual(len(results_dict['hits']['hits']), 10)
+        ids = [item['_source']['object']['id'] for item in results_dict['hits']['hits']]
+        self.assertTrue('dit:maxemail:Email:459-a.b@dummy.co' in ids)
+
     def test_base_event_should_include(self):
         json_null_event = {}
         context = Context(logger=MagicMock(), metrics=MagicMock(),
