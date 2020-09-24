@@ -150,11 +150,11 @@ class TestProcess(unittest.TestCase):
         routes = [
             web.post('/_bulk', return_200_slow),
         ]
-        es_runner = await run_es_application(port=9201, override_routes=routes)
+        es_runner = await run_es_application(port=9210, override_routes=routes)
         self.add_async_cleanup(es_runner.cleanup)
 
         (server_out, stdout_out), (server_inc, stdout_inc), _ = await self.setup_manual({
-            **mock_env(), 'ELASTICSEARCH__PORT': '9201'
+            **mock_env(), 'ELASTICSEARCH__PORT': '9210'
         })
         self.assertTrue(await is_http_accepted_eventually())
 
