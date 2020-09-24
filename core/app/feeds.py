@@ -617,6 +617,7 @@ class MaxemailFeed(Feed):
                     campaign_name = await get_email_campaign(parsed_line[0])
                     # email_campaign_id-email_address
                     line_id = f'{parsed_line[0]}-{parsed_line[1]}'
+                    last_updated = parsed_line[2]
                     parsed.append(
                         {
                             'id': 'dit:maxemail:Email:' + line_id + ':Create',
@@ -636,11 +637,11 @@ class MaxemailFeed(Feed):
                         }
                     )
                     if len(parsed) == feed.page_size:
-                        yield parsed
+                        yield parsed, last_updated
                         parsed = []
 
             if parsed:
-                yield parsed
+                yield parsed, last_updated
 
         now = datetime.datetime.now()
         if ingest_type == 'full':
@@ -651,6 +652,5 @@ class MaxemailFeed(Feed):
         data_export_key = await get_data_export_key(timestamp)
         logger.debug('maxemail export key (%s)', data_export_key)
 
-        async for rows in gen_parse_rows_for_bulk_insert(data_export_key):
-            now = datetime.datetime.now()
-            yield rows, now.strftime('%Y-%m-%d %H:%M:%S')
+        async for rows, last_updated in gen_parse_rows_for_bulk_insert(data_export_key):
+            yield rows, last_updated
