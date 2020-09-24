@@ -521,9 +521,15 @@ class MaxemailFeed(Feed):
             payload = {'method': 'find', 'emailId': email_campaign_id}
 
             with logged(context.logger.debug, context.logger.warning,
-                        'Fetching email campaign (%s)', [url]):
+                        'maxemail Fetching campaign (%s) with payload (%s)', [url, payload]):
                 result = await http_make_request(
-                    context.session, context.metrics, 'POST', url, data=payload, headers={})
+                    context.session,
+                    context.metrics,
+                    'POST',
+                    url,
+                    data=payload,
+                    headers=await feed.auth_headers(None, None),
+                )
                 result.raise_for_status()
 
             campaign = json_loads(result._body)
@@ -538,8 +544,11 @@ class MaxemailFeed(Feed):
 
             sample payload {'method': 'sent', 'filter': '{"timestamp": "2020-09-10 17:00:00"}'}
             """
-            payload_filter = json_dumps({'timestamp': str(timestamp)})
-            payload = {'method': 'sent', 'filter': f'{payload_filter}'}
+            payload_filter = '{"timestamp": "' + timestamp + '"}'
+            payload = {
+                'method': 'sent',
+                'filter': payload_filter
+            }
 
             url = feed.seed
             num_attempts = 0
@@ -548,16 +557,18 @@ class MaxemailFeed(Feed):
             while True:
                 num_attempts += 1
                 try:
-                    with logged(context.logger.debug, context.logger.warning,
-                                'Fetching data export key (%s)', [url]):
-                        return await http_make_request(
+                    with logged(context.logger.info, context.logger.warning,
+                                'maxemail export key (%s) with payload (%s)', [url, payload]):
+                        result = await http_make_request(
                             context.session,
                             context.metrics,
                             'POST',
                             url,
                             data=payload,
-                            headers={},
+                            headers=await feed.auth_headers(None, None),
                         )
+                        key = str(await result.text()).strip('\"')
+                        return key
                 except aiohttp.ClientResponseError as client_error:
                     if (num_attempts >= max_attempts or client_error.status != 429 or
                             'Retry-After' not in client_error.headers):
@@ -575,9 +586,14 @@ class MaxemailFeed(Feed):
             """
             url = feed.data_export_url.format(key=key)
             with logged(context.logger.debug, context.logger.warning,
-                        'Fetching data export csv (%s)', [url]):
+                        'maxemail data export csv (%s)', [url]):
                 lines = http_stream_read_lines(
-                    context.session, context.metrics, 'POST', url, data={}, headers={}
+                    context.session,
+                    context.metrics,
+                    'POST',
+                    url,
+                    data={},
+                    headers=await feed.auth_headers(None, None),
                 )
             row_count = 0
             async for line in lines:
@@ -601,6 +617,7 @@ class MaxemailFeed(Feed):
                     campaign_name = await get_email_campaign(parsed_line[0])
                     # email_campaign_id-email_address
                     line_id = f'{parsed_line[0]}-{parsed_line[1]}'
+                    last_updated = parsed_line[2]
                     parsed.append(
                         {
                             'id': 'dit:maxemail:Email:' + line_id + ':Create',
@@ -620,18 +637,20 @@ class MaxemailFeed(Feed):
                         }
                     )
                     if len(parsed) == feed.page_size:
-                        yield parsed
+                        yield parsed, last_updated
                         parsed = []
 
             if parsed:
-                yield parsed
+                yield parsed, last_updated
 
         now = datetime.datetime.now()
         if ingest_type == 'full':
             # get last 6 weeks for full ingestion
-            timestamp = now - datetime.timedelta(days=42)
+            six_weeks_ago = now - datetime.timedelta(days=42)
+            timestamp = six_weeks_ago.strftime('%Y-%m-%d 00:00:00')
 
         data_export_key = await get_data_export_key(timestamp)
+        logger.debug('maxemail export key (%s)', data_export_key)
 
-        async for rows in gen_parse_rows_for_bulk_insert(data_export_key):
-            yield rows, now.strftime('%Y %m %d %H:%M:%S')
+        async for rows, last_updated in gen_parse_rows_for_bulk_insert(data_export_key):
+            yield rows, last_updated
