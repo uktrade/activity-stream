@@ -1219,9 +1219,9 @@ class TestApplication(TestBase):
             web.post('/_bulk', return_200_and_callback),
         ]
 
-        es_runner = await run_es_application(port=9201, override_routes=routes)
+        es_runner = await run_es_application(port=9208, override_routes=routes)
         original_env = mock_env()
-        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
+        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9208')
         self.add_async_cleanup(es_runner.cleanup)
         await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
                                 mock_feed=read_file, mock_feed_status=lambda: 200,
@@ -1362,11 +1362,11 @@ class TestApplication(TestBase):
         routes = [
             web.get('/activities/_search', return_200_and_callback),
         ]
-        es_runner = await run_es_application(port=9201, override_routes=routes)
+        es_runner = await run_es_application(port=9204, override_routes=routes)
         self.add_async_cleanup(es_runner.cleanup)
 
         original_env = mock_env()
-        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
+        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9204')
         await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
                                 mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -1387,10 +1387,10 @@ class TestApplication(TestBase):
         routes = [
             web.get('/activities/_search', respond_http('{"elasticsearch": "error"}', 401)),
         ]
-        es_runner = await run_es_application(port=9201, override_routes=routes)
+        es_runner = await run_es_application(port=9202, override_routes=routes)
 
         original_env = mock_env()
-        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
+        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9202')
         await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
                                 mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -1448,9 +1448,9 @@ class TestApplication(TestBase):
             finally:
                 writer.close()
 
-        server = await asyncio.start_server(handle_client, '0.0.0.0', 9201)
+        server = await asyncio.start_server(handle_client, '0.0.0.0', 9203)
         original_env = mock_env()
-        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
+        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9203')
 
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
@@ -1573,9 +1573,9 @@ class TestApplication(TestBase):
             finally:
                 writer.close()
 
-        server = await asyncio.start_server(handle_client, '0.0.0.0', 9201)
+        server = await asyncio.start_server(handle_client, '0.0.0.0', 9207)
         original_env = mock_env()
-        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
+        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9207')
 
         with patch('asyncio.sleep', wraps=fast_sleep) as mock_sleep:
             await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
@@ -1597,9 +1597,9 @@ class TestApplication(TestBase):
 
     @async_test
     async def test_es_no_connect_on_get_500(self):
-        es_runner = await run_es_application(port=9201, override_routes=[])
+        es_runner = await run_es_application(port=9206, override_routes=[])
         original_env = mock_env()
-        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
+        vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9206')
         env = {
             **original_env,
             'VCAP_SERVICES': vcap_services,
