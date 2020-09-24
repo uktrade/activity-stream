@@ -547,7 +547,7 @@ class MaxemailFeed(Feed):
             payload_filter = '{"timestamp": "' + timestamp + '"}'
             payload = {
                 'method': 'sent',
-                'filter': f'{payload_filter}'
+                'filter': payload_filter
             }
 
             url = feed.seed
