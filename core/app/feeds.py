@@ -617,7 +617,7 @@ class MaxemailFeed(Feed):
                     campaign_name = await get_email_campaign(parsed_line[0])
                     # email_campaign_id-email_address
                     line_id = f'{parsed_line[0]}-{parsed_line[1]}'
-                    last_updated = parsed_line[2]
+                    last_updated = parsed_line[2].strip('\"')
                     parsed.append(
                         {
                             'id': 'dit:maxemail:Email:' + line_id + ':Create',
@@ -629,9 +629,9 @@ class MaxemailFeed(Feed):
                                 'dit:emailAddress': parsed_line[1],
                                 'attributedTo': {
                                     'type': 'dit:maxemail:Campaign',
-                                    'id': 'dit:maxemail:Campaign:id' + parsed_line[0],
+                                    'id': 'dit:maxemail:Campaign:id:' + parsed_line[0],
                                     'name': campaign_name,
-                                    'published': parsed_line[2],
+                                    'published': last_updated,
                                 }
                             }
                         }
