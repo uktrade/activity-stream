@@ -609,7 +609,7 @@ class MaxemailFeed(Feed):
                 try:
                     parsed_line = next(csv.reader(
                         StringIO(line), skipinitialspace=True, delimiter=',',
-                        quotechar="'", quoting=csv.QUOTE_ALL,
+                        quotechar='"', quoting=csv.QUOTE_ALL,
                     ))
                 except StopIteration:
                     break
@@ -617,7 +617,7 @@ class MaxemailFeed(Feed):
                     campaign_name = await get_email_campaign(parsed_line[0])
                     # email_campaign_id-email_address
                     line_id = f'{parsed_line[0]}-{parsed_line[1]}'
-                    last_updated = parsed_line[2].strip('\"')
+                    last_updated = parsed_line[2]
                     parsed.append(
                         {
                             'id': 'dit:maxemail:Email:' + line_id + ':Create',
