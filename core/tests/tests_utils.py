@@ -198,18 +198,18 @@ async def get_until_raw(url, x_forwarded_for, condition):
     return all_data, status, headers
 
 
-async def post(url, auth, x_forwarded_for):
+async def post(url, auth, x_forwarded_for, body):
     return await post_with_headers(url, {
         'Authorization': auth,
-        'Content-Type': '',
+        'Content-Type': 'application/json',
         'X-Forwarded-For': x_forwarded_for,
         'X-Forwarded-Proto': 'http',
-    })
+    }, body)
 
 
-async def post_with_headers(url, headers):
+async def post_with_headers(url, headers, body):
     async with aiohttp.ClientSession(skip_auto_headers=['Content-Type']) as session:
-        result = await session.post(url, headers=headers, timeout=1)
+        result = await session.post(url, headers=headers, data=body, timeout=1)
     return (await result.text(), result.status)
 
 

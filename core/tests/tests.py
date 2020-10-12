@@ -426,10 +426,10 @@ class TestAuthentication(TestBase):
 
         url = 'http://127.0.0.1:8080/v2/activities'
         auth = hawk_auth_header(
-            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', '',
+            'incoming-some-id-1', 'incoming-some-secret-1', url, 'POST', '', 'application/json',
         )
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
-        text, status = await post(url, auth, x_forwarded_for)
+        text, status = await post(url, auth, x_forwarded_for, b'')
         self.assertEqual(status, 405)
         self.assertEqual(text, '{"details": "405: Method Not Allowed"}')
 
@@ -595,11 +595,21 @@ class TestApplication(TestBase):
             await fetch_all_es_data_until(has_at_least(2))
 
         desired_id = 'dit:exportOpportunities:Enquiry:49863'
-        result, status, _ = await get_until_with_body(
-            url, x_forwarded_for, has_at_least(1), json.dumps({
-                'query': {'term': {'id': desired_id}}
-            }).encode('utf-8'))
+        body = json.dumps({
+            'query': {'term': {'id': desired_id}}
+        }).encode('utf-8')
+        result, status, _ = await get_until_with_body(url,
+                                                      x_forwarded_for, has_at_least(1), body)
 
+        self.assertEqual(status, 200)
+        ids = [item['_source']['id'] for item in result['hits']['hits']]
+        self.assertEqual([desired_id], ids)
+
+        auth = hawk_auth_header(
+            'incoming-some-id-3', 'incoming-some-secret-3', url, 'POST', body, 'application/json',
+        )
+        result_raw, status = await post(url, auth, x_forwarded_for, body)
+        result = json.loads(result_raw)
         self.assertEqual(status, 200)
         ids = [item['_source']['id'] for item in result['hits']['hits']]
         self.assertEqual([desired_id], ids)
