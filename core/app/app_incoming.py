@@ -155,6 +155,14 @@ async def create_incoming_application(
             '/objects/_search',
             handle_get_search_v2(context, ALIAS_OBJECTS),
         ),
+        web.post(
+            '/activities/_search',
+            handle_get_search_v2(context, ALIAS_ACTIVITIES),
+        ),
+        web.post(
+            '/objects/_search',
+            handle_get_search_v2(context, ALIAS_OBJECTS),
+        ),
     ])
     app.add_subapp('/v3/', private_app_v3)
 
