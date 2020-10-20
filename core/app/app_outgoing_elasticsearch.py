@@ -196,16 +196,10 @@ async def add_remove_aliases_atomically(context,
             'actions': [
                 {'remove': {'index': activities_remove_pattern,
                             'alias': ALIAS_ACTIVITIES}},
-                {'remove': {'index': activities_schemas_remove_pattern,
-                            'alias': ALIAS_ACTIVITIES_SCHEMAS}},
                 {'remove': {'index': objects_remove_pattern,
                             'alias': ALIAS_OBJECTS}},
-                {'remove': {'index': objects_schemas_remove_pattern,
-                            'alias': ALIAS_OBJECTS_SCHEMAS}},
                 {'add': {'index': activity_index_name, 'alias': ALIAS_ACTIVITIES}},
-                {'add': {'index': activity_objects_index_name, 'alias': ALIAS_ACTIVITIES_SCHEMAS}},
                 {'add': {'index': object_index_name, 'alias': ALIAS_OBJECTS}},
-                {'add': {'index': object_schemas_index_name, 'alias': ALIAS_OBJECTS_SCHEMAS}},
             ]
         })
 

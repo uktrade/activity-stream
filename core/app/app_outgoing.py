@@ -253,9 +253,9 @@ async def ingest_full(parent_context, feed):
             objects_index_name, objects_schemas_index_name = get_new_index_names(
                 feed.unique_id)
         await create_activities_index(context, activities_index_name)
-        await create_schemas_index(context, activities_schemas_index_name)
+        # await create_schemas_index(context, activities_schemas_index_name)
         await create_objects_index(context, objects_index_name)
-        await create_schemas_index(context, objects_schemas_index_name)
+        # await create_schemas_index(context, objects_schemas_index_name)
 
         activities_schemas = set()
         objects_schemas = set()
@@ -269,16 +269,16 @@ async def ingest_full(parent_context, feed):
                     activities_index_name], [objects_index_name]
             )
 
-            activities_schemas.update(activities_schemas_page)
-            objects_schemas.update(objects_schemas_page)
+            # activities_schemas.update(activities_schemas_page)
+            # objects_schemas.update(objects_schemas_page)
 
             await sleep(context, feed.full_ingest_page_interval)
 
-        await es_ingest_schemas(context, activities_schemas, [activities_schemas_index_name])
-        await refresh_index(context, activities_schemas_index_name, feed.unique_id, 'full')
+        # await es_ingest_schemas(context, activities_schemas, [activities_schemas_index_name])
+        # await refresh_index(context, activities_schemas_index_name, feed.unique_id, 'full')
 
-        await es_ingest_schemas(context, objects_schemas, [objects_schemas_index_name])
-        await refresh_index(context, objects_schemas_index_name, feed.unique_id, 'full')
+        # await es_ingest_schemas(context, objects_schemas, [objects_schemas_index_name])
+        # await refresh_index(context, objects_schemas_index_name, feed.unique_id, 'full')
 
         await refresh_index(context, activities_index_name, feed.unique_id, 'full')
         await refresh_index(context, objects_index_name, feed.unique_id, 'full')
