@@ -1274,6 +1274,80 @@ class TestApplication(TestBase):
                          ['type'][1], 'dit:exportOpportunities:Enquiry')
         self.assertEqual(es_bulk_request_dicts[3]['actor']['dit:companiesHouseNumber'], '82312')
 
+    @freeze_time('2012-01-14 12:00:01')
+    @patch('os.urandom', return_value=b'something-random')
+    @patch('secrets.choice', return_value='qwerty12')
+    @async_test
+    async def test_single_page_aws_authentication(self, _, __):
+        posted_to_es_once, append_es = append_until(lambda results: len(results) == 1)
+
+        async def return_200_and_callback(request):
+            content, headers = (await request.content.read(), request.headers)
+            asyncio.get_event_loop().call_soon(append_es, (content, headers))
+            return await respond_http('{}', 200)(request)
+
+        routes = [
+            web.post('/_bulk', return_200_and_callback),
+        ]
+
+        es_runner = await run_es_application(port=9208, override_routes=routes)
+        aws_es_env = {
+            **mock_env(),
+            'ES_URI': 'http://127.0.0.1:9208',
+            'ES_VERSION': '7.x',
+            'ES_AWS_ACCESS_KEY_ID': 'AKIAIOSFODNN7EXAMPLE',
+            'ES_AWS_SECRET_ACCESS_KEY': 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+            'ES_AWS_REGION': 'us-east-1',
+        }
+        self.add_async_cleanup(es_runner.cleanup)
+        await self.setup_manual(env=aws_es_env,
+                                mock_feed=read_file, mock_feed_status=lambda: 200,
+                                mock_headers=lambda: {})
+
+        [[es_bulk_content, es_bulk_headers]] = await posted_to_es_once
+        es_bulk_request_dicts = [
+            json.loads(line)
+            for line in es_bulk_content.split(b'\n')[0:-1]
+        ]
+
+        self.assertEqual(self.feed_requested[0].result(
+        ).headers['Authorization'], (
+            'Hawk '
+            'mac="keUgjONtI1hLtS4DzGl+0G63o1nPFmvtIsTsZsB/NPM=", '
+            'hash="B0weSUXsMcb5UhL41FZbrUJCAotzSI3HawE1NPLRUz8=", '
+            'id="feed-some-id", '
+            'ts="1326542401", '
+            'nonce="c29tZX"'
+        ))
+
+        self.assertEqual(
+            es_bulk_headers['Authorization'],
+            'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20120114/us-east-1/es/aws4_request, '
+            'SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, '
+            'Signature=ae4f4eb6bdbd4382a6dd4589c67dbc000cff11859b4dd1a1632be9e227bb910b')
+        self.assertEqual(es_bulk_content.decode('utf-8')[-1], '\n')
+        self.assertEqual(es_bulk_headers['Content-Type'], 'application/x-ndjson')
+
+        self.assertIn('activities_', es_bulk_request_dicts[0]['index']['_index'])
+        self.assertEqual(es_bulk_request_dicts[0]['index']['_type'], '_doc')
+        self.assertEqual(es_bulk_request_dicts[0]['index']
+                         ['_id'], 'dit:exportOpportunities:Enquiry:49863:Create')
+        self.assertEqual(es_bulk_request_dicts[1]['published'], '2018-04-12T12:48:13+00:00')
+        self.assertEqual(es_bulk_request_dicts[1]['type'], 'Create')
+        self.assertEqual(es_bulk_request_dicts[1]['object']
+                         ['type'][1], 'dit:exportOpportunities:Enquiry')
+        self.assertEqual(es_bulk_request_dicts[1]['actor']['dit:companiesHouseNumber'], '123432')
+
+        self.assertIn('activities_', es_bulk_request_dicts[2]['index']['_index'])
+        self.assertEqual(es_bulk_request_dicts[2]['index']['_type'], '_doc')
+        self.assertEqual(es_bulk_request_dicts[2]['index']
+                         ['_id'], 'dit:exportOpportunities:Enquiry:49862:Create')
+        self.assertEqual(es_bulk_request_dicts[3]['published'], '2018-03-23T17:06:53+00:00')
+        self.assertEqual(es_bulk_request_dicts[3]['type'], 'Create')
+        self.assertEqual(es_bulk_request_dicts[3]['object']
+                         ['type'][1], 'dit:exportOpportunities:Enquiry')
+        self.assertEqual(es_bulk_request_dicts[3]['actor']['dit:companiesHouseNumber'], '82312')
+
     # Performs search to /v2/objects and expects JSON response in format
     # [
     #   {
