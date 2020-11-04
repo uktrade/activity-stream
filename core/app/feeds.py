@@ -1,7 +1,6 @@
 from abc import ABCMeta, abstractmethod
 import asyncio
 import csv
-import codecs
 import datetime
 import re
 from io import StringIO
@@ -412,7 +411,7 @@ class MaxemailFeed(Feed):
                 if row_count == 0:
                     row_count += 1
                     continue
-                yield codecs.decode(line, 'utf-8')
+                yield line.decode('utf-8')
 
         async def gen_sent_activities_and_last_updated(csv_lines):
             async for line in csv_lines:
