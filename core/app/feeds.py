@@ -414,8 +414,8 @@ class MaxemailFeed(Feed):
                     continue
                 yield codecs.decode(line, 'utf-8')
 
-        async def gen_activities_and_last_updated(data_export_key):
-            async for line in gen_data_export_csv(data_export_key):
+        async def gen_sent_activities_and_last_updated(csv_lines):
+            async for line in csv_lines:
                 try:
                     parsed_line = next(csv.reader(
                         StringIO(line), skipinitialspace=True, delimiter=',',
@@ -464,10 +464,11 @@ class MaxemailFeed(Feed):
             six_weeks_ago = now - datetime.timedelta(days=42)
             timestamp = six_weeks_ago.strftime('%Y-%m-%d 00:00:00')
 
-        data_export_key = await get_data_export_key(timestamp, 'sent')
-        logger.debug('maxemail export key (%s)', data_export_key)
+        sent_data_export_key = await get_data_export_key(timestamp, 'sent')
+        sent_csv_lines = gen_data_export_csv(sent_data_export_key)
+        sent_activities_and_last_updated = gen_sent_activities_and_last_updated(sent_csv_lines)
+        activity_pages_and_last_updated = paginate(
+            feed.page_size, sent_activities_and_last_updated)
 
-        activities_and_last_updated = gen_activities_and_last_updated(data_export_key)
-        activity_pages_and_last_updated = paginate(feed.page_size, activities_and_last_updated)
         async for activity_page, last_updated in activity_pages_and_last_updated:
             yield activity_page, last_updated
