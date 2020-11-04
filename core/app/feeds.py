@@ -349,16 +349,15 @@ class MaxemailFeed(Feed):
 
             return campaign_name
 
-        async def get_data_export_key(timestamp):
+        async def get_data_export_key(timestamp, method):
             """
             url: root/api/json/data_export_quick
-            method: 'sent'
 
             sample payload {'method': 'sent', 'filter': '{"timestamp": "2020-09-10 17:00:00"}'}
             """
             payload_filter = '{"timestamp": "' + timestamp + '"}'
             payload = {
-                'method': 'sent',
+                'method': method,
                 'filter': payload_filter
             }
 
@@ -461,7 +460,7 @@ class MaxemailFeed(Feed):
             six_weeks_ago = now - datetime.timedelta(days=42)
             timestamp = six_weeks_ago.strftime('%Y-%m-%d 00:00:00')
 
-        data_export_key = await get_data_export_key(timestamp)
+        data_export_key = await get_data_export_key(timestamp, 'sent')
         logger.debug('maxemail export key (%s)', data_export_key)
 
         async for rows, last_updated in gen_parse_rows_for_bulk_insert(data_export_key):
