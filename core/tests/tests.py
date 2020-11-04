@@ -1758,7 +1758,7 @@ class TestApplication(TestBase):
 
         self.assertEqual(len(results_dict['hits']['hits']), 10)
         ids = [item['_source']['object']['id'] for item in results_dict['hits']['hits']]
-        self.assertTrue('dit:maxemail:Email:459-a.b@dummy.co' in ids)
+        self.assertTrue('dit:maxemail:Email:Sent:459-a.b@dummy.co' in ids)
 
     @async_test
     async def test_on_bad_json_retries(self):

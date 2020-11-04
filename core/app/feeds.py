@@ -428,19 +428,21 @@ class MaxemailFeed(Feed):
                 # email_campaign_id-email_address
                 line_id = f'{line["email id"]}-{line["email address"]}'
                 last_updated = line['sent timestamp']
+                year, time = last_updated.split(' ')
+                last_updated = f'{year}T{time}'
                 activity = {
-                    'id': 'dit:maxemail:Email:' + line_id + ':Create',
+                    'id': 'dit:maxemail:Email:Sent:' + line_id + ':Create',
                     'type': 'Create',
                     'dit:application': 'maxemail',
+                    'published': last_updated,
                     'object': {
-                        'type': ['Document', 'dit:maxemail:Email'],
-                        'id': 'dit:maxemail:Email:' + line_id,
-                        'dit:emailAddress': line['email address'][1],
+                        'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Sent'],
+                        'id': 'dit:maxemail:Email:Sent:' + line_id,
+                        'dit:emailAddress': line['email address'],
                         'attributedTo': {
                             'type': 'dit:maxemail:Campaign',
-                            'id': 'dit:maxemail:Campaign:id:' + line['email id'],
+                            'id': 'dit:maxemail:Campaign:' + line['email id'],
                             'name': campaign_name,
-                            'published': last_updated,
                         }
                     }
                 }
