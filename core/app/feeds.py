@@ -414,8 +414,7 @@ class MaxemailFeed(Feed):
                     continue
                 yield codecs.decode(line, 'utf-8')
 
-        async def gen_parse_rows_for_bulk_insert(data_export_key):
-            parsed = []
+        async def gen_activities_and_last_updated(data_export_key):
             async for line in gen_data_export_csv(data_export_key):
                 try:
                     parsed_line = next(csv.reader(
@@ -429,30 +428,35 @@ class MaxemailFeed(Feed):
                     # email_campaign_id-email_address
                     line_id = f'{parsed_line[0]}-{parsed_line[1]}'
                     last_updated = parsed_line[2]
-                    parsed.append(
-                        {
-                            'id': 'dit:maxemail:Email:' + line_id + ':Create',
-                            'type': 'Create',
-                            'dit:application': 'maxemail',
-                            'object': {
-                                'type': ['Document', 'dit:maxemail:Email'],
-                                'id': 'dit:maxemail:Email:' + line_id,
-                                'dit:emailAddress': parsed_line[1],
-                                'attributedTo': {
-                                    'type': 'dit:maxemail:Campaign',
-                                    'id': 'dit:maxemail:Campaign:id:' + parsed_line[0],
-                                    'name': campaign_name,
-                                    'published': last_updated,
-                                }
+                    activity = {
+                        'id': 'dit:maxemail:Email:' + line_id + ':Create',
+                        'type': 'Create',
+                        'dit:application': 'maxemail',
+                        'object': {
+                            'type': ['Document', 'dit:maxemail:Email'],
+                            'id': 'dit:maxemail:Email:' + line_id,
+                            'dit:emailAddress': parsed_line[1],
+                            'attributedTo': {
+                                'type': 'dit:maxemail:Campaign',
+                                'id': 'dit:maxemail:Campaign:id:' + parsed_line[0],
+                                'name': campaign_name,
+                                'published': last_updated,
                             }
                         }
-                    )
-                    if len(parsed) == feed.page_size:
-                        yield parsed, last_updated
-                        parsed = []
+                    }
+                    yield activity, last_updated
 
-            if parsed:
-                yield parsed, last_updated
+        async def paginate(page_size, objs):
+            page = []
+            last_updated = None
+            async for obj, last_updated in objs:
+                page.append(obj)
+                if len(page) == page_size:
+                    yield page, last_updated
+                    page = []
+
+            if page:
+                yield page, last_updated
 
         now = datetime.datetime.now()
         if ingest_type == 'full':
@@ -463,5 +467,7 @@ class MaxemailFeed(Feed):
         data_export_key = await get_data_export_key(timestamp, 'sent')
         logger.debug('maxemail export key (%s)', data_export_key)
 
-        async for rows, last_updated in gen_parse_rows_for_bulk_insert(data_export_key):
-            yield rows, last_updated
+        activities_and_last_updated = gen_activities_and_last_updated(data_export_key)
+        activity_pages_and_last_updated = paginate(feed.page_size, activities_and_last_updated)
+        async for activity_page, last_updated in activity_pages_and_last_updated:
+            yield activity_page, last_updated
