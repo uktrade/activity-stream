@@ -25,6 +25,7 @@ from .utils import (
     sub_dict_lower,
 )
 from .utils import (
+    async_enumerate,
     sleep,
 )
 
@@ -405,45 +406,45 @@ class MaxemailFeed(Feed):
                     data={},
                     headers=await feed.auth_headers(None, None),
                 )
-            row_count = 0
-            async for line in lines:
-                # skip header
-                if row_count == 0:
-                    row_count += 1
-                    continue
-                yield line.decode('utf-8')
 
-        async def gen_sent_activities_and_last_updated(csv_lines):
-            async for line in csv_lines:
+            headers = []
+            async for i, line in async_enumerate(lines):
                 try:
                     parsed_line = next(csv.reader(
-                        StringIO(line), skipinitialspace=True, delimiter=',',
+                        StringIO(line.decode('utf-8')), skipinitialspace=True, delimiter=',',
                         quotechar='"', quoting=csv.QUOTE_ALL,
                     ))
                 except StopIteration:
                     break
+
+                if i == 0:
+                    headers = parsed_line
                 else:
-                    campaign_name = await get_email_campaign(parsed_line[0])
-                    # email_campaign_id-email_address
-                    line_id = f'{parsed_line[0]}-{parsed_line[1]}'
-                    last_updated = parsed_line[2]
-                    activity = {
-                        'id': 'dit:maxemail:Email:' + line_id + ':Create',
-                        'type': 'Create',
-                        'dit:application': 'maxemail',
-                        'object': {
-                            'type': ['Document', 'dit:maxemail:Email'],
-                            'id': 'dit:maxemail:Email:' + line_id,
-                            'dit:emailAddress': parsed_line[1],
-                            'attributedTo': {
-                                'type': 'dit:maxemail:Campaign',
-                                'id': 'dit:maxemail:Campaign:id:' + parsed_line[0],
-                                'name': campaign_name,
-                                'published': last_updated,
-                            }
+                    yield dict(zip(headers, parsed_line))
+
+        async def gen_sent_activities_and_last_updated(csv_lines):
+            async for line in csv_lines:
+                campaign_name = await get_email_campaign(line['email id'])
+                # email_campaign_id-email_address
+                line_id = f'{line["email id"]}-{line["email address"]}'
+                last_updated = line['sent timestamp']
+                activity = {
+                    'id': 'dit:maxemail:Email:' + line_id + ':Create',
+                    'type': 'Create',
+                    'dit:application': 'maxemail',
+                    'object': {
+                        'type': ['Document', 'dit:maxemail:Email'],
+                        'id': 'dit:maxemail:Email:' + line_id,
+                        'dit:emailAddress': line['email address'][1],
+                        'attributedTo': {
+                            'type': 'dit:maxemail:Campaign',
+                            'id': 'dit:maxemail:Campaign:id:' + line['email id'],
+                            'name': campaign_name,
+                            'published': last_updated,
                         }
                     }
-                    yield activity, last_updated
+                }
+                yield activity, last_updated
 
         async def paginate(page_size, objs):
             page = []
