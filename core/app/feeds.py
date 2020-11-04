@@ -425,11 +425,10 @@ class MaxemailFeed(Feed):
         async def gen_sent_activities_and_last_updated(csv_lines):
             async for line in csv_lines:
                 campaign_name = await get_email_campaign(line['email id'])
-                # email_campaign_id-email_address
-                line_id = f'{line["email id"]}-{line["email address"]}'
                 last_updated = line['sent timestamp']
                 year, time = last_updated.split(' ')
                 last_updated = f'{year}T{time}'
+                line_id = f'{line["email id"]}:{last_updated}:{line["email address"]}'
                 activity = {
                     'id': 'dit:maxemail:Email:Sent:' + line_id + ':Create',
                     'type': 'Create',
