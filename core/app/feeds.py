@@ -422,30 +422,35 @@ class MaxemailFeed(Feed):
                 else:
                     yield dict(zip(headers, parsed_line))
 
+        async def common(campaign_id, timestamp, email_address):
+            campaign_name = await get_email_campaign(campaign_id)
+            year, time = timestamp.split(' ')
+            timestamp = f'{year}T{time}'
+            line_id = f'{campaign_id}:{timestamp}:{email_address}'
+            campaign_dict = {
+                'type': 'dit:maxemail:Campaign',
+                'id': 'dit:maxemail:Campaign:' + campaign_id,
+                'name': campaign_name,
+            }
+            return campaign_dict, line_id, timestamp
+
         async def gen_sent_activities_and_last_updated(csv_lines):
             async for line in csv_lines:
-                campaign_name = await get_email_campaign(line['email id'])
-                last_updated = line['sent timestamp']
-                year, time = last_updated.split(' ')
-                last_updated = f'{year}T{time}'
-                line_id = f'{line["email id"]}:{last_updated}:{line["email address"]}'
+                campaign_dict, line_id, timestamp = \
+                    await common(line['email id'], line['sent timestamp'], line['email address'])
                 activity = {
                     'id': 'dit:maxemail:Email:Sent:' + line_id + ':Create',
                     'type': 'Create',
                     'dit:application': 'maxemail',
-                    'published': last_updated,
+                    'published': timestamp,
                     'object': {
                         'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Sent'],
                         'id': 'dit:maxemail:Email:Sent:' + line_id,
                         'dit:emailAddress': line['email address'],
-                        'attributedTo': {
-                            'type': 'dit:maxemail:Campaign',
-                            'id': 'dit:maxemail:Campaign:' + line['email id'],
-                            'name': campaign_name,
-                        }
+                        'attributedTo': campaign_dict
                     }
                 }
-                yield activity, last_updated
+                yield activity, timestamp
 
         async def paginate(page_size, objs):
             page = []
