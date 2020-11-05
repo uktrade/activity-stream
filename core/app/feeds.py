@@ -434,7 +434,7 @@ class MaxemailFeed(Feed):
             }
             return campaign_dict, line_id, timestamp
 
-        async def gen_sent_activities_and_last_updated(csv_lines):
+        async def gen_sent_activities_and_timestamp(csv_lines):
             async for line in csv_lines:
                 campaign_dict, line_id, timestamp = \
                     await common(line['email id'], line['sent timestamp'], line['email address'])
@@ -454,15 +454,15 @@ class MaxemailFeed(Feed):
 
         async def paginate(page_size, objs):
             page = []
-            last_updated = None
-            async for obj, last_updated in objs:
+            timestamp = None
+            async for obj, timestamp in objs:
                 page.append(obj)
                 if len(page) == page_size:
-                    yield page, last_updated
+                    yield page, timestamp
                     page = []
 
             if page:
-                yield page, last_updated
+                yield page, timestamp
 
         now = datetime.datetime.now()
         if ingest_type == 'full':
@@ -472,9 +472,8 @@ class MaxemailFeed(Feed):
 
         sent_data_export_key = await get_data_export_key(timestamp, 'sent')
         sent_csv_lines = gen_data_export_csv(sent_data_export_key)
-        sent_activities_and_last_updated = gen_sent_activities_and_last_updated(sent_csv_lines)
-        activity_pages_and_last_updated = paginate(
-            feed.page_size, sent_activities_and_last_updated)
+        sent_activities_and_timestamp = gen_sent_activities_and_timestamp(sent_csv_lines)
+        activity_pages_and_timestamp = paginate(feed.page_size, sent_activities_and_timestamp)
 
-        async for activity_page, last_updated in activity_pages_and_last_updated:
-            yield activity_page, last_updated
+        async for activity_page, timestamp in activity_pages_and_timestamp:
+            yield activity_page, timestamp
