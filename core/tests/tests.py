@@ -1736,7 +1736,7 @@ class TestApplication(TestBase):
             'FEEDS__1__PASSWORD': 'bar',
             'FEEDS__1__PAGE_SIZE': '8',
             'FEEDS__1__SEED': 'http://localhost:6098',
-            'FEEDS__1__DATA_EXPORT_URL': 'http://localhost:8081/tests_fixture_maxemail_csv.csv',
+            'FEEDS__1__DATA_EXPORT_URL': 'http://localhost:8081/tests_fixture_maxemail_sent.csv',
             'FEEDS__1__CAMPAIGN_URL': 'http://localhost:8081/tests_fixture_maxemail_campaign.json',
             'FEEDS__1__TYPE': 'maxemail',
         }
