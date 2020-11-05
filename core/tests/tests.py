@@ -1735,8 +1735,8 @@ class TestApplication(TestBase):
             'FEEDS__1__USERNAME': 'foo',
             'FEEDS__1__PASSWORD': 'bar',
             'FEEDS__1__PAGE_SIZE': '8',
-            'FEEDS__1__SEED': 'http://localhost:6098',
-            'FEEDS__1__DATA_EXPORT_URL': 'http://localhost:8081/tests_fixture_maxemail_sent.csv',
+            'FEEDS__1__SEED': 'http://localhost:6098/api/json/data_export_quick',
+            'FEEDS__1__DATA_EXPORT_URL': 'http://localhost:8081/tests_fixture_maxemail_{key}.csv',
             'FEEDS__1__CAMPAIGN_URL': 'http://localhost:8081/tests_fixture_maxemail_campaign.json',
             'FEEDS__1__TYPE': 'maxemail',
         }
@@ -1746,12 +1746,13 @@ class TestApplication(TestBase):
                                     mock_headers=lambda: {})
 
         # Setup Mock data export Server
-        async def mock_get_download_key(_):
-            return web.Response(text='123')
+        async def mock_get_download_key(request):
+            method = (await request.post())['method']
+            return web.Response(text=f'"{method}"')
 
         await _web_application(
             port=6098,
-            routes=[web.get('/api/json/data_export_quick', mock_get_download_key)],
+            routes=[web.post('/api/json/data_export_quick', mock_get_download_key)],
         )
 
         results_dict = await fetch_all_es_data_until(maxemail_base_fetch)
@@ -1759,6 +1760,10 @@ class TestApplication(TestBase):
         self.assertEqual(len(results_dict['hits']['hits']), 10)
         ids = [item['_source']['object']['id'] for item in results_dict['hits']['hits']]
         self.assertTrue('dit:maxemail:Email:Sent:459:2020-09-11T16:13:03:a.b@dummy.co' in ids)
+        self.assertTrue('dit:maxemail:Email:Clicked:459:2020-11-03T01:45:08:a.b@dummy.co' in ids)
+        self.assertTrue('dit:maxemail:Email:Opened:459:2020-11-03T00:06:54:a.b@dummy.co' in ids)
+        self.assertTrue(
+            'dit:maxemail:Email:Unsubscribed:459:2020-11-03T08:38:19:a.b@dummy.co' in ids)
 
     @async_test
     async def test_on_bad_json_retries(self):

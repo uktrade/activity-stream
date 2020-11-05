@@ -314,6 +314,10 @@ class MaxemailFeed(Feed):
         timestamp = href
         logger = context.logger
         campaigns = {}
+        now = datetime.datetime.now()
+        six_weeks_ago = (now - datetime.timedelta(days=42)).strftime('%Y-%m-%d 00:00:00')
+        if ingest_type == 'full':
+            timestamp = six_weeks_ago
 
         async def get_email_campaign(email_campaign_id):
             if email_campaign_id not in campaigns:
@@ -452,6 +456,103 @@ class MaxemailFeed(Feed):
                 }
                 yield activity, timestamp
 
+        async def gen_bounced_activities_and_timestamp(csv_lines):
+            async for line in csv_lines:
+                campaign_dict, line_id, timestamp = \
+                    await common(line['email id'], line['bounce timestamp'], line['email address'])
+                activity = {
+                    'id': 'dit:maxemail:Email:Bounced:' + line_id + ':Create',
+                    'type': 'Create',
+                    'dit:application': 'maxemail',
+                    'published': timestamp,
+                    'object': {
+                        'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Bounced'],
+                        'id': 'dit:maxemail:Email:Bounced:' + line_id,
+                        'dit:emailAddress': line['email address'],
+                        'content': line['bounce reason'],
+                        'attributedTo': campaign_dict
+                    }
+                }
+                yield activity, timestamp
+
+        async def gen_opened_activities_and_timestamp(csv_lines):
+            async for line in csv_lines:
+                campaign_dict, line_id, timestamp = \
+                    await common(line['email id'], line['open timestamp'], line['email address'])
+                activity = {
+                    'id': 'dit:maxemail:Email:Opened:' + line_id + ':Create',
+                    'type': 'Create',
+                    'dit:application': 'maxemail',
+                    'published': timestamp,
+                    'object': {
+                        'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Opened'],
+                        'id': 'dit:maxemail:Email:Opened:' + line_id,
+                        'dit:emailAddress': line['email address'],
+                        'attributedTo': campaign_dict
+                    }
+                }
+                yield activity, timestamp
+
+        async def gen_clicked_activities_and_timestamp(csv_lines):
+            async for line in csv_lines:
+                campaign_dict, line_id, timestamp = \
+                    await common(line['email id'], line['click timestamp'], line['email address'])
+                activity = {
+                    'id': 'dit:maxemail:Email:Clicked:' + line_id + ':Create',
+                    'type': 'Create',
+                    'dit:application': 'maxemail',
+                    'published': timestamp,
+                    'object': {
+                        'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Clicked'],
+                        'id': 'dit:maxemail:Email:Clicked:' + line_id,
+                        'dit:emailAddress': line['email address'],
+                        'url': line['url'],
+                        'attributedTo': campaign_dict
+                    }
+                }
+                yield activity, timestamp
+
+        async def gen_unsubscribed_activities_and_timestamp(csv_lines):
+            async for line in csv_lines:
+                campaign_dict, line_id, timestamp = \
+                    await common(line['email id'], line['unsubscribe timestamp'],
+                                 line['email address'])
+                activity = {
+                    'id': 'dit:maxemail:Email:Unsubscribed:' + line_id + ':Create',
+                    'type': 'Create',
+                    'dit:application': 'maxemail',
+                    'published': timestamp,
+                    'object': {
+                        'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Unsubscribed'],
+                        'id': 'dit:maxemail:Email:Unsubscribed:' + line_id,
+                        'dit:emailAddress': line['email address'],
+                        'attributedTo': campaign_dict
+                    }
+                }
+                yield activity, timestamp
+
+        async def multiplex(aiter_initial_timestamps):
+            timestamps = [
+                initial_timestamp
+                for _, initial_timestamp in aiter_initial_timestamps
+            ]
+
+            while True:
+                at_least_one_success = False
+
+                for i, (aiter, _) in enumerate(aiter_initial_timestamps):
+                    try:
+                        activity, activity_timestamp = await aiter.__anext__()
+                    except StopAsyncIteration:
+                        continue
+                    else:
+                        at_least_one_success = True
+                        timestamps[i] = activity_timestamp
+                        yield activity, '--'.join(timestamps)
+
+                if not at_least_one_success:
+                    break
+
         async def paginate(page_size, objs):
             page = []
             timestamp = None
@@ -464,16 +565,51 @@ class MaxemailFeed(Feed):
             if page:
                 yield page, timestamp
 
-        now = datetime.datetime.now()
-        if ingest_type == 'full':
-            # get last 6 weeks for full ingestion
-            six_weeks_ago = now - datetime.timedelta(days=42)
-            timestamp = six_weeks_ago.strftime('%Y-%m-%d 00:00:00')
+        def get_with_default(items, index, default):
+            try:
+                return items[index]
+            except IndexError:
+                return default
 
-        sent_data_export_key = await get_data_export_key(timestamp, 'sent')
+        timestamps = timestamp.split('--')
+        timestamp_sent = get_with_default(timestamps, 0, six_weeks_ago)
+        timestamp_bounced = get_with_default(timestamps, 1, timestamp_sent)
+        timestamp_opened = get_with_default(timestamps, 2, timestamp_bounced)
+        timestamp_clicked = get_with_default(timestamps, 3, timestamp_opened)
+        timestamp_unsubscribed = get_with_default(timestamps, 4, timestamp_clicked)
+
+        sent_data_export_key = await get_data_export_key(timestamp_sent, 'sent')
         sent_csv_lines = gen_data_export_csv(sent_data_export_key)
         sent_activities_and_timestamp = gen_sent_activities_and_timestamp(sent_csv_lines)
-        activity_pages_and_timestamp = paginate(feed.page_size, sent_activities_and_timestamp)
 
-        async for activity_page, timestamp in activity_pages_and_timestamp:
+        bounced_data_export_key = await get_data_export_key(timestamp_bounced, 'bounced')
+        bounced_csv_lines = gen_data_export_csv(bounced_data_export_key)
+        bounced_activities_and_timestamp = gen_bounced_activities_and_timestamp(bounced_csv_lines)
+
+        opened_data_export_key = await get_data_export_key(timestamp_opened, 'opened')
+        opened_csv_lines = gen_data_export_csv(opened_data_export_key)
+        opened_activities_and_timestamp = gen_opened_activities_and_timestamp(opened_csv_lines)
+
+        clicked_data_export_key = await get_data_export_key(timestamp_clicked, 'clicked')
+        clicked_csv_lines = gen_data_export_csv(clicked_data_export_key)
+        clicked_activities_and_timestamp = gen_clicked_activities_and_timestamp(clicked_csv_lines)
+
+        unsubscribed_data_export_key = await get_data_export_key(timestamp_unsubscribed,
+                                                                 'unsubscribed')
+        unsubscribed_csv_lines = gen_data_export_csv(unsubscribed_data_export_key)
+        unsubscribed_activities_and_timestamp = gen_unsubscribed_activities_and_timestamp(
+            unsubscribed_csv_lines)
+
+        multiplexed_activities_and_timestamps = multiplex([
+            (sent_activities_and_timestamp, timestamp_sent),
+            (bounced_activities_and_timestamp, timestamp_bounced),
+            (opened_activities_and_timestamp, timestamp_opened),
+            (clicked_activities_and_timestamp, timestamp_clicked),
+            (unsubscribed_activities_and_timestamp, timestamp_unsubscribed),
+        ])
+
+        multiplexed_activity_pages_and_timestamp = paginate(
+            feed.page_size, multiplexed_activities_and_timestamps)
+
+        async for activity_page, timestamp in multiplexed_activity_pages_and_timestamp:
             yield activity_page, timestamp
