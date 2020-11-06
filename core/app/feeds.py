@@ -1,7 +1,6 @@
 from abc import ABCMeta, abstractmethod
 import asyncio
 import csv
-import codecs
 import datetime
 import re
 from io import StringIO
@@ -26,6 +25,7 @@ from .utils import (
     sub_dict_lower,
 )
 from .utils import (
+    async_enumerate,
     sleep,
 )
 
@@ -314,6 +314,10 @@ class MaxemailFeed(Feed):
         timestamp = href
         logger = context.logger
         campaigns = {}
+        now = datetime.datetime.now()
+        six_weeks_ago = (now - datetime.timedelta(days=42)).strftime('%Y-%m-%d 00:00:00')
+        if ingest_type == 'full':
+            timestamp = six_weeks_ago
 
         async def get_email_campaign(email_campaign_id):
             if email_campaign_id not in campaigns:
@@ -345,20 +349,31 @@ class MaxemailFeed(Feed):
                 result.raise_for_status()
 
             campaign = json_loads(result._body)
-            campaign_name = campaign.get('name')
+            year, time = campaign['start_ts'].split(' ')
+            timestamp = f'{year}T{time}'
+            return {
+                'type': 'dit:maxemail:Campaign',
+                'id': 'dit:maxemail:Campaign:' + email_campaign_id,
+                'name': campaign['name'],
+                'content': campaign['description'],
+                'dit:emailSubject': campaign['subject_line'],
+                'published': timestamp
+            }, {
+                'type': ['Organization', 'dit:maxemail:Sender'],
+                'id': 'dit:maxemail:Sender:' + campaign['from_address'],
+                'name': campaign['from_address_alias'],
+                'dit:emailAddress': campaign['from_address'],
+            }
 
-            return campaign_name
-
-        async def get_data_export_key(timestamp):
+        async def get_data_export_key(timestamp, method):
             """
             url: root/api/json/data_export_quick
-            method: 'sent'
 
             sample payload {'method': 'sent', 'filter': '{"timestamp": "2020-09-10 17:00:00"}'}
             """
             payload_filter = '{"timestamp": "' + timestamp + '"}'
             payload = {
-                'method': 'sent',
+                'method': method,
                 'filter': payload_filter
             }
 
@@ -407,62 +422,242 @@ class MaxemailFeed(Feed):
                     data={},
                     headers=await feed.auth_headers(None, None),
                 )
-            row_count = 0
-            async for line in lines:
-                # skip header
-                if row_count == 0:
-                    row_count += 1
-                    continue
-                yield codecs.decode(line, 'utf-8')
 
-        async def gen_parse_rows_for_bulk_insert(data_export_key):
-            parsed = []
-            async for line in gen_data_export_csv(data_export_key):
+            headers = []
+            async for i, line in async_enumerate(lines):
                 try:
                     parsed_line = next(csv.reader(
-                        StringIO(line), skipinitialspace=True, delimiter=',',
+                        StringIO(line.decode('utf-8')), skipinitialspace=True, delimiter=',',
                         quotechar='"', quoting=csv.QUOTE_ALL,
                     ))
                 except StopIteration:
                     break
+
+                if i == 0:
+                    headers = parsed_line
                 else:
-                    campaign_name = await get_email_campaign(parsed_line[0])
-                    # email_campaign_id-email_address
-                    line_id = f'{parsed_line[0]}-{parsed_line[1]}'
-                    last_updated = parsed_line[2]
-                    parsed.append(
-                        {
-                            'id': 'dit:maxemail:Email:' + line_id + ':Create',
-                            'type': 'Create',
-                            'dit:application': 'maxemail',
-                            'object': {
-                                'type': ['Document', 'dit:maxemail:Email'],
-                                'id': 'dit:maxemail:Email:' + line_id,
-                                'dit:emailAddress': parsed_line[1],
-                                'attributedTo': {
-                                    'type': 'dit:maxemail:Campaign',
-                                    'id': 'dit:maxemail:Campaign:id:' + parsed_line[0],
-                                    'name': campaign_name,
-                                    'published': last_updated,
-                                }
-                            }
-                        }
-                    )
-                    if len(parsed) == feed.page_size:
-                        yield parsed, last_updated
-                        parsed = []
+                    yield dict(zip(headers, parsed_line))
 
-            if parsed:
-                yield parsed, last_updated
+        def common(campaign_id, timestamp, email_address):
+            year, time = timestamp.split(' ')
+            timestamp = f'{year}T{time}'
+            line_id = f'{campaign_id}:{timestamp}:{email_address}'
+            return line_id, timestamp
 
-        now = datetime.datetime.now()
-        if ingest_type == 'full':
-            # get last 6 weeks for full ingestion
-            six_weeks_ago = now - datetime.timedelta(days=42)
-            timestamp = six_weeks_ago.strftime('%Y-%m-%d 00:00:00')
+        async def gen_sent_activities_and_timestamp(csv_lines):
+            async for line in csv_lines:
+                line_id, timestamp = common(line['email id'], line['sent timestamp'],
+                                            line['email address'])
+                activity = {
+                    'id': 'dit:maxemail:Email:Sent:' + line_id + ':Create',
+                    'type': 'Create',
+                    'dit:application': 'maxemail',
+                    'published': timestamp,
+                    'object': {
+                        'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Sent'],
+                        'id': 'dit:maxemail:Email:Sent:' + line_id,
+                        'dit:emailAddress': line['email address'],
+                        'attributedTo': (await get_email_campaign(line['email id']))[0]
+                    }
+                }
+                yield activity, timestamp
 
-        data_export_key = await get_data_export_key(timestamp)
-        logger.debug('maxemail export key (%s)', data_export_key)
+        async def gen_bounced_activities_and_timestamp(csv_lines):
+            async for line in csv_lines:
+                line_id, timestamp = common(line['email id'],
+                                            line['bounce timestamp'], line['email address'])
+                activity = {
+                    'id': 'dit:maxemail:Email:Bounced:' + line_id + ':Create',
+                    'type': 'Create',
+                    'dit:application': 'maxemail',
+                    'published': timestamp,
+                    'object': {
+                        'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Bounced'],
+                        'id': 'dit:maxemail:Email:Bounced:' + line_id,
+                        'dit:emailAddress': line['email address'],
+                        'content': line['bounce reason'],
+                        'attributedTo': (await get_email_campaign(line['email id']))[0]
+                    }
+                }
+                yield activity, timestamp
 
-        async for rows, last_updated in gen_parse_rows_for_bulk_insert(data_export_key):
-            yield rows, last_updated
+        async def gen_opened_activities_and_timestamp(csv_lines):
+            async for line in csv_lines:
+                line_id, timestamp = common(line['email id'],
+                                            line['open timestamp'], line['email address'])
+                activity = {
+                    'id': 'dit:maxemail:Email:Opened:' + line_id + ':Create',
+                    'type': 'Create',
+                    'dit:application': 'maxemail',
+                    'published': timestamp,
+                    'object': {
+                        'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Opened'],
+                        'id': 'dit:maxemail:Email:Opened:' + line_id,
+                        'dit:emailAddress': line['email address'],
+                        'attributedTo': (await get_email_campaign(line['email id']))[0]
+                    }
+                }
+                yield activity, timestamp
+
+        async def gen_clicked_activities_and_timestamp(csv_lines):
+            async for line in csv_lines:
+                line_id, timestamp = common(line['email id'], line['click timestamp'],
+                                            line['email address'])
+                activity = {
+                    'id': 'dit:maxemail:Email:Clicked:' + line_id + ':Create',
+                    'type': 'Create',
+                    'dit:application': 'maxemail',
+                    'published': timestamp,
+                    'object': {
+                        'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Clicked'],
+                        'id': 'dit:maxemail:Email:Clicked:' + line_id,
+                        'dit:emailAddress': line['email address'],
+                        'url': line['url'],
+                        'attributedTo': (await get_email_campaign(line['email id']))[0]
+                    }
+                }
+                yield activity, timestamp
+
+        async def gen_responded_activities_and_timestamp(csv_lines):
+            async for line in csv_lines:
+                # The column _is_ called "click timestamp" for responded
+                line_id, timestamp = common(line['email id'], line['click timestamp'],
+                                            line['email address'])
+                activity = {
+                    'id': 'dit:maxemail:Email:Responded:' + line_id + ':Create',
+                    'type': 'Create',
+                    'dit:application': 'maxemail',
+                    'published': timestamp,
+                    'object': {
+                        'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Responded'],
+                        'id': 'dit:maxemail:Email:Responded:' + line_id,
+                        'dit:emailAddress': line['email address'],
+                        'attributedTo': (await get_email_campaign(line['email id']))[0]
+                    }
+                }
+                yield activity, timestamp
+
+        async def gen_unsubscribed_activities_and_timestamp(csv_lines):
+            async for line in csv_lines:
+                line_id, timestamp = common(line['email id'], line['unsubscribe timestamp'],
+                                            line['email address'])
+                activity = {
+                    'id': 'dit:maxemail:Email:Unsubscribed:' + line_id + ':Create',
+                    'type': 'Create',
+                    'dit:application': 'maxemail',
+                    'published': timestamp,
+                    'object': {
+                        'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Unsubscribed'],
+                        'id': 'dit:maxemail:Email:Unsubscribed:' + line_id,
+                        'dit:emailAddress': line['email address'],
+                        'attributedTo': (await get_email_campaign(line['email id']))[0]
+                    }
+                }
+                yield activity, timestamp
+
+        async def gen_campains_activities_and_timestamp(campaigns, timestamp):
+            for campaign_obj, campaign_sender in campaigns.values():
+                yield {
+                    'id': campaign_obj['id'] + ':Create',
+                    'type': 'Create',
+                    'dit:application': 'maxemail',
+                    'published': campaign_obj['published'],
+                    'object': campaign_obj,
+                    'actor': campaign_sender
+                }, timestamp
+
+        async def multiplex(aiter_initial_timestamps):
+            timestamps = [
+                initial_timestamp
+                for _, initial_timestamp in aiter_initial_timestamps
+            ]
+
+            while True:
+                at_least_one_success = False
+
+                for i, (aiter, _) in enumerate(aiter_initial_timestamps):
+                    try:
+                        activity, activity_timestamp = await aiter.__anext__()
+                    except StopAsyncIteration:
+                        continue
+                    else:
+                        at_least_one_success = True
+                        timestamps[i] = activity_timestamp
+                        yield activity, '--'.join(timestamps)
+
+                if not at_least_one_success:
+                    break
+
+        async def paginate(page_size, objs):
+            page = []
+            timestamp = None
+            async for obj, timestamp in objs:
+                page.append(obj)
+                if len(page) == page_size:
+                    yield page, timestamp
+                    page = []
+
+            if page:
+                yield page, timestamp
+
+        def get_with_default(items, index, default):
+            try:
+                return items[index]
+            except IndexError:
+                return default
+
+        timestamps = timestamp.split('--')
+        timestamp_sent = get_with_default(timestamps, 0, six_weeks_ago)
+        timestamp_bounced = get_with_default(timestamps, 1, timestamp_sent)
+        timestamp_opened = get_with_default(timestamps, 2, timestamp_bounced)
+        timestamp_clicked = get_with_default(timestamps, 3, timestamp_opened)
+        timestamp_responded = get_with_default(timestamps, 4, timestamp_clicked)
+        timestamp_unsubscribed = get_with_default(timestamps, 5, timestamp_responded)
+
+        sent_data_export_key = await get_data_export_key(timestamp_sent, 'sent')
+        sent_csv_lines = gen_data_export_csv(sent_data_export_key)
+        sent_activities_and_timestamp = gen_sent_activities_and_timestamp(sent_csv_lines)
+
+        bounced_data_export_key = await get_data_export_key(timestamp_bounced, 'bounced')
+        bounced_csv_lines = gen_data_export_csv(bounced_data_export_key)
+        bounced_activities_and_timestamp = gen_bounced_activities_and_timestamp(bounced_csv_lines)
+
+        opened_data_export_key = await get_data_export_key(timestamp_opened, 'opened')
+        opened_csv_lines = gen_data_export_csv(opened_data_export_key)
+        opened_activities_and_timestamp = gen_opened_activities_and_timestamp(opened_csv_lines)
+
+        clicked_data_export_key = await get_data_export_key(timestamp_clicked, 'clicked')
+        clicked_csv_lines = gen_data_export_csv(clicked_data_export_key)
+        clicked_activities_and_timestamp = gen_clicked_activities_and_timestamp(clicked_csv_lines)
+
+        responded_data_export_key = await get_data_export_key(timestamp_clicked, 'responded')
+        responded_csv_lines = gen_data_export_csv(responded_data_export_key)
+        responded_activities_and_timestamp = \
+            gen_responded_activities_and_timestamp(responded_csv_lines)
+
+        unsubscribed_data_export_key = await get_data_export_key(timestamp_unsubscribed,
+                                                                 'unsubscribed')
+        unsubscribed_csv_lines = gen_data_export_csv(unsubscribed_data_export_key)
+        unsubscribed_activities_and_timestamp = gen_unsubscribed_activities_and_timestamp(
+            unsubscribed_csv_lines)
+
+        multiplexed_activities_and_timestamps = multiplex([
+            (sent_activities_and_timestamp, timestamp_sent),
+            (bounced_activities_and_timestamp, timestamp_bounced),
+            (opened_activities_and_timestamp, timestamp_opened),
+            (clicked_activities_and_timestamp, timestamp_clicked),
+            (responded_activities_and_timestamp, timestamp_responded),
+            (unsubscribed_activities_and_timestamp, timestamp_unsubscribed),
+        ])
+
+        multiplexed_activity_pages_and_timestamp = paginate(
+            feed.page_size, multiplexed_activities_and_timestamps)
+        async for activity_page, timestamp in multiplexed_activity_pages_and_timestamp:
+            yield activity_page, timestamp
+
+        campaigns_activities_and_timestamp = gen_campains_activities_and_timestamp(
+            campaigns, timestamp)
+        campaigns_activity_pages_and_timestamp = paginate(
+            feed.page_size, campaigns_activities_and_timestamp)
+        async for activity_page, timestamp in campaigns_activity_pages_and_timestamp:
+            yield activity_page, timestamp
