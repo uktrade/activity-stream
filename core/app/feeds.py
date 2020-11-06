@@ -357,7 +357,7 @@ class MaxemailFeed(Feed):
                 'name': campaign['name'],
                 'content': campaign['description'],
                 'dit:emailSubject': campaign['subject_line'],
-                'dit:maxemail:Campain:Id': int(email_campaign_id),
+                'dit:maxemail:Campaign:id': int(email_campaign_id),
                 'published': timestamp
             }, {
                 'type': ['Organization', 'dit:maxemail:Sender'],
