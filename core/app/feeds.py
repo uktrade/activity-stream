@@ -518,6 +518,25 @@ class MaxemailFeed(Feed):
                 }
                 yield activity, timestamp
 
+        async def gen_responded_activities_and_timestamp(csv_lines):
+            async for line in csv_lines:
+                # The column _is_ called "click timestamp" for responded
+                line_id, timestamp = common(line['email id'], line['click timestamp'],
+                                            line['email address'])
+                activity = {
+                    'id': 'dit:maxemail:Email:Responded:' + line_id + ':Create',
+                    'type': 'Create',
+                    'dit:application': 'maxemail',
+                    'published': timestamp,
+                    'object': {
+                        'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Responded'],
+                        'id': 'dit:maxemail:Email:Responded:' + line_id,
+                        'dit:emailAddress': line['email address'],
+                        'attributedTo': (await get_email_campaign(line['email id']))[0]
+                    }
+                }
+                yield activity, timestamp
+
         async def gen_unsubscribed_activities_and_timestamp(csv_lines):
             async for line in csv_lines:
                 line_id, timestamp = common(line['email id'], line['unsubscribe timestamp'],
@@ -592,7 +611,8 @@ class MaxemailFeed(Feed):
         timestamp_bounced = get_with_default(timestamps, 1, timestamp_sent)
         timestamp_opened = get_with_default(timestamps, 2, timestamp_bounced)
         timestamp_clicked = get_with_default(timestamps, 3, timestamp_opened)
-        timestamp_unsubscribed = get_with_default(timestamps, 4, timestamp_clicked)
+        timestamp_responded = get_with_default(timestamps, 4, timestamp_clicked)
+        timestamp_unsubscribed = get_with_default(timestamps, 5, timestamp_responded)
 
         sent_data_export_key = await get_data_export_key(timestamp_sent, 'sent')
         sent_csv_lines = gen_data_export_csv(sent_data_export_key)
@@ -610,6 +630,11 @@ class MaxemailFeed(Feed):
         clicked_csv_lines = gen_data_export_csv(clicked_data_export_key)
         clicked_activities_and_timestamp = gen_clicked_activities_and_timestamp(clicked_csv_lines)
 
+        responded_data_export_key = await get_data_export_key(timestamp_clicked, 'responded')
+        responded_csv_lines = gen_data_export_csv(responded_data_export_key)
+        responded_activities_and_timestamp = \
+            gen_responded_activities_and_timestamp(responded_csv_lines)
+
         unsubscribed_data_export_key = await get_data_export_key(timestamp_unsubscribed,
                                                                  'unsubscribed')
         unsubscribed_csv_lines = gen_data_export_csv(unsubscribed_data_export_key)
@@ -621,6 +646,7 @@ class MaxemailFeed(Feed):
             (bounced_activities_and_timestamp, timestamp_bounced),
             (opened_activities_and_timestamp, timestamp_opened),
             (clicked_activities_and_timestamp, timestamp_clicked),
+            (responded_activities_and_timestamp, timestamp_responded),
             (unsubscribed_activities_and_timestamp, timestamp_unsubscribed),
         ])
 

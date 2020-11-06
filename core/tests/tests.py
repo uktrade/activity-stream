@@ -1721,7 +1721,7 @@ class TestApplication(TestBase):
     async def test_maxemail(self):
         def maxemail_base_fetch(results):
             if 'hits' not in results or 'hits' \
-                    not in results['hits'] or len(results['hits']['hits']) < 15:
+                    not in results['hits'] or len(results['hits']['hits']) < 16:
                 return False
 
             if str(results).find('maxemail') != -1:
@@ -1757,11 +1757,12 @@ class TestApplication(TestBase):
 
         results_dict = await fetch_all_es_data_until(maxemail_base_fetch)
 
-        self.assertEqual(len(results_dict['hits']['hits']), 15)
+        self.assertEqual(len(results_dict['hits']['hits']), 16)
         ids = [item['_source']['object']['id'] for item in results_dict['hits']['hits']]
         self.assertTrue('dit:maxemail:Email:Sent:459:2020-09-11T16:13:03:a.b@dummy.co' in ids)
         self.assertTrue('dit:maxemail:Email:Clicked:459:2020-11-03T01:45:08:a.b@dummy.co' in ids)
         self.assertTrue('dit:maxemail:Email:Opened:459:2020-11-03T00:06:54:a.b@dummy.co' in ids)
+        self.assertTrue('dit:maxemail:Email:Responded:459:2020-11-03T01:45:08:a.b@dummy.co' in ids)
         self.assertTrue(
             'dit:maxemail:Email:Unsubscribed:459:2020-11-03T08:38:19:a.b@dummy.co' in ids)
         self.assertTrue('dit:maxemail:Campaign:459' in ids)
