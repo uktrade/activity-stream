@@ -349,9 +349,11 @@ class MaxemailFeed(Feed):
                 result.raise_for_status()
 
             campaign = json_loads(result._body)
-            campaign_name = campaign.get('name')
-
-            return campaign_name
+            return {
+                'type': 'dit:maxemail:Campaign',
+                'id': 'dit:maxemail:Campaign:' + email_campaign_id,
+                'name': campaign.get('name'),
+            }
 
         async def get_data_export_key(timestamp, method):
             """
@@ -426,22 +428,16 @@ class MaxemailFeed(Feed):
                 else:
                     yield dict(zip(headers, parsed_line))
 
-        async def common(campaign_id, timestamp, email_address):
-            campaign_name = await get_email_campaign(campaign_id)
+        def common(campaign_id, timestamp, email_address):
             year, time = timestamp.split(' ')
             timestamp = f'{year}T{time}'
             line_id = f'{campaign_id}:{timestamp}:{email_address}'
-            campaign_dict = {
-                'type': 'dit:maxemail:Campaign',
-                'id': 'dit:maxemail:Campaign:' + campaign_id,
-                'name': campaign_name,
-            }
-            return campaign_dict, line_id, timestamp
+            return line_id, timestamp
 
         async def gen_sent_activities_and_timestamp(csv_lines):
             async for line in csv_lines:
-                campaign_dict, line_id, timestamp = \
-                    await common(line['email id'], line['sent timestamp'], line['email address'])
+                line_id, timestamp = common(line['email id'], line['sent timestamp'],
+                                            line['email address'])
                 activity = {
                     'id': 'dit:maxemail:Email:Sent:' + line_id + ':Create',
                     'type': 'Create',
@@ -451,15 +447,15 @@ class MaxemailFeed(Feed):
                         'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Sent'],
                         'id': 'dit:maxemail:Email:Sent:' + line_id,
                         'dit:emailAddress': line['email address'],
-                        'attributedTo': campaign_dict
+                        'attributedTo': await get_email_campaign(line['email id'])
                     }
                 }
                 yield activity, timestamp
 
         async def gen_bounced_activities_and_timestamp(csv_lines):
             async for line in csv_lines:
-                campaign_dict, line_id, timestamp = \
-                    await common(line['email id'], line['bounce timestamp'], line['email address'])
+                line_id, timestamp = common(line['email id'],
+                                            line['bounce timestamp'], line['email address'])
                 activity = {
                     'id': 'dit:maxemail:Email:Bounced:' + line_id + ':Create',
                     'type': 'Create',
@@ -470,15 +466,15 @@ class MaxemailFeed(Feed):
                         'id': 'dit:maxemail:Email:Bounced:' + line_id,
                         'dit:emailAddress': line['email address'],
                         'content': line['bounce reason'],
-                        'attributedTo': campaign_dict
+                        'attributedTo': await get_email_campaign(line['email id'])
                     }
                 }
                 yield activity, timestamp
 
         async def gen_opened_activities_and_timestamp(csv_lines):
             async for line in csv_lines:
-                campaign_dict, line_id, timestamp = \
-                    await common(line['email id'], line['open timestamp'], line['email address'])
+                line_id, timestamp = common(line['email id'],
+                                            line['open timestamp'], line['email address'])
                 activity = {
                     'id': 'dit:maxemail:Email:Opened:' + line_id + ':Create',
                     'type': 'Create',
@@ -488,15 +484,15 @@ class MaxemailFeed(Feed):
                         'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Opened'],
                         'id': 'dit:maxemail:Email:Opened:' + line_id,
                         'dit:emailAddress': line['email address'],
-                        'attributedTo': campaign_dict
+                        'attributedTo': await get_email_campaign(line['email id'])
                     }
                 }
                 yield activity, timestamp
 
         async def gen_clicked_activities_and_timestamp(csv_lines):
             async for line in csv_lines:
-                campaign_dict, line_id, timestamp = \
-                    await common(line['email id'], line['click timestamp'], line['email address'])
+                line_id, timestamp = common(line['email id'], line['click timestamp'],
+                                            line['email address'])
                 activity = {
                     'id': 'dit:maxemail:Email:Clicked:' + line_id + ':Create',
                     'type': 'Create',
@@ -507,16 +503,15 @@ class MaxemailFeed(Feed):
                         'id': 'dit:maxemail:Email:Clicked:' + line_id,
                         'dit:emailAddress': line['email address'],
                         'url': line['url'],
-                        'attributedTo': campaign_dict
+                        'attributedTo': await get_email_campaign(line['email id'])
                     }
                 }
                 yield activity, timestamp
 
         async def gen_unsubscribed_activities_and_timestamp(csv_lines):
             async for line in csv_lines:
-                campaign_dict, line_id, timestamp = \
-                    await common(line['email id'], line['unsubscribe timestamp'],
-                                 line['email address'])
+                line_id, timestamp = common(line['email id'], line['unsubscribe timestamp'],
+                                            line['email address'])
                 activity = {
                     'id': 'dit:maxemail:Email:Unsubscribed:' + line_id + ':Create',
                     'type': 'Create',
@@ -526,7 +521,7 @@ class MaxemailFeed(Feed):
                         'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Unsubscribed'],
                         'id': 'dit:maxemail:Email:Unsubscribed:' + line_id,
                         'dit:emailAddress': line['email address'],
-                        'attributedTo': campaign_dict
+                        'attributedTo': await get_email_campaign(line['email id'])
                     }
                 }
                 yield activity, timestamp
