@@ -119,7 +119,7 @@ async def fetch_es_index_names_with_alias():
 async def fetch_until(url, condition):
     async def fetch_all_es_data():
         async with aiohttp.ClientSession() as session:
-            results = await session.get(url)
+            results = await session.get(url, json={'size': 20})
             return json.loads(await results.text())
 
     while True:

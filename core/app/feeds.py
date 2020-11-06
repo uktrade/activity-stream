@@ -349,10 +349,20 @@ class MaxemailFeed(Feed):
                 result.raise_for_status()
 
             campaign = json_loads(result._body)
+            year, time = campaign['start_ts'].split(' ')
+            timestamp = f'{year}T{time}'
             return {
                 'type': 'dit:maxemail:Campaign',
                 'id': 'dit:maxemail:Campaign:' + email_campaign_id,
-                'name': campaign.get('name'),
+                'name': campaign['name'],
+                'content': campaign['description'],
+                'dit:emailSubject': campaign['subject_line'],
+                'published': timestamp
+            }, {
+                'type': ['Organization', 'dit:maxemail:Sender'],
+                'id': 'dit:maxemail:Sender:' + campaign['from_address'],
+                'name': campaign['from_address_alias'],
+                'dit:emailAddress': campaign['from_address'],
             }
 
         async def get_data_export_key(timestamp, method):
@@ -447,7 +457,7 @@ class MaxemailFeed(Feed):
                         'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Sent'],
                         'id': 'dit:maxemail:Email:Sent:' + line_id,
                         'dit:emailAddress': line['email address'],
-                        'attributedTo': await get_email_campaign(line['email id'])
+                        'attributedTo': (await get_email_campaign(line['email id']))[0]
                     }
                 }
                 yield activity, timestamp
@@ -466,7 +476,7 @@ class MaxemailFeed(Feed):
                         'id': 'dit:maxemail:Email:Bounced:' + line_id,
                         'dit:emailAddress': line['email address'],
                         'content': line['bounce reason'],
-                        'attributedTo': await get_email_campaign(line['email id'])
+                        'attributedTo': (await get_email_campaign(line['email id']))[0]
                     }
                 }
                 yield activity, timestamp
@@ -484,7 +494,7 @@ class MaxemailFeed(Feed):
                         'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Opened'],
                         'id': 'dit:maxemail:Email:Opened:' + line_id,
                         'dit:emailAddress': line['email address'],
-                        'attributedTo': await get_email_campaign(line['email id'])
+                        'attributedTo': (await get_email_campaign(line['email id']))[0]
                     }
                 }
                 yield activity, timestamp
@@ -503,7 +513,7 @@ class MaxemailFeed(Feed):
                         'id': 'dit:maxemail:Email:Clicked:' + line_id,
                         'dit:emailAddress': line['email address'],
                         'url': line['url'],
-                        'attributedTo': await get_email_campaign(line['email id'])
+                        'attributedTo': (await get_email_campaign(line['email id']))[0]
                     }
                 }
                 yield activity, timestamp
@@ -521,10 +531,21 @@ class MaxemailFeed(Feed):
                         'type': ['dit:maxemail:Email', 'dit:maxemail:Email:Unsubscribed'],
                         'id': 'dit:maxemail:Email:Unsubscribed:' + line_id,
                         'dit:emailAddress': line['email address'],
-                        'attributedTo': await get_email_campaign(line['email id'])
+                        'attributedTo': (await get_email_campaign(line['email id']))[0]
                     }
                 }
                 yield activity, timestamp
+
+        async def gen_campains_activities_and_timestamp(campaigns, timestamp):
+            for campaign_obj, campaign_sender in campaigns.values():
+                yield {
+                    'id': campaign_obj['id'] + ':Create',
+                    'type': 'Create',
+                    'dit:application': 'maxemail',
+                    'published': campaign_obj['published'],
+                    'object': campaign_obj,
+                    'actor': campaign_sender
+                }, timestamp
 
         async def multiplex(aiter_initial_timestamps):
             timestamps = [
@@ -605,6 +626,12 @@ class MaxemailFeed(Feed):
 
         multiplexed_activity_pages_and_timestamp = paginate(
             feed.page_size, multiplexed_activities_and_timestamps)
-
         async for activity_page, timestamp in multiplexed_activity_pages_and_timestamp:
+            yield activity_page, timestamp
+
+        campaigns_activities_and_timestamp = gen_campains_activities_and_timestamp(
+            campaigns, timestamp)
+        campaigns_activity_pages_and_timestamp = paginate(
+            feed.page_size, campaigns_activities_and_timestamp)
+        async for activity_page, timestamp in campaigns_activity_pages_and_timestamp:
             yield activity_page, timestamp
