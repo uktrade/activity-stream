@@ -363,6 +363,12 @@ async def create_activities_index(context, index_name):
                     },
                     'object.geocoordinates': {
                         'type': 'geo_point'
+                    },
+                    'object.dit:status': {
+                        'type': 'keyword'
+                    },
+                    'object.dit:public': {
+                        'type': 'boolean'
                     }
                 },
             }),
@@ -435,6 +441,12 @@ async def create_objects_index(context, index_name):
                     },
                     'geocoordinates': {
                         'type': 'geo_point'
+                    },
+                    'dit:status': {
+                        'type': 'keyword'
+                    },
+                    'dit:public': {
+                        'type': 'boolean'
                     }
                 },
             }),
