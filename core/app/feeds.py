@@ -35,7 +35,7 @@ def parse_feed_config(feed_config):
     by_feed_type = {
         'activity_stream': ActivityStreamFeed,
         'zendesk': ZendeskFeed,
-        'maxemail': EventFeed,
+        'maxemail': MaxemailFeed,
         'aventri': EventFeed,
     }
     return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
@@ -302,6 +302,7 @@ class EventFeed(Feed):
         }
 
     async def get_activities(self, context, feed):
+        # pylint: disable=bad-continuation
         async def fetch_attendees(event_id):
             url = self.attendees_list_url.format(event_id=event_id)
 
@@ -333,13 +334,21 @@ class EventFeed(Feed):
                     continue
 
                 attendee_object = {
-                    'type': ['Attendee', 'dit:aventri:Attendee'],
                     'id': 'dit:aventri:Attendee:' + attendee['attendeeid'],
-                    'registration_status': attendee['registrationstatus'],
-                    'individual_cost': attendee['individualcost'],
-                    'cost': attendee['cost'],
-                    'total_cost': attendee['totalcost'],
-                    'created': attendee['created']
+                    'published': datetime.datetime.strptime(
+                        attendee['created'], '%Y-%m-%d %H:%M:%S'
+                    ).isoformat(),
+                    'type': ['Attendee', 'dit:aventri:Attendee'],
+                    'dit:aventri:approvalstatus': attendee['approvalstatus'],
+                    'dit:aventri:category': attendee['category']['name']
+                    if attendee['category'] else None,
+                    'dit:aventri:createdby': attendee['createdby'],
+                    'dit:aventri:language': attendee['language'],
+                    'dit:aventri:lastmodified': attendee['lastmodified'],
+                    'dit:aventri:modifiedby': attendee['modifiedby'],
+                    'dit:aventri:registrationstatus': attendee['registrationstatus'],
+                    'dit:aventri:responses': [{'name': r['name'], 'response': r['response']}
+                                              for r in attendee['responses'].values()]
                 }
                 attendees.append(attendee_object)
             return attendees
@@ -365,10 +374,10 @@ class EventFeed(Feed):
                     headers={'accesstoken': self.access_token})
                 result.raise_for_status()
             event = json_loads(result._body)
-            if 'error' in event:
-                event = {}
-            else:
-                event['attendeees'] = await fetch_attendees(event_id)
+
+            if 'error' not in event:
+                event['attendees'] = await fetch_attendees(event_id)
+
             await context.redis_client.execute(
                 'SETEX', f'event-{event_id}', 60*60*24, json_dumps(event))
             return event
@@ -376,32 +385,77 @@ class EventFeed(Feed):
         now = datetime.datetime.now().isoformat()
         return [
             {
-                'type': 'Create',
                 'id': 'dit:aventri:Event:' + str(event['eventid']) + ':Create',
                 'published': now,
-                'eventid': event['eventid'],
+                'type': 'dit:aventri:Event',
                 'dit:application': 'aventri',
                 'object': {
-                    'type': ['Event', 'dit:aventri:Event'],
+                    'attributedTo': event['attendees'],
                     'id': 'dit:aventri:Event:' + event['eventid'],
                     'name': event['name'],
-                    'url': event['url'],
-                    'content': event['description'],
-                    'startdate': event['startdate'],
-                    'enddate': event['enddate'],
-                    'foldername': event['foldername'],
-                    'location': event['location'],
-                    'language': event['defaultlanguage'],
-                    'timezone': event['timezone'],
-                    'currency': event['standardcurrency'],
-                    'price_type': event['price_type'],
-                    'price': event['pricepoints'],
-                    'attributedTo': event['attendees']
+                    'published': datetime.datetime.strptime(
+                        event['createddatetime'], '%Y-%m-%d %H:%M:%S'
+                    ).isoformat(),
+                    'type': ['Event', 'dit:aventri:Event'],
+
+                    # The following keys are not namespaced with aventri in order for the mappings
+                    # to be available for queries in great.gov.uk search.
+                    # see https://readme.trade.gov.uk/docs/playbooks/activity-stream/structure.html
+                    'dit:description': event['description'],
+                    'dit:foldername': event['foldername'],
+                    'dit:include_calendar': event['include_calendar'],
+                    'dit:status': event['status'],
+                    'dit:url': event['url'],
+
+                    'dit:aventri:approval_required': event['approval_required'],
+                    'dit:aventri:approval_status': event['approval_status'],
+                    'dit:aventri:city': event['city'],
+                    'dit:aventri:clientcontact': event['clientcontact'],
+                    'dit:aventri:closedate': event['closedate'],
+                    'dit:aventri:closetime': event['closetime'],
+                    'dit:aventri:code': event['code'],
+                    'dit:aventri:contactinfo': event['contactinfo'],
+                    'dit:aventri:country': event['country'],
+                    'dit:aventri:createdby': event['createdby'],
+                    'dit:aventri:defaultlanguage': event['defaultlanguage'],
+                    'dit:aventri:enddate': event['enddate'],
+                    'dit:aventri:endtime': event['endtime'],
+                    'dit:aventri:folderid': event['folderid'],
+                    'dit:aventri:live_date': event['live_date'],
+                    'dit:aventri:location_address1': event['location']['address1']
+                    if event['location'] else None,
+                    'dit:aventri:location_address2': event['location']['address2']
+                    if event['location'] else None,
+                    'dit:aventri:location_address3': event['location']['address3']
+                    if event['location'] else None,
+                    'dit:aventri:location_city': event['location']['city']
+                    if event['location'] else None,
+                    'dit:aventri:location_country': event['location']['country']
+                    if event['location'] else None,
+                    'dit:aventri:location_name': event['location']['name']
+                    if event['location'] else None,
+                    'dit:aventri:location_postcode': event['location']['postcode']
+                    if event['location'] else None,
+                    'dit:aventri:location_state': event['location']['state']
+                    if event['location'] else None,
+                    'dit:aventri:locationname': event['locationname'],
+                    'dit:aventri:login1': event['login1'],
+                    'dit:aventri:login2': event['login2'],
+                    'dit:aventri:max_reg': event['max_reg'],
+                    'dit:aventri:modifiedby': event['modifiedby'],
+                    'dit:aventri:modifieddatetime': event['modifieddatetime'],
+                    'dit:aventri:price_type': event['price_type'],
+                    'dit:aventri:pricepoints': event['pricepoints'],
+                    'dit:aventri:standardcurrency': event['standardcurrency'],
+                    'dit:aventri:startdate': event['startdate'],
+                    'dit:aventri:starttime': event['starttime'],
+                    'dit:aventri:state': event['state'],
+                    'dit:aventri:timezone': event['timezone'],
                 }
             }
             for page_event in feed
             for event in [await get_event(page_event['eventid'])]
-            if event is not None
+            if 'eventid' in event
         ]
 
 

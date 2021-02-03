@@ -1,0 +1,64 @@
+{
+  "adjustments": "0.00",
+  "agendacost": "0.00",
+  "approvalstatus": "",
+  "attendeeid": "1",
+  "balancedue": "0.00",
+  "category": {
+    "categoryid": "1",
+    "name": "Event Speaker"
+  },
+  "categorycost": "0.00",
+  "cost": "0.00",
+  "created": "2014-10-06 14:10:01",
+  "createdby": "attendee",
+  "guestcost": "0.00",
+  "hotelcost": "0.00",
+  "individualcost": "0.00",
+  "language": "eng",
+  "last_lobby_login": "2020-10-30 06:08:30",
+  "lastmodified": "2014-10-06 14:10:31",
+  "modifiedby": "attendee",
+  "optioncost": "0.00",
+  "preload-recordid": "1",
+  "received": "0.00",
+  "recordid": "XXX",
+  "registrationstatus": "Confirmed",
+  "responses": {
+    "1": {
+      "choicekey": "test@example.com",
+      "fieldname": "email",
+      "name": "Email Address",
+      "page": "Welcome",
+      "pageid": "1",
+      "questionid": "1",
+      "response": "test@example.com"
+    },
+    "2": {
+      "auto_capitalize": "0",
+      "choicekey": "1",
+      "fieldname": "28341900",
+      "name": "Session A",
+      "page": "Agenda",
+      "pageid": "3",
+      "questionid": "28341900",
+      "response": "Session A"
+    },
+    "3": {
+      "auto_capitalize": "0",
+      "choicekey": "1",
+      "fieldname": "28341982",
+      "name": "Option A",
+      "page": "Options",
+      "pageid": "4",
+      "questionid": "28341982",
+      "response": "Option A"
+    }
+  },
+  "statetax": "0.00",
+  "subcategorycost": "0.00",
+  "tax": "0.00",
+  "testregistration": "0",
+  "totalcost": "0.00",
+  "virtual_event_attendance": "Yes"
+}

@@ -202,7 +202,7 @@ def json_loads(data):
 def main(run_application_coroutine):
     stdout_handler = logging.StreamHandler(sys.stdout)
     app_logger = logging.getLogger('activity-stream')
-    app_logger.setLevel(logging.DEBUG)
+    app_logger.setLevel(logging.INFO)
     app_logger.addHandler(stdout_handler)
 
     loop = asyncio.get_event_loop()

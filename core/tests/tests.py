@@ -1792,6 +1792,62 @@ class TestApplication(TestBase):
         self.assertIn('"2011-04-12T12:48:13+00:00"', results)
 
     @async_test
+    async def test_aventri(self):
+        def aventri_fetch(results):
+            if 'hits' not in results or 'hits' not in results['hits']:
+                return False
+            aventri_events = [
+                item
+                for item in results['hits']['hits']
+                for source in [item['_source']]
+                if 'dit:application' in source and source['dit:application'] == 'aventri'
+            ]
+            return len(aventri_events) == 1
+
+        env = {
+            **mock_env(),
+            'FEEDS__1__UNIQUE_ID': 'third_feed',
+            'FEEDS__1__ACCOUNT_ID': '1234',
+            'FEEDS__1__API_KEY': '5678',
+            'FEEDS__1__TYPE': 'aventri',
+            'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_aventri_listEvents.json',
+            'FEEDS__1__AUTH_URL': 'http://localhost:8081/tests_fixture_aventri_authorize.json',
+            'FEEDS__1__EVENT_URL': 'http://localhost:8081/tests_fixture_aventri_getEvent.json',
+            'FEEDS__1__ATTENDEES_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listAttendees.json',
+            'FEEDS__1__ATTENDEE_URL':
+            'http://localhost:8081/tests_fixture_aventri_getAttendee.json',
+        }
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_file, mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            results_dict = await fetch_all_es_data_until(aventri_fetch)
+
+        event = results_dict['hits']['hits'][0]['_source']
+
+        self.assertEqual(event['dit:application'], 'aventri')
+        self.assertEqual(event['id'], 'dit:aventri:Event:1:Create')
+        self.assertEqual(event['type'], 'dit:aventri:Event')
+
+        self.assertEqual(event['object']['id'], 'dit:aventri:Event:1')
+        self.assertEqual(event['object']['type'], ['Event', 'dit:aventri:Event'])
+        self.assertEqual(event['object']['name'], 'Demo Event')
+        self.assertEqual(event['object']['published'], '2021-01-27T00:00:00')
+        self.assertEqual(event['object']['dit:aventri:location_city'], 'London')
+
+        self.assertEqual(event['object']['attributedTo'][0]['id'],
+                         'dit:aventri:Attendee:1')
+        self.assertEqual(event['object']['attributedTo'][0]['type'],
+                         ['Attendee', 'dit:aventri:Attendee'])
+        self.assertEqual(event['object']['attributedTo'][0]['published'],
+                         '2014-10-06T14:10:01')
+        self.assertEqual(event['object']['attributedTo'][0]['dit:aventri:category'],
+                         'Event Speaker')
+        self.assertEqual(event['object']['attributedTo'][0]['dit:aventri:responses'][0],
+                         {'name': 'Email Address', 'response': 'test@example.com'})
+
+    @async_test
     async def test_maxemail(self):
         def maxemail_base_fetch(results):
             if 'hits' not in results or 'hits' \
