@@ -1,7 +1,9 @@
 from abc import ABCMeta, abstractmethod
 import asyncio
+from collections.abc import Sequence
 import csv
 import datetime
+from distutils.util import strtobool
 import re
 from io import StringIO
 import aiohttp
@@ -48,6 +50,7 @@ class Feed(metaclass=ABCMeta):
     down_grace_period = 60 * 2
 
     full_ingest_page_interval = 0.25
+    full_ingest_interval = 120
     updates_page_interval = 1
     exception_intervals = [1, 2, 4, 8, 16, 32, 64]
 
@@ -257,10 +260,14 @@ class ZendeskFeed(Feed):
 class EventFeed(Feed):
 
     down_grace_period = 60 * 60 * 4
+    full_ingest_page_interval = 1
+    full_ingest_interval = 60 * 60
 
-    full_ingest_page_interval = 3
     updates_page_interval = 60 * 60 * 24 * 30
     exception_intervals = [120, 180, 240, 300]
+
+    # EventFeed specific configuration
+    ingest_page_size = 400
 
     @classmethod
     def parse_config(cls, config):
@@ -289,6 +296,38 @@ class EventFeed(Feed):
         """
         return None
 
+    async def http_make_aventri_request(self, context, method, url, data, headers, sleep_interval):
+        logger = context.logger
+
+        num_attempts = 0
+        max_attempts = 10
+        retry_interval = 0
+
+        while True:
+            num_attempts += 1
+            retry_interval += 5
+            try:
+                result = await http_make_request(
+                    context.session, context.metrics, method, url, data=data, headers=headers)
+                result.raise_for_status()
+                if sleep_interval:
+                    await sleep(context, sleep_interval)
+                return result
+            except aiohttp.ClientResponseError as client_error:
+                if (num_attempts >= max_attempts or client_error.status not in [429, 502]):
+                    raise
+                logger.debug(
+                    'HTTP %s received at attempt (%s). Will retry after (%s) seconds',
+                    client_error.status,
+                    num_attempts,
+                    retry_interval,
+                )
+                context.raven_client.captureMessage(
+                    f'HTTP {client_error.status} received at attempt ({num_attempts}).'
+                    f'Will retry after ({retry_interval}) seconds',
+                )
+                await sleep(context, retry_interval)
+
     async def auth_headers(self, context, __):
         result = await http_make_request(
             context.session, context.metrics, 'POST', self.auth_url, data={
@@ -301,57 +340,110 @@ class EventFeed(Feed):
             'accesstoken': self.access_token,
         }
 
+    @classmethod
+    async def pages(cls, context, feed, href, ingest_type):
+        logger = context.logger
+
+        async def fetch_page(context, href, headers):
+            result = await cls.http_make_aventri_request(
+                cls, context, 'GET', href, data=b'', headers=headers, sleep_interval=0
+            )
+            return result._body
+
+        async def gen_source_pages(href):
+            updates_href = href
+            while updates_href:
+                # Lock so there is only 1 request per feed at any given time
+                async with feed.lock:
+                    with \
+                            logged(logger.info, logger.warning, 'Polling page (%s)',
+                                   [updates_href]), \
+                            metric_timer(context.metrics['ingest_page_duration_seconds'],
+                                         [feed.unique_id, ingest_type, 'pull']):
+                        feed_contents = await fetch_page(
+                            context, updates_href, await feed.auth_headers(context, updates_href),
+                        )
+
+                with logged(logger.debug, logger.warning, 'Parsing JSON', []):
+                    feed_parsed = json_loads(feed_contents)
+
+                with logged(logger.debug, logger.warning, 'Convert to activities', []):
+                    activities = await feed.get_activities(context, feed_parsed)
+
+                async for activity in activities:
+                    yield activity, updates_href
+                updates_href = feed.next_href(feed_parsed)
+
+        async def gen_evenly_sized_pages(source_pages):
+            # pylint: disable=undefined-loop-variable
+            page_size = cls.ingest_page_size
+            current = []
+            async for activities, updates_href in source_pages:
+                current.append(activities)
+
+                while len(current) >= page_size:
+                    to_yield, current = current[:page_size], current[page_size:]
+                    yield to_yield, updates_href
+
+            if current:
+                yield current, updates_href
+
+        source_pages = gen_source_pages(href)
+        evenly_sized_pages = gen_evenly_sized_pages(source_pages)
+
+        async for page, updates_href in evenly_sized_pages:
+            yield page, updates_href
+
     async def get_activities(self, context, feed):
         # pylint: disable=bad-continuation
-        async def fetch_attendees(event_id):
+        async def get_attendee(event_id, attendee_id):
+            attendee_lookup = await context.redis_client.execute(
+                'GET', f'event-{event_id}-attendee-{attendee_id}'
+            )
+            if attendee_lookup:
+                try:
+                    return json_loads(attendee_lookup.decode('utf-8'))
+                except UnicodeDecodeError:
+                    await context.redis_client.execute(
+                        'DEL', f'event-{event_id}-attendee-{attendee_id}'
+                    )
+                    return await fetch_attendee(event_id, attendee_id)
+            else:
+                return await fetch_attendee(event_id, attendee_id)
+
+        async def fetch_attendee(event_id, attendee_id):
+            url = self.attendee_url.format(event_id=event_id, attendee_id=attendee_id)
+            with logged(context.logger.debug, context.logger.warning,
+                        'Fetching attendee (%s)', [url]):
+                result = await self.http_make_aventri_request(
+                    context, 'GET', url, data=b'',
+                    headers={'accesstoken': self.access_token}, sleep_interval=0.2)
+            attendee = json_loads(result._body)
+
+            if 'error' in attendee:
+                return None
+
+            await context.redis_client.execute(
+                'SETEX', f'event-{event_id}-attendee-{attendee_id}',
+                60*60*24*2, json_dumps(attendee)
+            )
+
+            return attendee
+
+        async def get_attendees(event_id):
             url = self.attendees_list_url.format(event_id=event_id)
 
             with logged(context.logger.debug, context.logger.warning,
                         'Fetching attendee list (%s)', [url]):
-                result = await http_make_request(
-                    context.session, context.metrics, 'GET', url, data=b'',
-                    headers={'accesstoken': self.access_token})
-                result.raise_for_status()
+                result = await self.http_make_aventri_request(
+                    context, 'GET', url, data=b'',
+                    headers={'accesstoken': self.access_token}, sleep_interval=0.5)
             attendees_list = json_loads(result._body)
 
             if 'error' in attendees_list:
                 return []
 
-            attendee_ids = [a['attendeeid'] for a in attendees_list]
-            attendees = []
-
-            for attendee_id in attendee_ids:
-                url = self.attendee_url.format(event_id=event_id, attendee_id=attendee_id)
-                with logged(context.logger.debug, context.logger.warning,
-                            'Fetching attendee (%s)', [url]):
-                    result = await http_make_request(
-                        context.session, context.metrics, 'GET', url, data=b'',
-                        headers={'accesstoken': self.access_token})
-                    result.raise_for_status()
-                attendee = json_loads(result._body)
-
-                if 'error' in attendee:
-                    continue
-
-                attendee_object = {
-                    'id': 'dit:aventri:Attendee:' + attendee['attendeeid'],
-                    'published': datetime.datetime.strptime(
-                        attendee['created'], '%Y-%m-%d %H:%M:%S'
-                    ).isoformat(),
-                    'type': ['Attendee', 'dit:aventri:Attendee'],
-                    'dit:aventri:approvalstatus': attendee['approvalstatus'],
-                    'dit:aventri:category': attendee['category']['name']
-                    if attendee['category'] else None,
-                    'dit:aventri:createdby': attendee['createdby'],
-                    'dit:aventri:language': attendee['language'],
-                    'dit:aventri:lastmodified': attendee['lastmodified'],
-                    'dit:aventri:modifiedby': attendee['modifiedby'],
-                    'dit:aventri:registrationstatus': attendee['registrationstatus'],
-                    'dit:aventri:responses': [{'name': r['name'], 'response': r['response']}
-                                              for r in attendee['responses'].values()]
-                }
-                attendees.append(attendee_object)
-            return attendees
+            return [await get_attendee(event_id, a['attendeeid']) for a in attendees_list]
 
         async def get_event(event_id):
             event_lookup = await context.redis_client.execute('GET', f'event-{event_id}')
@@ -369,94 +461,146 @@ class EventFeed(Feed):
 
             with logged(context.logger.debug, context.logger.warning,
                         'Fetching event (%s)', [url]):
-                result = await http_make_request(
-                    context.session, context.metrics, 'GET', url, data=b'',
-                    headers={'accesstoken': self.access_token})
-                result.raise_for_status()
+                result = await self.http_make_aventri_request(
+                    context, 'GET', url, data=b'',
+                    headers={'accesstoken': self.access_token}, sleep_interval=0.5)
             event = json_loads(result._body)
 
-            if 'error' not in event:
-                event['attendees'] = await fetch_attendees(event_id)
+            if 'error' in event or 'eventid' not in event:
+                return None
 
             await context.redis_client.execute(
-                'SETEX', f'event-{event_id}', 60*60*24, json_dumps(event))
+                'SETEX', f'event-{event_id}', 60*60*24*2, json_dumps(event))
+
             return event
 
-        now = datetime.datetime.now().isoformat()
-        return [
-            {
-                'id': 'dit:aventri:Event:' + str(event['eventid']) + ':Create',
+        def map_to_activity(event_id, aventri_object):
+            now = datetime.datetime.now().isoformat()
+            if 'eventid' in aventri_object:
+                return {
+                    'id': 'dit:aventri:Event:' + event_id + ':Create',
+                    'published': now,
+                    'type': 'dit:aventri:Event',
+                    'dit:application': 'aventri',
+                    'object': {
+                        'id': 'dit:aventri:Event:' + event_id,
+                        'name': aventri_object['name'],
+                        'published': datetime.datetime.strptime(
+                            aventri_object['createddatetime'], '%Y-%m-%d %H:%M:%S'
+                        ).isoformat(),
+
+                        # The following mappings are used to allow great.gov.uk
+                        # search to filter on events.
+                        'attributedTo': {
+                            'type': 'dit:aventri:Folder',
+                            'id': f'dit:aventri:Folder:{aventri_object["foldername"]}'
+                        },
+                        'content': aventri_object['description'],
+                        'dit:public': bool(strtobool(aventri_object['include_calendar'])),
+                        'dit:status': aventri_object['status'],
+                        'endTime': aventri_object['enddate'] + (
+                            'T' + aventri_object['endtime'] if aventri_object['endtime'] else ''
+                        ),
+                        'startTime': aventri_object['startdate'] + (
+                            'T' + \
+                            aventri_object['starttime'] if aventri_object['starttime'] else ''
+                        ),
+                        'type': ['dit:aventri:Event'] + (
+                            ['Tombstone'] if aventri_object['deleted'] == '1' else []
+                        ),
+                        'url': aventri_object['url'],
+
+                        'dit:aventri:approval_required': aventri_object['approval_required'],
+                        'dit:aventri:approval_status': aventri_object['approval_status'],
+                        'dit:aventri:city': aventri_object['city'],
+                        'dit:aventri:clientcontact': aventri_object['clientcontact'],
+                        'dit:aventri:closedate': aventri_object['closedate'],
+                        'dit:aventri:closetime': aventri_object['closetime'],
+                        'dit:aventri:code': aventri_object['code'],
+                        'dit:aventri:contactinfo': aventri_object['contactinfo'],
+                        'dit:aventri:country': aventri_object['country'],
+                        'dit:aventri:createdby': aventri_object['createdby'],
+                        'dit:aventri:defaultlanguage': aventri_object['defaultlanguage'],
+                        'dit:aventri:folderid': aventri_object['folderid'],
+                        'dit:aventri:live_date': aventri_object['live_date'],
+                        'dit:aventri:location_address1': aventri_object['location']['address1']
+                        if aventri_object['location'] else None,
+                        'dit:aventri:location_address2': aventri_object['location']['address2']
+                        if aventri_object['location'] else None,
+                        'dit:aventri:location_address3': aventri_object['location']['address3']
+                        if aventri_object['location'] else None,
+                        'dit:aventri:location_city': aventri_object['location']['city']
+                        if aventri_object['location'] else None,
+                        'dit:aventri:location_country': aventri_object['location']['country']
+                        if aventri_object['location'] else None,
+                        'dit:aventri:location_name': aventri_object['location']['name']
+                        if aventri_object['location'] else None,
+                        'dit:aventri:location_postcode': aventri_object['location']['postcode']
+                        if aventri_object['location'] else None,
+                        'dit:aventri:location_state': aventri_object['location']['state']
+                        if aventri_object['location'] else None,
+                        'dit:aventri:locationname': aventri_object['locationname'],
+                        'dit:aventri:login1': aventri_object['login1'],
+                        'dit:aventri:login2': aventri_object['login2'],
+                        'dit:aventri:max_reg': aventri_object['max_reg'],
+                        'dit:aventri:modifiedby': aventri_object['modifiedby'],
+                        'dit:aventri:modifieddatetime': aventri_object['modifieddatetime'],
+                        'dit:aventri:price_type': aventri_object['price_type'],
+                        'dit:aventri:pricepoints': aventri_object['pricepoints'],
+                        'dit:aventri:standardcurrency': aventri_object['standardcurrency'],
+                        'dit:aventri:state': aventri_object['state'],
+                        'dit:aventri:timezone': aventri_object['timezone'],
+                    }
+                }
+            if not aventri_object['responses']:
+                responses = []
+            elif isinstance(aventri_object['responses'], dict):
+                responses = aventri_object['responses'].values()
+            else:
+                responses = aventri_object['responses']
+
+            return {
+                'id': 'dit:aventri:Attendee:' + event_id + ':Create',
                 'published': now,
-                'type': 'dit:aventri:Event',
+                'type': 'dit:aventri:Attendee',
                 'dit:application': 'aventri',
                 'object': {
-                    'attributedTo': event['attendees'],
-                    'id': 'dit:aventri:Event:' + event['eventid'],
-                    'name': event['name'],
+                    'attributedTo': {
+                        'type': 'dit:aventri:Event',
+                        'id': f'dit:aventri:Event:{event_id}'
+                    },
+                    'id': 'dit:aventri:Attendee:' + aventri_object['attendeeid'],
                     'published': datetime.datetime.strptime(
-                        event['createddatetime'], '%Y-%m-%d %H:%M:%S'
+                        aventri_object['created'], '%Y-%m-%d %H:%M:%S'
                     ).isoformat(),
-                    'type': ['Event', 'dit:aventri:Event'],
-
-                    # The following keys are not namespaced with aventri in order for the mappings
-                    # to be available for queries in great.gov.uk search.
-                    # see https://readme.trade.gov.uk/docs/playbooks/activity-stream/structure.html
-                    'dit:description': event['description'],
-                    'dit:foldername': event['foldername'],
-                    'dit:include_calendar': event['include_calendar'],
-                    'dit:status': event['status'],
-                    'dit:url': event['url'],
-
-                    'dit:aventri:approval_required': event['approval_required'],
-                    'dit:aventri:approval_status': event['approval_status'],
-                    'dit:aventri:city': event['city'],
-                    'dit:aventri:clientcontact': event['clientcontact'],
-                    'dit:aventri:closedate': event['closedate'],
-                    'dit:aventri:closetime': event['closetime'],
-                    'dit:aventri:code': event['code'],
-                    'dit:aventri:contactinfo': event['contactinfo'],
-                    'dit:aventri:country': event['country'],
-                    'dit:aventri:createdby': event['createdby'],
-                    'dit:aventri:defaultlanguage': event['defaultlanguage'],
-                    'dit:aventri:enddate': event['enddate'],
-                    'dit:aventri:endtime': event['endtime'],
-                    'dit:aventri:folderid': event['folderid'],
-                    'dit:aventri:live_date': event['live_date'],
-                    'dit:aventri:location_address1': event['location']['address1']
-                    if event['location'] else None,
-                    'dit:aventri:location_address2': event['location']['address2']
-                    if event['location'] else None,
-                    'dit:aventri:location_address3': event['location']['address3']
-                    if event['location'] else None,
-                    'dit:aventri:location_city': event['location']['city']
-                    if event['location'] else None,
-                    'dit:aventri:location_country': event['location']['country']
-                    if event['location'] else None,
-                    'dit:aventri:location_name': event['location']['name']
-                    if event['location'] else None,
-                    'dit:aventri:location_postcode': event['location']['postcode']
-                    if event['location'] else None,
-                    'dit:aventri:location_state': event['location']['state']
-                    if event['location'] else None,
-                    'dit:aventri:locationname': event['locationname'],
-                    'dit:aventri:login1': event['login1'],
-                    'dit:aventri:login2': event['login2'],
-                    'dit:aventri:max_reg': event['max_reg'],
-                    'dit:aventri:modifiedby': event['modifiedby'],
-                    'dit:aventri:modifieddatetime': event['modifieddatetime'],
-                    'dit:aventri:price_type': event['price_type'],
-                    'dit:aventri:pricepoints': event['pricepoints'],
-                    'dit:aventri:standardcurrency': event['standardcurrency'],
-                    'dit:aventri:startdate': event['startdate'],
-                    'dit:aventri:starttime': event['starttime'],
-                    'dit:aventri:state': event['state'],
-                    'dit:aventri:timezone': event['timezone'],
+                    'type': ['dit:aventri:Attendee'],
+                    'dit:aventri:approvalstatus': aventri_object['approvalstatus'],
+                    'dit:aventri:category': aventri_object['category']['name']
+                    if aventri_object['category'] else None,
+                    'dit:aventri:createdby': aventri_object['createdby'],
+                    'dit:aventri:language': aventri_object['language'],
+                    'dit:aventri:lastmodified': aventri_object['lastmodified'],
+                    'dit:aventri:modifiedby': aventri_object['modifiedby'],
+                    'dit:aventri:registrationstatus': aventri_object['registrationstatus'],
+                    'dit:aventri:responses': [{'name': r['name'], 'response': r['response']}
+                                              for r in responses]
                 }
             }
+
+        def flatten(items):
+            for item in items:
+                if isinstance(item, Sequence):
+                    yield from flatten(item)
+                else:
+                    yield item
+        return (
+            map_to_activity(page_event['eventid'], aventri_object)
             for page_event in feed
-            for event in [await get_event(page_event['eventid'])]
-            if 'eventid' in event
-        ]
+            for aventri_object in flatten([
+                await get_event(page_event['eventid']),
+                await get_attendees(page_event['eventid'])
+            ]) if aventri_object
+        )
 
 
 class MaxemailFeed(Feed):

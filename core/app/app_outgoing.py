@@ -210,7 +210,9 @@ async def ingest_feeds(context, feeds):
                 context, feed), min_duration=min_duration
         )
         for feed in feeds
-        for (ingest_func, min_duration) in ((ingest_full, 120), (ingest_updates, 0))
+        for (ingest_func, min_duration) in (
+            (ingest_full, feed.full_ingest_interval), (ingest_updates, 0)
+        )
     ])
 
 
