@@ -297,6 +297,9 @@ class EventFeed(Feed):
         """
         return None
 
+    async def auth_headers(self, _, __):
+        return {}
+
     async def http_make_aventri_request(self, context, method, url, data, headers, sleep_interval):
         logger = context.logger
 
@@ -329,55 +332,56 @@ class EventFeed(Feed):
                 )
                 await sleep(context, retry_interval)
 
-    async def auth_headers(self, context, __):
-        result = await http_make_request(
-            context.session, context.metrics, 'POST', self.auth_url, data={
-                'accountid': self.account_id, 'key': self.api_key,
-            }, headers={}
-        )
-        result.raise_for_status()
-        self.access_token = json_loads(result._body)['accesstoken']
-        return {
-            'accesstoken': self.access_token,
-        }
-
-    @classmethod
-    async def pages(cls, context, feed, href, ingest_type):
+    async def pages(self, context, feed, href, ingest_type):
         logger = context.logger
 
-        async def fetch_page(context, href, headers):
-            result = await cls.http_make_aventri_request(
-                cls, context, 'GET', href, data=b'', headers=headers, sleep_interval=0
-            )
-            return result._body
-
         async def gen_source_pages(href):
-            updates_href = href
-            while updates_href:
-                # Lock so there is only 1 request per feed at any given time
-                async with feed.lock:
+            # Lock so there is only 1 request per feed at any given time
+            async with feed.lock:
+
+                # Fetch access token for later requests
+                result = await http_make_request(
+                    context.session, context.metrics, 'POST', self.auth_url, data={
+                        'accountid': self.account_id, 'key': self.api_key,
+                    }, headers={}
+                )
+                result.raise_for_status()
+                headers = {
+                    'accesstoken': json_loads(result._body)['accesstoken'],
+                }
+
+                maybe_remaining = True
+                total_events = 0
+                per_page = 2000  # This is the max Aventri seems to allow
+
+                while maybe_remaining:
                     with \
                             logged(logger.info, logger.warning, 'Polling page (%s)',
-                                   [updates_href]), \
+                                   [href]), \
                             metric_timer(context.metrics['ingest_page_duration_seconds'],
                                          [feed.unique_id, ingest_type, 'pull']):
-                        feed_contents = await fetch_page(
-                            context, updates_href, await feed.auth_headers(context, updates_href),
+
+                        result = await self.http_make_aventri_request(
+                            context, 'GET', href, data=json_dumps({
+                                'limit': per_page,
+                                'offset': total_events,
+                            }), headers=headers, sleep_interval=2
                         )
+                        page_of_events = json_loads(result._body)
+                        num_events_in_page = len(page_of_events)
+                        total_events += num_events_in_page
 
-                with logged(logger.debug, logger.warning, 'Parsing JSON', []):
-                    feed_parsed = json_loads(feed_contents)
+                    with logged(logger.debug, logger.warning, 'Convert to activities', []):
+                        activities = await feed.get_activities(context, page_of_events, headers)
 
-                with logged(logger.debug, logger.warning, 'Convert to activities', []):
-                    activities = await feed.get_activities(context, feed_parsed)
+                    async for activity in activities:
+                        yield activity, href
 
-                async for activity in activities:
-                    yield activity, updates_href
-                updates_href = feed.next_href(feed_parsed)
+                    maybe_remaining = num_events_in_page == per_page
 
         async def gen_evenly_sized_pages(source_pages):
             # pylint: disable=undefined-loop-variable
-            page_size = cls.ingest_page_size
+            page_size = self.ingest_page_size
             current = []
             async for activities, updates_href in source_pages:
                 current.append(activities)
@@ -395,7 +399,7 @@ class EventFeed(Feed):
         async for page, updates_href in evenly_sized_pages:
             yield page, updates_href
 
-    async def get_activities(self, context, feed):
+    async def get_activities(self, context, page_of_events, headers):
         # pylint: disable=bad-continuation
         async def get_attendee(event_id, attendee_id):
             attendee_lookup = await context.redis_client.execute(
@@ -418,7 +422,7 @@ class EventFeed(Feed):
                         'Fetching attendee (%s)', [url]):
                 result = await self.http_make_aventri_request(
                     context, 'GET', url, data=b'',
-                    headers={'accesstoken': self.access_token}, sleep_interval=2)
+                    headers=headers, sleep_interval=2)
             attendee = json_loads(result._body)
 
             if 'error' in attendee:
@@ -438,7 +442,7 @@ class EventFeed(Feed):
                         'Fetching attendee list (%s)', [url]):
                 result = await self.http_make_aventri_request(
                     context, 'GET', url, data=b'',
-                    headers={'accesstoken': self.access_token}, sleep_interval=2)
+                    headers=headers, sleep_interval=2)
             attendees_list = json_loads(result._body)
 
             if 'error' in attendees_list:
@@ -464,7 +468,7 @@ class EventFeed(Feed):
                         'Fetching event (%s)', [url]):
                 result = await self.http_make_aventri_request(
                     context, 'GET', url, data=b'',
-                    headers={'accesstoken': self.access_token}, sleep_interval=2)
+                    headers=headers, sleep_interval=2)
             event = json_loads(result._body)
 
             if 'error' in event or 'eventid' not in event:
@@ -596,7 +600,7 @@ class EventFeed(Feed):
                     yield item
         return (
             map_to_activity(page_event['eventid'], aventri_object)
-            for page_event in feed
+            for page_event in page_of_events
             for aventri_object in flatten([
                 await get_event(page_event['eventid']),
                 await get_attendees(page_event['eventid'])
