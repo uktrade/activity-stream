@@ -301,11 +301,11 @@ class EventFeed(Feed):
 
         num_attempts = 0
         max_attempts = 10
-        retry_interval = 0
+        retry_interval = 65
 
         while True:
             num_attempts += 1
-            retry_interval += 5
+            retry_interval += 60
             try:
                 result = await http_make_request(
                     context.session, context.metrics, method, url, data=data, headers=headers)
@@ -417,7 +417,7 @@ class EventFeed(Feed):
                         'Fetching attendee (%s)', [url]):
                 result = await self.http_make_aventri_request(
                     context, 'GET', url, data=b'',
-                    headers={'accesstoken': self.access_token}, sleep_interval=0.2)
+                    headers={'accesstoken': self.access_token}, sleep_interval=2)
             attendee = json_loads(result._body)
 
             if 'error' in attendee:
@@ -437,7 +437,7 @@ class EventFeed(Feed):
                         'Fetching attendee list (%s)', [url]):
                 result = await self.http_make_aventri_request(
                     context, 'GET', url, data=b'',
-                    headers={'accesstoken': self.access_token}, sleep_interval=0.5)
+                    headers={'accesstoken': self.access_token}, sleep_interval=2)
             attendees_list = json_loads(result._body)
 
             if 'error' in attendees_list:
@@ -463,7 +463,7 @@ class EventFeed(Feed):
                         'Fetching event (%s)', [url]):
                 result = await self.http_make_aventri_request(
                     context, 'GET', url, data=b'',
-                    headers={'accesstoken': self.access_token}, sleep_interval=0.5)
+                    headers={'accesstoken': self.access_token}, sleep_interval=2)
             event = json_loads(result._body)
 
             if 'error' in event or 'eventid' not in event:
