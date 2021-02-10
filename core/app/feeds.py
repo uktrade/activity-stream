@@ -300,7 +300,7 @@ class EventFeed(Feed):
     async def auth_headers(self, _, __):
         return {}
 
-    async def http_make_aventri_request(self, context, method, url, data, headers, sleep_interval):
+    async def http_make_aventri_request(self, context, method, url, data, headers, sleep_interval, params=()):
         logger = context.logger
 
         num_attempts = 0
@@ -313,7 +313,7 @@ class EventFeed(Feed):
             try:
                 context.logger.info('Making aventri request to %s %s', url, data)
                 result = await http_make_request(
-                    context.session, context.metrics, method, url, data=data, headers=headers)
+                    context.session, context.metrics, method, url, data=data, headers=headers, params=params)
                 result.raise_for_status()
                 if sleep_interval:
                     await sleep(context, sleep_interval)
@@ -363,10 +363,10 @@ class EventFeed(Feed):
                                          [feed.unique_id, ingest_type, 'pull']):
 
                         result = await self.http_make_aventri_request(
-                            context, 'GET', href, data=json_dumps({
-                                'limit': per_page,
-                                'offset': total_events,
-                            }), headers=headers, sleep_interval=2
+                            context, 'GET', href, data=b'', params=(
+                                ('limit', str(per_page)),
+                                ('offset', str(total_events)),
+                            ), headers=headers, sleep_interval=2
                         )
                         page_of_events = json_loads(result._body)
                         num_events_in_page = len(page_of_events)
