@@ -266,8 +266,9 @@ class EventFeed(Feed):
     updates_page_interval = 60 * 60 * 24 * 30
     exception_intervals = [120, 180, 240, 300]
 
-    # EventFeed specific configuration
-    ingest_page_size = 400
+    # This is quite small so even when we have a lot of sleeps, we still have signs that the
+    # feed is working in Grafana
+    ingest_page_size = 20
 
     @classmethod
     def parse_config(cls, config):
