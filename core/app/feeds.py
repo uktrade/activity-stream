@@ -366,7 +366,7 @@ class EventFeed(Feed):
                             context, 'GET', href, data=b'', params=(
                                 ('limit', str(per_page)),
                                 ('offset', str(total_events)),
-                            ), headers=headers, sleep_interval=2
+                            ), headers=headers, sleep_interval=1
                         )
                         page_of_events = json_loads(result._body)
                         num_events_in_page = len(page_of_events)
@@ -423,7 +423,7 @@ class EventFeed(Feed):
                         'Fetching attendee (%s)', [url]):
                 result = await self.http_make_aventri_request(
                     context, 'GET', url, data=b'',
-                    headers=headers, sleep_interval=2)
+                    headers=headers, sleep_interval=1)
             attendee = json_loads(result._body)
 
             if 'error' in attendee:
@@ -443,7 +443,7 @@ class EventFeed(Feed):
                         'Fetching attendee list (%s)', [url]):
                 result = await self.http_make_aventri_request(
                     context, 'GET', url, data=b'',
-                    headers=headers, sleep_interval=2)
+                    headers=headers, sleep_interval=1)
             attendees_list = json_loads(result._body)
 
             if 'error' in attendees_list:
@@ -469,7 +469,7 @@ class EventFeed(Feed):
                         'Fetching event (%s)', [url]):
                 result = await self.http_make_aventri_request(
                     context, 'GET', url, data=b'',
-                    headers=headers, sleep_interval=2)
+                    headers=headers, sleep_interval=1)
             event = json_loads(result._body)
 
             if 'error' in event or 'eventid' not in event:
