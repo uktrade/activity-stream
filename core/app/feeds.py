@@ -447,7 +447,9 @@ class EventFeed(Feed):
             attendees_list = json_loads(result._body)
 
             if 'error' in attendees_list:
-                return []
+                attendees_list = []
+
+            context.logger.info('Number of attendees %s', len(attendees_list))
 
             return [await get_attendee(event_id, a['attendeeid']) for a in attendees_list]
 
