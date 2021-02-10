@@ -311,6 +311,7 @@ class EventFeed(Feed):
             num_attempts += 1
             retry_interval += 60
             try:
+                context.logger.info('Making aventri request to %s %s', url, data)
                 result = await http_make_request(
                     context.session, context.metrics, method, url, data=data, headers=headers)
                 result.raise_for_status()
