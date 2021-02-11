@@ -3,7 +3,7 @@ import asyncio
 from collections.abc import Sequence
 import csv
 import datetime
-from distutils.util import strtobool
+from distutils.util import strtobool    # pylint: disable=import-error, no-name-in-module
 import re
 from io import StringIO
 import aiohttp
@@ -23,7 +23,6 @@ from .metrics import (
     metric_timer,
 )
 from .utils import (
-    json_dumps,
     json_loads,
     sub_dict_lower,
 )
@@ -273,21 +272,17 @@ class EventFeed(Feed):
     @classmethod
     def parse_config(cls, config):
         return cls(**sub_dict_lower(
-            config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL', 'EVENT_URL',
-                     'ATTENDEES_LIST_URL', 'ATTENDEE_URL'
+            config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL', 'ATTENDEES_LIST_URL'
                      ]))
 
-    def __init__(self, unique_id, seed, account_id, api_key, auth_url,
-                 event_url, attendees_list_url, attendee_url):
+    def __init__(self, unique_id, seed, account_id, api_key, auth_url, attendees_list_url):
         self.lock = asyncio.Lock()
         self.unique_id = unique_id
         self.seed = seed
         self.account_id = account_id
         self.api_key = api_key
         self.auth_url = auth_url
-        self.event_url = event_url
         self.attendees_list_url = attendees_list_url
-        self.attendee_url = attendee_url
         self.accesstoken = None
 
     @staticmethod
@@ -300,35 +295,75 @@ class EventFeed(Feed):
     async def auth_headers(self, _, __):
         return {}
 
-    async def http_make_aventri_request(self, context, method, url, data, headers, sleep_interval, params=()):
+    async def generate_access_token(self, context):
+        context.logger.info('Making aventri auth request to %s', self.auth_url)
+        result = await http_make_request(
+            context.session, context.metrics, 'GET', self.auth_url,
+            data=b'',
+            params=(
+                ('accountid', str(self.account_id)),
+                ('key', str(self.api_key)),
+            ),
+            headers={},
+        )
+        result.raise_for_status()
+        accesstoken = str(json_loads(result._body)['accesstoken'])
+        context.logger.info('fresh access token %s', accesstoken)
+        return accesstoken
+
+    async def http_make_auth_request(self, context, method, url, data, params=()):
+        # Aventri DS APIs tokens have short expiry
+        num_attempts = 0
+        max_attempts = 5
+        while True:
+            num_attempts += 1
+            if self.accesstoken is None:
+                self.accesstoken = await self.generate_access_token(context)
+            params_auth = params + (('accesstoken', str(self.accesstoken)),)
+            context.logger.info('Making aventri request to %s with params %s', url, params_auth)
+            result = await http_make_request(
+                context.session, context.metrics, method, url,
+                data=data, headers={}, params=params_auth,
+            )
+            error_status = json_loads(result._body).get('status', None)
+            error_msg = json_loads(result._body).get('msg', None)
+            if num_attempts < max_attempts and \
+                    error_status == 'error' and error_msg.startswith('Not authorized to access'):
+                self.accesstoken = None
+                continue
+            return result
+
+    async def http_make_aventri_request(
+            self, context, method, url, data, sleep_interval=0.1, params=()):
         logger = context.logger
 
         num_attempts = 0
         max_attempts = 10
-        retry_interval = 65
+        retry_interval = 30
 
         while True:
             num_attempts += 1
             retry_interval += 60
             try:
-                context.logger.info('Making aventri request to %s %s', url, data)
-                result = await http_make_request(
-                    context.session, context.metrics, method, url, data=data, headers=headers, params=params)
+                result = await self.http_make_auth_request(context, method, url, data, params)
                 result.raise_for_status()
+
                 if sleep_interval:
                     await sleep(context, sleep_interval)
-                return result
+                return json_loads(result._body).get('ResultSet', [])
             except aiohttp.ClientResponseError as client_error:
-                if (num_attempts >= max_attempts or client_error.status not in [429, 502]):
+                if (num_attempts >= max_attempts or client_error.status not in [
+                        429, 502, 504,
+                ]):
                     raise
                 logger.debug(
-                    'HTTP %s received at attempt (%s). Will retry after (%s) seconds',
+                    'Aventri: HTTP %s received at attempt (%s). Will retry after (%s) seconds',
                     client_error.status,
                     num_attempts,
                     retry_interval,
                 )
                 context.raven_client.captureMessage(
-                    f'HTTP {client_error.status} received at attempt ({num_attempts}).'
+                    f'Aventri: HTTP {client_error.status} received at attempt ({num_attempts}).'
                     f'Will retry after ({retry_interval}) seconds',
                 )
                 await sleep(context, retry_interval)
@@ -339,46 +374,31 @@ class EventFeed(Feed):
         async def gen_source_pages(href):
             # Lock so there is only 1 request per feed at any given time
             async with feed.lock:
-
-                # Fetch access token for later requests
-                result = await http_make_request(
-                    context.session, context.metrics, 'POST', self.auth_url, data={
-                        'accountid': self.account_id, 'key': self.api_key,
-                    }, headers={}
-                )
-                result.raise_for_status()
-                headers = {
-                    'accesstoken': json_loads(result._body)['accesstoken'],
-                }
-
-                maybe_remaining = True
-                total_events = 0
-                per_page = 2000  # This is the max Aventri seems to allow
-
-                while maybe_remaining:
+                next_page = 1
+                while True:
                     with \
                             logged(logger.info, logger.warning, 'Polling page (%s)',
                                    [href]), \
                             metric_timer(context.metrics['ingest_page_duration_seconds'],
                                          [feed.unique_id, ingest_type, 'pull']):
 
-                        result = await self.http_make_aventri_request(
-                            context, 'GET', href, data=b'', params=(
-                                ('limit', str(per_page)),
-                                ('offset', str(total_events)),
-                            ), headers=headers, sleep_interval=1
+                        params = (
+                            ('pageNumber', str(next_page)),
                         )
-                        page_of_events = json_loads(result._body)
-                        num_events_in_page = len(page_of_events)
-                        total_events += num_events_in_page
+
+                        page_of_events = await self.http_make_aventri_request(
+                            context, 'GET', self.seed, data=b'', params=params,
+                        )
+                        next_page += 1
 
                     with logged(logger.debug, logger.warning, 'Convert to activities', []):
-                        activities = await feed.get_activities(context, page_of_events, headers)
+                        activities = await feed.get_activities(context, page_of_events)
 
                     async for activity in activities:
                         yield activity, href
 
-                    maybe_remaining = num_events_in_page == per_page
+                    if not page_of_events:
+                        break
 
         async def gen_evenly_sized_pages(source_pages):
             # pylint: disable=undefined-loop-variable
@@ -400,91 +420,29 @@ class EventFeed(Feed):
         async for page, updates_href in evenly_sized_pages:
             yield page, updates_href
 
-    async def get_activities(self, context, page_of_events, headers):
-        # pylint: disable=bad-continuation
-        async def get_attendee(event_id, attendee_id):
-            attendee_lookup = await context.redis_client.execute(
-                'GET', f'event-{event_id}-attendee-{attendee_id}'
-            )
-            if attendee_lookup:
-                try:
-                    return json_loads(attendee_lookup.decode('utf-8'))
-                except UnicodeDecodeError:
-                    await context.redis_client.execute(
-                        'DEL', f'event-{event_id}-attendee-{attendee_id}'
-                    )
-                    return await fetch_attendee(event_id, attendee_id)
-            else:
-                return await fetch_attendee(event_id, attendee_id)
-
-        async def fetch_attendee(event_id, attendee_id):
-            url = self.attendee_url.format(event_id=event_id, attendee_id=attendee_id)
-            with logged(context.logger.debug, context.logger.warning,
-                        'Fetching attendee (%s)', [url]):
-                result = await self.http_make_aventri_request(
-                    context, 'GET', url, data=b'',
-                    headers=headers, sleep_interval=1)
-            attendee = json_loads(result._body)
-
-            if 'error' in attendee:
-                return None
-
-            await context.redis_client.execute(
-                'SETEX', f'event-{event_id}-attendee-{attendee_id}',
-                60*60*24*2, json_dumps(attendee)
-            )
-
-            return attendee
-
+    async def get_activities(self, context, page_of_events):
+        # pylint: disable=bad-continuation, arguments-differ
         async def get_attendees(event_id):
+            logger = context.logger
             url = self.attendees_list_url.format(event_id=event_id)
-
-            with logged(context.logger.debug, context.logger.warning,
-                        'Fetching attendee list (%s)', [url]):
-                result = await self.http_make_aventri_request(
-                    context, 'GET', url, data=b'',
-                    headers=headers, sleep_interval=1)
-            attendees_list = json_loads(result._body)
-
-            if 'error' in attendees_list:
-                attendees_list = []
-
-            context.logger.info('Number of attendees %s', len(attendees_list))
-
-            return [await get_attendee(event_id, a['attendeeid']) for a in attendees_list]
-
-        async def get_event(event_id):
-            event_lookup = await context.redis_client.execute('GET', f'event-{event_id}')
-            if event_lookup:
-                try:
-                    return json_loads(event_lookup.decode('utf-8'))
-                except UnicodeDecodeError:
-                    await context.redis_client.execute('DEL', f'event-{event_id}')
-                    return await fetch_event(event_id)
-            else:
-                return await fetch_event(event_id)
-
-        async def fetch_event(event_id):
-            url = self.event_url.format(event_id=event_id)
-
-            with logged(context.logger.debug, context.logger.warning,
-                        'Fetching event (%s)', [url]):
-                result = await self.http_make_aventri_request(
-                    context, 'GET', url, data=b'',
-                    headers=headers, sleep_interval=1)
-            event = json_loads(result._body)
-
-            if 'error' in event or 'eventid' not in event:
-                return None
-
-            await context.redis_client.execute(
-                'SETEX', f'event-{event_id}', 60*60*24*2, json_dumps(event))
-
-            return event
+            attendees_list_page_size = 500
+            next_page = 1
+            params = (
+                ('pageNumber', str(next_page)),
+                ('pageSize', str(attendees_list_page_size)),
+            )
+            with logged(logger.debug, logger.warning, 'Fetching attendee list', []):
+                attendees = await self.http_make_aventri_request(
+                    context, 'GET', url, data=b'', params=params,
+                )
+            return attendees
 
         def map_to_activity(event_id, aventri_object):
             now = datetime.datetime.now().isoformat()
-            if 'eventid' in aventri_object:
+            if 'attendeeid' not in aventri_object:
+                # folderpath is in relative path style "Cloud/z_Aventri_PST_Sandbox/Archive"
+                # we only need the last bit (Archive)
+                folder_name = aventri_object['folderpath'].split('/')[-1]
                 return {
                     'id': 'dit:aventri:Event:' + event_id + ':Create',
                     'published': now,
@@ -492,20 +450,20 @@ class EventFeed(Feed):
                     'dit:application': 'aventri',
                     'object': {
                         'id': 'dit:aventri:Event:' + event_id,
-                        'name': aventri_object['name'],
+                        'name': aventri_object['eventname'],
                         'published': datetime.datetime.strptime(
-                            aventri_object['createddatetime'], '%Y-%m-%d %H:%M:%S'
+                            aventri_object['event_created'], '%Y-%m-%d %H:%M:%S'
                         ).isoformat(),
 
                         # The following mappings are used to allow great.gov.uk
                         # search to filter on events.
                         'attributedTo': {
                             'type': 'dit:aventri:Folder',
-                            'id': f'dit:aventri:Folder:{aventri_object["foldername"]}'
+                            'id': f'dit: aventri: Folder: {folder_name}'
                         },
-                        'content': aventri_object['description'],
+                        'content': aventri_object['event_description'],
                         'dit:public': bool(strtobool(aventri_object['include_calendar'])),
-                        'dit:status': aventri_object['status'],
+                        'dit:status': aventri_object['eventstatus'],
                         'endTime': aventri_object['enddate'] + (
                             'T' + aventri_object['endtime'] if aventri_object['endtime'] else ''
                         ),
@@ -514,58 +472,42 @@ class EventFeed(Feed):
                             aventri_object['starttime'] if aventri_object['starttime'] else ''
                         ),
                         'type': ['dit:aventri:Event'] + (
-                            ['Tombstone'] if aventri_object['deleted'] == '1' else []
+                            ['Tombstone'] if aventri_object['event_deleted'] == '1' else []
                         ),
                         'url': aventri_object['url'],
 
                         'dit:aventri:approval_required': aventri_object['approval_required'],
                         'dit:aventri:approval_status': aventri_object['approval_status'],
-                        'dit:aventri:city': aventri_object['city'],
+                        'dit:aventri:city': aventri_object['event_city'],
                         'dit:aventri:clientcontact': aventri_object['clientcontact'],
                         'dit:aventri:closedate': aventri_object['closedate'],
                         'dit:aventri:closetime': aventri_object['closetime'],
                         'dit:aventri:code': aventri_object['code'],
                         'dit:aventri:contactinfo': aventri_object['contactinfo'],
-                        'dit:aventri:country': aventri_object['country'],
+                        'dit:aventri:country': aventri_object['event_country'],
                         'dit:aventri:createdby': aventri_object['createdby'],
                         'dit:aventri:defaultlanguage': aventri_object['defaultlanguage'],
                         'dit:aventri:folderid': aventri_object['folderid'],
                         'dit:aventri:live_date': aventri_object['live_date'],
-                        'dit:aventri:location_address1': aventri_object['location']['address1']
-                        if aventri_object['location'] else None,
-                        'dit:aventri:location_address2': aventri_object['location']['address2']
-                        if aventri_object['location'] else None,
-                        'dit:aventri:location_address3': aventri_object['location']['address3']
-                        if aventri_object['location'] else None,
-                        'dit:aventri:location_city': aventri_object['location']['city']
-                        if aventri_object['location'] else None,
-                        'dit:aventri:location_country': aventri_object['location']['country']
-                        if aventri_object['location'] else None,
-                        'dit:aventri:location_name': aventri_object['location']['name']
-                        if aventri_object['location'] else None,
-                        'dit:aventri:location_postcode': aventri_object['location']['postcode']
-                        if aventri_object['location'] else None,
-                        'dit:aventri:location_state': aventri_object['location']['state']
-                        if aventri_object['location'] else None,
+                        'dit:aventri:location_address1': aventri_object['event_loc_addr1'],
+                        'dit:aventri:location_address2': aventri_object['event_loc_addr2'],
+                        'dit:aventri:location_address3': aventri_object['event_loc_addr3'],
+                        'dit:aventri:location_city': aventri_object['event_loc_city'],
+                        'dit:aventri:location_country': aventri_object['event_loc_country'],
+                        'dit:aventri:location_name': aventri_object['event_loc_name'],
+                        'dit:aventri:location_postcode': aventri_object['event_loc_postcode'],
+                        'dit:aventri:location_state': aventri_object['event_loc_state'],
                         'dit:aventri:locationname': aventri_object['locationname'],
-                        'dit:aventri:login1': aventri_object['login1'],
-                        'dit:aventri:login2': aventri_object['login2'],
                         'dit:aventri:max_reg': aventri_object['max_reg'],
                         'dit:aventri:modifiedby': aventri_object['modifiedby'],
-                        'dit:aventri:modifieddatetime': aventri_object['modifieddatetime'],
+                        'dit:aventri:modifieddatetime': aventri_object['event_lastmodified'],
                         'dit:aventri:price_type': aventri_object['price_type'],
-                        'dit:aventri:pricepoints': aventri_object['pricepoints'],
+                        # 'dit:aventri:pricepoints': aventri_object['pricepoints'],
                         'dit:aventri:standardcurrency': aventri_object['standardcurrency'],
-                        'dit:aventri:state': aventri_object['state'],
-                        'dit:aventri:timezone': aventri_object['timezone'],
+                        'dit:aventri:state': aventri_object['event_state'],
+                        'dit:aventri:timezone': aventri_object['timezone_name'],
                     }
                 }
-            if not aventri_object['responses']:
-                responses = []
-            elif isinstance(aventri_object['responses'], dict):
-                responses = aventri_object['responses'].values()
-            else:
-                responses = aventri_object['responses']
 
             return {
                 'id': 'dit:aventri:Attendee:' + event_id + ':Create',
@@ -582,16 +524,16 @@ class EventFeed(Feed):
                         aventri_object['created'], '%Y-%m-%d %H:%M:%S'
                     ).isoformat(),
                     'type': ['dit:aventri:Attendee'],
-                    'dit:aventri:approvalstatus': aventri_object['approvalstatus'],
-                    'dit:aventri:category': aventri_object['category']['name']
-                    if aventri_object['category'] else None,
+                    'dit:aventri:approvalstatus': aventri_object['approval_status'],
+                    'dit:aventri:category': aventri_object['category_shortname'],
                     'dit:aventri:createdby': aventri_object['createdby'],
                     'dit:aventri:language': aventri_object['language'],
                     'dit:aventri:lastmodified': aventri_object['lastmodified'],
                     'dit:aventri:modifiedby': aventri_object['modifiedby'],
                     'dit:aventri:registrationstatus': aventri_object['registrationstatus'],
-                    'dit:aventri:responses': [{'name': r['name'], 'response': r['response']}
-                                              for r in responses]
+                    # 'dit:aventri:responses': [{'name': r['name'], 'response': r['response']}
+                    #                           for r in responses],
+                    'dit:aventri:email': aventri_object['email'],
                 }
             }
 
@@ -601,11 +543,13 @@ class EventFeed(Feed):
                     yield from flatten(item)
                 else:
                     yield item
+
+        self.accesstoken = None
         return (
             map_to_activity(page_event['eventid'], aventri_object)
             for page_event in page_of_events
             for aventri_object in flatten([
-                await get_event(page_event['eventid']),
+                page_event,
                 await get_attendees(page_event['eventid'])
             ]) if aventri_object
         )
@@ -645,7 +589,7 @@ class MaxemailFeed(Feed):
         self.password = password
         self.page_size = int(page_size)
 
-    @staticmethod
+    @ staticmethod
     def next_href(_):
         """
         Maxemail API does not support GET requests with next href for pagination
@@ -664,7 +608,7 @@ class MaxemailFeed(Feed):
     async def get_activities(self, context, feed):
         return None
 
-    @classmethod
+    @ classmethod
     async def pages(cls, context, feed, href, ingest_type):
         """
         async generator for Maxemail email campaign sent records
@@ -992,8 +936,8 @@ class MaxemailFeed(Feed):
 
         responded_data_export_key = await get_data_export_key(timestamp_clicked, 'responded')
         responded_csv_lines = gen_data_export_csv(responded_data_export_key)
-        responded_activities_and_timestamp = \
-            gen_responded_activities_and_timestamp(responded_csv_lines)
+        responded_activities_and_timestamp = gen_responded_activities_and_timestamp(
+            responded_csv_lines)
 
         unsubscribed_data_export_key = await get_data_export_key(timestamp_unsubscribed,
                                                                  'unsubscribed')
