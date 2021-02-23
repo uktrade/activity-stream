@@ -53,6 +53,8 @@ class Feed(metaclass=ABCMeta):
     updates_page_interval = 1
     exception_intervals = [1, 2, 4, 8, 16, 32, 64]
 
+    disable_updates = False
+
     @classmethod
     @abstractmethod
     def parse_config(cls, config):
@@ -268,6 +270,8 @@ class EventFeed(Feed):
     # This is quite small so even when we have a lot of sleeps, we still have signs that the
     # feed is working in Grafana
     ingest_page_size = 20
+
+    disable_updates = True
 
     @classmethod
     def parse_config(cls, config):
@@ -624,7 +628,7 @@ class MaxemailFeed(Feed):
         self.password = password
         self.page_size = int(page_size)
 
-    @ staticmethod
+    @staticmethod
     def next_href(_):
         """
         Maxemail API does not support GET requests with next href for pagination

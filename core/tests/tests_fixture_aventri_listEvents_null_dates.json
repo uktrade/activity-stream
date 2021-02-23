@@ -1,8 +1,8 @@
 {
   "ResultSet": [
     {
-      "accountid": "200008108",
-      "accountname": "UK Department for International Trade (DIT)",
+      "accountid": "12345",
+      "accountname": "Dummy",
       "adminreg_send_notifications": "0",
       "advanced_settings_code_copies_admin": null,
       "advanced_settings_code_copies_public": null,
@@ -111,7 +111,7 @@
       "elqSiteID": "",
       "emailSuffixData": "",
       "emailSuffixes": null,
-      "enddate": "0000-00-00",
+      "enddate": null,
       "endtime": null,
       "event_city": "",
       "event_country": "",
@@ -174,7 +174,7 @@
       "mgpartner": null,
       "mgprovidergdsid": null,
       "mgproviderofficeid": null,
-      "modifiedby": "bhagyalaxmi.gouda@etouches.com",
+      "modifiedby": "abc.bcd@test.com",
       "new_badges": "0",
       "nolodgingrequired": "0",
       "old_badge_editor": "0",
