@@ -2,6 +2,8 @@ from abc import ABCMeta, abstractmethod
 import asyncio
 import csv
 import datetime
+from distutils.util import strtobool    # pylint: disable=import-error, no-name-in-module
+from json import JSONDecodeError
 import re
 from io import StringIO
 import aiohttp
@@ -35,6 +37,7 @@ def parse_feed_config(feed_config):
         'activity_stream': ActivityStreamFeed,
         'zendesk': ZendeskFeed,
         'maxemail': MaxemailFeed,
+        'aventri': EventFeed,
     }
     return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
 
@@ -46,8 +49,11 @@ class Feed(metaclass=ABCMeta):
     down_grace_period = 60 * 2
 
     full_ingest_page_interval = 0.25
+    full_ingest_interval = 120
     updates_page_interval = 1
     exception_intervals = [1, 2, 4, 8, 16, 32, 64]
+
+    disable_updates = False
 
     @classmethod
     @abstractmethod
@@ -250,6 +256,342 @@ class ZendeskFeed(Feed):
             for ticket in feed['tickets']
             for company_number in company_numbers(ticket['description'])
         ]
+
+
+class EventFeed(Feed):
+
+    down_grace_period = 60 * 60 * 4
+    full_ingest_page_interval = 0  # There are sleeps in tht HTTP requests in this class
+    full_ingest_interval = 60 * 60
+
+    updates_page_interval = 60 * 60 * 24 * 30
+    exception_intervals = [120, 180, 240, 300]
+
+    # This is quite small so even when we have a lot of sleeps, we still have signs that the
+    # feed is working in Grafana
+    ingest_page_size = 20
+
+    disable_updates = True
+
+    @classmethod
+    def parse_config(cls, config):
+        return cls(**sub_dict_lower(
+            config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL', 'ATTENDEES_LIST_URL'
+                     ]))
+
+    def __init__(self, unique_id, seed, account_id, api_key, auth_url, attendees_list_url):
+        self.lock = asyncio.Lock()
+        self.unique_id = unique_id
+        self.seed = seed
+        self.account_id = account_id
+        self.api_key = api_key
+        self.auth_url = auth_url
+        self.attendees_list_url = attendees_list_url
+        self.accesstoken = None
+
+    @staticmethod
+    def next_href(_):
+        """ aventri API does not support pagination
+            returns (None)
+        """
+        return None
+
+    async def auth_headers(self, _, __):
+        return {}
+
+    async def generate_access_token(self, context):
+        context.logger.info('Making aventri auth request to %s', self.auth_url)
+        result = await http_make_request(
+            context.session, context.metrics, 'GET', self.auth_url,
+            data=b'',
+            params=(
+                ('accountid', str(self.account_id)),
+                ('key', str(self.api_key)),
+            ),
+            headers={},
+        )
+        result.raise_for_status()
+        accesstoken = str(json_loads(result._body)['accesstoken'])
+        context.logger.info('fresh access token %s', accesstoken)
+        return accesstoken
+
+    async def http_make_auth_request(self, context, method, url, data, params=()):
+        # Aventri DS APIs tokens have short expiry
+        num_attempts = 0
+        max_attempts = 5
+        while True:
+            try:
+                num_attempts += 1
+                if self.accesstoken is None:
+                    self.accesstoken = await self.generate_access_token(context)
+                params_auth = params + (('accesstoken', str(self.accesstoken)),)
+                context.logger.info('Making aventri request to %s with params %s', url, params)
+                result = await http_make_request(
+                    context.session, context.metrics, method, url,
+                    data=data, headers={}, params=params_auth,
+                )
+                error_status = json_loads(result._body).get('status', None)
+                error_msg = json_loads(result._body).get('msg', None)
+                if error_status == 'error' and error_msg.startswith('Not authorized to access'):
+                    raise aiohttp.ClientResponseError(
+                        result.request_info, result.history, status=403)
+            except (aiohttp.ClientResponseError, JSONDecodeError):
+                if num_attempts < max_attempts:
+                    self.accesstoken = None
+                    continue
+            return result
+
+    async def http_make_aventri_request(
+            self, context, method, url, data, sleep_interval=0.5, params=()):
+        logger = context.logger
+
+        num_attempts = 0
+        max_attempts = 10
+        retry_interval = 30
+
+        while True:
+            num_attempts += 1
+            retry_interval += 60
+            try:
+                result = await self.http_make_auth_request(context, method, url, data, params)
+                result.raise_for_status()
+
+                if sleep_interval:
+                    await sleep(context, sleep_interval)
+                results = json_loads(result._body).get('ResultSet', [])
+                return results
+            except aiohttp.ClientResponseError as client_error:
+                if (num_attempts >= max_attempts or client_error.status not in [
+                        429, 502, 504,
+                ]):
+                    raise
+                logger.debug(
+                    'aventri: HTTP %s received at attempt (%s). Will retry after (%s) seconds',
+                    client_error.status,
+                    num_attempts,
+                    retry_interval,
+                )
+                context.raven_client.captureMessage(
+                    f'aventri: HTTP {client_error.status} received at attempt ({num_attempts}).'
+                    f'Will retry after ({retry_interval}) seconds',
+                )
+                await sleep(context, retry_interval)
+            except JSONDecodeError:
+                if num_attempts >= max_attempts:
+                    logger.debug(
+                        'aventri: JSONDecodeError at attempt (%s). Will retry after (%s) seconds',
+                        num_attempts,
+                        retry_interval,
+                    )
+                    await sleep(context, retry_interval)
+
+    async def pages(self, context, feed, href, ingest_type):
+        logger = context.logger
+
+        async def gen_activities(href):
+            with \
+                    logged(logger.info, logger.warning, 'Polling page (%s)',
+                           [href]), \
+                    metric_timer(context.metrics['ingest_page_duration_seconds'],
+                                 [feed.unique_id, ingest_type, 'pull']):
+
+                async for event in gen_events():
+                    yield self.map_to_event_activity(event)
+
+                    async for attendee in gen_attendees(event):
+                        yield self.map_to_attendee_activity(attendee)
+
+        async def gen_events():
+            next_page = 1
+            # default is 1024, but keep it low as it becomes slow
+            page_size = 100
+            while True:
+                params = (
+                    ('pageNumber', str(next_page)),
+                    ('pageSize', str(page_size)),
+                )
+
+                page_of_events = await self.http_make_aventri_request(
+                    context, 'GET', self.seed, data=b'', params=params,
+                )
+                for event in page_of_events:
+                    yield event
+
+                if len(page_of_events) != page_size:
+                    break
+
+                next_page += 1
+
+        async def gen_attendees(event):
+            logger = context.logger
+            url = self.attendees_list_url.format(event_id=event['eventid'])
+
+            next_page = 1
+            # Be careful of bigger: sometimes is very slow
+            page_size = 100
+            while True:
+                params = (
+                    ('pageNumber', str(next_page)),
+                    ('pageSize', str(page_size)),
+                )
+                with logged(logger.debug, logger.warning, 'Fetching attendee list', []):
+                    attendees = await self.http_make_aventri_request(
+                        context, 'GET', url, data=b'', params=params,
+                    )
+                for attendee in attendees:
+                    yield attendee
+
+                if len(attendees) != page_size:
+                    break
+
+                next_page += 1
+
+        async def paginate(items):
+            # pylint: disable=undefined-loop-variable
+            page_size = self.ingest_page_size
+            current = []
+            async for item in items:
+                current.append(item)
+
+                while len(current) >= page_size:
+                    to_yield, current = current[:page_size], current[page_size:]
+                    yield to_yield
+
+            if current:
+                yield current
+
+        activities = gen_activities(href)
+        pages = paginate(activities)
+
+        async for page in pages:
+            yield page, href
+
+    def map_to_event_activity(self, event):
+        event_id = event['eventid']
+        folder_name = event['folderpath'].split('/')[-1]
+        published = self.format_datetime(event['event_created'])
+
+        return {
+            'id': 'dit:aventri:Event:' + event_id + ':Create',
+            'published': published,
+            'type': 'dit:aventri:Event',
+            'dit:application': 'aventri',
+            'object': {
+                'id': 'dit:aventri:Event:' + event_id,
+                'name': event['eventname'],
+                'published': published,
+                # The following mappings are used to allow great.gov.uk
+                # search to filter on events.
+                'attributedTo': {
+                    'type': 'dit:aventri:Folder',
+                    'id': f'dit:aventri:Folder:{folder_name}'
+                },
+                'content': event['event_description'],
+                'dit:public': bool(strtobool(event['include_calendar'])),
+                'dit:status': event['eventstatus'],
+                'endTime': self.format_date_and_time(
+                    event['enddate'], event['endtime'],
+                ),
+                'startTime': self.format_date_and_time(
+                    event['startdate'], event['starttime'],
+                ),
+                'type': ['dit:aventri:Event'] + (
+                    ['Tombstone'] if event['event_deleted'] == '1' else []
+                ),
+                'url': event['url'],
+                'dit:aventri:approval_required': event['approval_required'],
+                'dit:aventri:approval_status': event['approval_status'],
+                'dit:aventri:city': event['event_city'],
+                'dit:aventri:clientcontact': event['clientcontact'],
+                'dit:aventri:closedate': self.format_date_and_time(
+                    event['closedate'], event['closetime'],
+                ),
+                'dit:aventri:code': event['code'],
+                'dit:aventri:contactinfo': event['contactinfo'],
+                'dit:aventri:country': event['event_country'],
+                'dit:aventri:createdby': event['createdby'],
+                'dit:aventri:defaultlanguage': event['defaultlanguage'],
+                'dit:aventri:folderid': event['folderid'],
+                'dit:aventri:live_date': self.format_date(event['live_date']),
+                'dit:aventri:location_address1': event['event_loc_addr1'],
+                'dit:aventri:location_address2': event['event_loc_addr2'],
+                'dit:aventri:location_address3': event['event_loc_addr3'],
+                'dit:aventri:location_city': event['event_loc_city'],
+                'dit:aventri:location_country': event['event_loc_country'],
+                'dit:aventri:location_name': event['event_loc_name'],
+                'dit:aventri:location_postcode': event['event_loc_postcode'],
+                'dit:aventri:location_state': event['event_loc_state'],
+                'dit:aventri:locationname': event['locationname'],
+                'dit:aventri:max_reg': event['max_reg'],
+                'dit:aventri:modifiedby': event['modifiedby'],
+                'dit:aventri:modifieddatetime': self.format_datetime(event['event_lastmodified']),
+                'dit:aventri:price_type': event['price_type'],
+                'dit:aventri:standardcurrency': event['standardcurrency'],
+                'dit:aventri:state': event['event_state'],
+                'dit:aventri:timezone': event['timezone_name'],
+            }
+        }
+
+    def map_to_attendee_activity(self, attendee):
+        event_id = attendee['eventid']
+        attendee_id = attendee['attendeeid']
+        return {
+            'id': 'dit:aventri:Event:' + event_id + ':Attendee:' + attendee_id + ':Create',
+            'published': self.format_datetime(attendee['created']),
+            'type': 'dit:aventri:Attendee',
+            'dit:application': 'aventri',
+            'object': {
+                'attributedTo': {
+                    'type': 'dit:aventri:Event',
+                    'id': f'dit:aventri:Event:{event_id}'
+                },
+                'id': 'dit:aventri:Attendee:' + attendee_id,
+                'published': self.format_datetime(attendee['created']),
+                'type': ['dit:aventri:Attendee'],
+                'dit:aventri:approvalstatus': attendee['approval_status'],
+                'dit:aventri:category': attendee['category_shortname'],
+                'dit:aventri:createdby': attendee['createdby'],
+                'dit:aventri:language': attendee['language'],
+                'dit:aventri:lastmodified': self.format_datetime(attendee['lastmodified']),
+                'dit:aventri:modifiedby': attendee['modifiedby'],
+                'dit:aventri:registrationstatus': attendee['registrationstatus'],
+                'dit:aventri:email': attendee['email'],
+                'dit:aventri:firstname': attendee['fname'],
+                'dit:aventri:lastname': attendee['lname'],
+                'dit:aventri:companyname': attendee.get(
+                    'please_specify_the_name_of_the_uk_company',
+                    None
+                ),
+            }
+        }
+
+    @staticmethod
+    def format_datetime(aventri_datetime):
+        return \
+            None if (aventri_datetime is None or aventri_datetime == '0000-00-00 00:00:00') else \
+            datetime.datetime.strptime(aventri_datetime, '%Y-%m-%d %H:%M:%S').isoformat()
+
+    @staticmethod
+    def format_date_and_time(aventri_date, aventri_time):
+        checked_date = aventri_date if aventri_date else '0000-00-00'
+        checked_time = aventri_time if aventri_time else '00:00:00'
+        if checked_date == '0000-00-00' or checked_time == '00:00:00':
+            return None
+
+        return datetime.datetime.strptime(
+            f'{checked_date} {checked_time}',
+            '%Y-%m-%d %H:%M:%S'
+        ).isoformat()
+
+    @staticmethod
+    def format_date(aventri_datetime):
+        return \
+            None if (aventri_datetime is None or aventri_datetime == '0000-00-00') else \
+            datetime.datetime.strptime(aventri_datetime, '%Y-%m-%d').isoformat()
+
+    @classmethod
+    async def get_activities(cls, _, feed):
+        pass
 
 
 class MaxemailFeed(Feed):
@@ -633,8 +975,8 @@ class MaxemailFeed(Feed):
 
         responded_data_export_key = await get_data_export_key(timestamp_clicked, 'responded')
         responded_csv_lines = gen_data_export_csv(responded_data_export_key)
-        responded_activities_and_timestamp = \
-            gen_responded_activities_and_timestamp(responded_csv_lines)
+        responded_activities_and_timestamp = gen_responded_activities_and_timestamp(
+            responded_csv_lines)
 
         unsubscribed_data_export_key = await get_data_export_key(timestamp_unsubscribed,
                                                                  'unsubscribed')

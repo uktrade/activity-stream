@@ -210,7 +210,9 @@ async def ingest_feeds(context, feeds):
                 context, feed), min_duration=min_duration
         )
         for feed in feeds
-        for (ingest_func, min_duration) in ((ingest_full, 120), (ingest_updates, 0))
+        for (ingest_func, min_duration) in (
+            (ingest_full, feed.full_ingest_interval), (ingest_updates, 0)
+        )
     ])
 
 
@@ -328,7 +330,7 @@ async def ingest_updates(parent_context, feed):
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'updates']):
 
         href = await get_feed_updates_url(context, feed.unique_id)
-        if href != feed.seed:
+        if href != feed.seed and not feed.disable_updates:
             indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
 
             # We deliberately ingest into both the live and ingesting indexes
