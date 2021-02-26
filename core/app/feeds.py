@@ -35,6 +35,7 @@ from .utils import (
 def parse_feed_config(feed_config):
     by_feed_type = {
         'activity_stream': ActivityStreamFeed,
+        'directory_sso': DirectorySSOFeed,
         'zendesk': ZendeskFeed,
         'maxemail': MaxemailFeed,
         'aventri': EventFeed,
@@ -159,6 +160,7 @@ class Feed(metaclass=ABCMeta):
 
 
 class ActivityStreamFeed(Feed):
+    content_type = b''
 
     @classmethod
     def parse_config(cls, config):
@@ -186,10 +188,14 @@ class ActivityStreamFeed(Feed):
                 host=parsed_url.host,
                 port=str(parsed_url.port),
                 path=parsed_url.raw_path_qs,
-                content_type=b'',
+                content_type=self.content_type,
                 content=b'',
             )
         }
+
+
+class DirectorySSOFeed(ActivityStreamFeed):
+    content_type = b'text/plain'
 
 
 class ZendeskFeed(Feed):

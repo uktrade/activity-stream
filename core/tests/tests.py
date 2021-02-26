@@ -1792,6 +1792,61 @@ class TestApplication(TestBase):
         self.assertIn('"2011-04-12T12:48:13+00:00"', results)
 
     @async_test
+    async def test_directory_sso(self):
+        def directory_sso_fetch(results):
+            if 'hits' not in results or 'hits' not in results['hits']:
+                return False
+            directory_sso_events = [
+                item
+                for item in results['hits']['hits']
+                if item['_source'].get('dit:application', '') == 'DirectorySSO'
+            ]
+            return len(directory_sso_events) == 2
+
+        env = {
+            **mock_env(),
+            'FEEDS__1__UNIQUE_ID': 'directory-sso-feed',
+            'FEEDS__1__ACCESS_KEY_ID': 'some-id',
+            'FEEDS__1__SECRET_ACCESS_KEY': 'some-secret',
+            'FEEDS__1__SIGNATURE_SECRET': 'some-secret',
+            'FEEDS__1__TYPE': 'directory_sso',
+            'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_directory_sso_listUsers.json',
+        }
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=env, mock_feed=read_file, mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+            results_dict = await fetch_all_es_data_until(directory_sso_fetch)
+
+        user_1 = results_dict['hits']['hits'][0]['_source']
+        assert user_1 == {
+            'dit:application': 'DirectorySSO',
+            'id': 'dit:DirectorySSO:User:1:Update',
+            'published': '2021-02-26T08:33:04.910428Z',
+            'type': 'Update',
+            'object': {
+                'id': 'dit:DirectorySSO:User:1',
+                'type': 'dit:DirectorySSO:User',
+                'dit:DirectorySSO:User:email': '1@example.com',
+                'dit:DirectorySSO:User:dateJoined': '2021-02-26T08:33:04.910293Z'
+            }
+        }
+
+        user_2 = results_dict['hits']['hits'][1]['_source']
+        assert user_2 == {
+            'dit:application': 'DirectorySSO',
+            'id': 'dit:DirectorySSO:User:2:Update',
+            'published': '2021-02-26T08:33:04.909856Z',
+            'type': 'Update',
+            'object': {
+                'id': 'dit:DirectorySSO:User:2',
+                'type': 'dit:DirectorySSO:User',
+                'dit:DirectorySSO:User:email': '2@example.com',
+                'dit:DirectorySSO:User:dateJoined': '2021-02-26T08:33:04.909721Z'
+            }
+        }
+
+    @async_test
     async def test_aventri(self):
         def aventri_fetch(results):
             if 'hits' not in results or 'hits' not in results['hits']:

@@ -1,0 +1,37 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    {
+      "dit": "https://www.trade.gov.uk/ns/activitystreams/v1"
+    }
+  ],
+  "next": null,
+  "orderedItems": [
+    {
+      "dit:application": "DirectorySSO",
+      "id": "dit:DirectorySSO:User:1:Update",
+      "object": {
+        "dit:DirectorySSO:User:dateJoined": "2021-02-26T08:33:04.910293Z",
+        "dit:DirectorySSO:User:email": "1@example.com",
+        "id": "dit:DirectorySSO:User:1",
+        "type": "dit:DirectorySSO:User"
+      },
+      "published": "2021-02-26T08:33:04.910428Z",
+      "type": "Update"
+    },
+    {
+      "dit:application": "DirectorySSO",
+      "id": "dit:DirectorySSO:User:2:Update",
+      "object": {
+        "dit:DirectorySSO:User:dateJoined": "2021-02-26T08:33:04.909721Z",
+        "dit:DirectorySSO:User:email": "2@example.com",
+        "id": "dit:DirectorySSO:User:2",
+        "type": "dit:DirectorySSO:User"
+      },
+      "published": "2021-02-26T08:33:04.909856Z",
+      "type": "Update"
+    }
+  ],
+  "previous": null,
+  "type": "Collection"
+}
