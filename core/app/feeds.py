@@ -53,7 +53,7 @@ class Feed(metaclass=ABCMeta):
     updates_page_interval = 1
     exception_intervals = [1, 2, 4, 8, 16, 32, 64]
 
-    disable_updates = False
+    disable_updates = False  # this is to disable updates feed, if necessary
 
     @classmethod
     @abstractmethod
