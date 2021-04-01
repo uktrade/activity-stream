@@ -1,0 +1,7 @@
+---
+applications:
+- name: activity-stream-dummy-aventri
+  buildpacks:
+    - python_buildpack
+  memory: 256M
+  disk_quota: 256M
