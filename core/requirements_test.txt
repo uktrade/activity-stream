@@ -5,39 +5,82 @@
 #    pip-compile requirements_test.in
 #
 aiodnsresolver==0.0.120
-aiohttp==3.5.4
+    # via -r requirements.in
+aiohttp==3.6.2
+    # via -r requirements.in
 aioredis==1.1.0
-aspy.yaml==1.2.0          # via pre-commit
-astroid==2.2.5            # via pylint
-async-timeout==3.0.0      # via aiohttp, aioredis
-attrs==18.1.0             # via aiohttp
-cfgv==1.5.0               # via pre-commit
-chardet==3.0.4            # via aiohttp
+    # via -r requirements.in
+aspy.yaml==1.2.0
+    # via pre-commit
+astroid==2.2.5
+    # via pylint
+async-timeout==3.0.0
+    # via
+    #   aiohttp
+    #   aioredis
+attrs==18.1.0
+    # via aiohttp
+cfgv==1.5.0
+    # via pre-commit
+chardet==3.0.4
+    # via aiohttp
 coverage==4.5.1
+    # via -r requirements_test.in
 freezegun==0.3.10
-hiredis==0.2.0            # via aioredis
-identify==1.4.0           # via pre-commit
-idna-ssl==1.1.0           # via aiohttp
-idna==2.7                 # via idna-ssl, yarl
-importlib-metadata==0.8   # via importlib-resources, pre-commit
-importlib-resources==1.3.1  # via pre-commit
-isort==4.3.4              # via pylint
-lazy-object-proxy==1.3.1  # via astroid
-mccabe==0.6.1             # via pylint
+    # via -r requirements_test.in
+hiredis==0.2.0
+    # via aioredis
+identify==1.4.0
+    # via pre-commit
+idna==2.7
+    # via yarl
+importlib-metadata==0.8
+    # via pre-commit
+isort==4.3.4
+    # via pylint
+lazy-object-proxy==1.3.1
+    # via astroid
+mccabe==0.6.1
+    # via pylint
 mohawk==0.3.4
-multidict==4.3.1          # via aiohttp, yarl
-nodeenv==1.3.3            # via pre-commit
+    # via -r requirements_test.in
+multidict==4.7.6
+    # via
+    #   aiohttp
+    #   yarl
+nodeenv==1.3.3
+    # via pre-commit
 pre-commit==1.14.4
+    # via -r requirements_test.in
 prometheus_client==0.3.0
+    # via -r requirements.in
 pylint==2.3.1
-python-dateutil==2.7.3    # via freezegun
-pyyaml==5.1               # via aspy.yaml, pre-commit
+    # via -r requirements_test.in
+python-dateutil==2.7.3
+    # via freezegun
+pyyaml==5.4
+    # via
+    #   aspy.yaml
+    #   pre-commit
 raven==6.9.0
-six==1.11.0               # via astroid, cfgv, freezegun, mohawk, pre-commit, python-dateutil
-toml==0.10.0              # via pre-commit
-typed-ast==1.4.0          # via astroid
-typing-extensions==3.7.4.1  # via aiohttp
-virtualenv==16.4.3        # via pre-commit
-wrapt==1.10.11            # via astroid
-yarl==1.2.6               # via aiohttp
-zipp==3.1.0               # via importlib-metadata, importlib-resources
+    # via -r requirements.in
+six==1.11.0
+    # via
+    #   astroid
+    #   cfgv
+    #   freezegun
+    #   mohawk
+    #   pre-commit
+    #   python-dateutil
+toml==0.10.0
+    # via pre-commit
+typed-ast==1.4.0
+    # via astroid
+virtualenv==16.4.3
+    # via pre-commit
+wrapt==1.10.11
+    # via astroid
+yarl==1.2.6
+    # via aiohttp
+zipp==3.1.0
+    # via importlib-metadata
