@@ -1568,11 +1568,12 @@ class TestApplication(TestBase):
                    b'{"error":"Something horrible"}'
 
         previous_data = {}
+        on_delete_fail = False
 
         def modify(data, direction, client_id):
-            nonlocal previous_data
             previous_data[(direction, client_id)] = data
-            be_400 = direction == 'response' and b'DELETE' in previous_data[('request', client_id)]
+            be_400 = on_delete_fail and direction == 'response' and b'DELETE' in previous_data[(
+                'request', client_id)]
             return (
                 http_400 if be_400 else
                 data
@@ -1610,12 +1611,14 @@ class TestApplication(TestBase):
             await wait_until_get_working()
             url = 'http://127.0.0.1:8080/v2/activities'
             x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
             await get_until(url, x_forwarded_for, has_at_least_hits(2))
 
             raven_client().captureException.assert_not_called()
 
             # The full ingest has a minimum duration, and the delete is only called at the
             # beginning of the second ingest
+            on_delete_fail = True
             await ORIGINAL_SLEEP(5)
 
             # This is the point of the test: the exception should have been

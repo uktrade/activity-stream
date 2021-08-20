@@ -10,13 +10,11 @@ from prometheus_client import (
 from .app_outgoing_elasticsearch import (
     ESMetricsUnavailable,
     es_bulk_ingest,
-    es_ingest_schemas,
     es_feed_activities_total,
     es_searchable_total,
     es_nonsearchable_total,
     create_activities_index,
     create_objects_index,
-    create_schemas_index,
     get_new_index_names,
     get_old_index_names,
     split_index_names,
@@ -25,7 +23,6 @@ from .app_outgoing_elasticsearch import (
     add_remove_aliases_atomically,
     delete_indexes,
     refresh_index,
-    to_schemas,
 )
 from .dns import (
     AioHttpDnsResolver,
@@ -255,42 +252,25 @@ async def ingest_full(parent_context, feed):
             indexes_without_alias, [feed.unique_id])
         await delete_indexes(context, indexes_to_delete)
 
-        activities_index_name, activities_schemas_index_name, \
-            objects_index_name, objects_schemas_index_name = get_new_index_names(
-                feed.unique_id)
+        activities_index_name, objects_index_name = get_new_index_names(feed.unique_id)
         await create_activities_index(context, activities_index_name)
-        await create_schemas_index(context, activities_schemas_index_name)
         await create_objects_index(context, objects_index_name)
-        await create_schemas_index(context, objects_schemas_index_name)
-
-        activities_schemas = set()
-        objects_schemas = set()
 
         updates_href = feed.seed
         async for page_of_activities, href in feed.pages(context, feed, feed.seed, 'full'):
             updates_href = href
 
-            activities_schemas_page, objects_schemas_page = await ingest_page(
+            await ingest_page(
                 context, page_of_activities, 'full', feed, [
                     activities_index_name], [objects_index_name]
             )
 
-            activities_schemas.update(activities_schemas_page)
-            objects_schemas.update(objects_schemas_page)
-
             await sleep(context, feed.full_ingest_page_interval)
-
-        await es_ingest_schemas(context, activities_schemas, [activities_schemas_index_name])
-        await refresh_index(context, activities_schemas_index_name, feed.unique_id, 'full')
-
-        await es_ingest_schemas(context, objects_schemas, [objects_schemas_index_name])
-        await refresh_index(context, objects_schemas_index_name, feed.unique_id, 'full')
 
         await refresh_index(context, activities_index_name, feed.unique_id, 'full')
         await refresh_index(context, objects_index_name, feed.unique_id, 'full')
-        await add_remove_aliases_atomically(
-            context, activities_index_name, activities_schemas_index_name,
-            objects_index_name, objects_schemas_index_name, feed.unique_id)
+        await add_remove_aliases_atomically(context, activities_index_name,
+                                            objects_index_name, feed.unique_id)
         await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
 
 
@@ -337,26 +317,15 @@ async def ingest_updates(parent_context, feed):
             indexes_to_ingest_into = indexes_matching_feeds(
                 indexes_without_alias + indexes_with_alias, [feed.unique_id])
 
-            activities_index_names, activities_schemas_index_names, \
-                objects_index_names, objects_schemas_index_names = split_index_names(
-                    indexes_to_ingest_into)
-
-            activities_schemas = set()
-            objects_schemas = set()
+            activities_index_names, objects_index_names = split_index_names(indexes_to_ingest_into)
 
             updates_href = feed.seed
             async for page_of_activities, href in feed.pages(context, feed, href, 'updates'):
                 updates_href = href
-                activities_schemas_page, objects_schemas_page = await ingest_page(
+                await ingest_page(
                     context, page_of_activities, 'updates', feed,
                     activities_index_names, objects_index_names,
                 )
-
-                activities_schemas.update(activities_schemas_page)
-                objects_schemas.update(objects_schemas_page)
-
-            await es_ingest_schemas(context, activities_schemas, activities_schemas_index_names)
-            await es_ingest_schemas(context, objects_schemas, objects_schemas_index_names)
 
             for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
                 await refresh_index(context, index_name, feed.unique_id, 'updates')
@@ -435,12 +404,6 @@ async def ingest_page(context, activities, ingest_type, feed, activity_index_nam
 
         asyncio.ensure_future(set_feed_status(
             context, feed.unique_id, feed.down_grace_period, b'GREEN'))
-
-        activities_schemas = to_schemas(activities)
-        objects_schemas = to_schemas(
-            [activity['object'] for activity in activities])
-
-        return activities_schemas, objects_schemas
 
 
 async def set_metric_if_can(metric, labels, get_value_coroutine):

@@ -41,7 +41,7 @@ def leaky_queue():
     lock = asyncio.Lock()
 
     async def _queue_or_leak(coroutine):
-        if len(lock._waiters) < 100:
+        if lock._waiters is None or len(lock._waiters) < 100:
             async with lock:
                 await coroutine()
 
