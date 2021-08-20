@@ -139,7 +139,9 @@ async def run_outgoing_application():
 
     context = Context(
         logger=logger, metrics=metrics,
-        raven_client=raven_client, redis_client=redis_client, session=session)
+        raven_client=raven_client, redis_client=redis_client, session=session,
+        es_semaphore=asyncio.Semaphore(value=1),
+    )
 
     await acquire_and_keep_lock(context, EXCEPTION_INTERVALS, 'lock')
     await create_outgoing_application(context, feeds)

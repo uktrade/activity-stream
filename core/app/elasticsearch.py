@@ -75,27 +75,28 @@ async def es_request_non_200_exception(context, method, path, query, headers, pa
 
 
 async def es_request(context, method, path, query, headers, payload):
-    with logged(
-            context.logger.debug, context.logger.warning,
-            'Elasticsearch request (%s) (%s) (%s) (%s)',
-            [settings.ES_URI, method, path, query],
-    ):
-        # It's not ideal, but we have a mix of environments. Some use AWS authentication, and
-        # some basic (and so with credentials in ES_URI)
-        if settings.ES_AWS_ACCESS_KEY_ID:
-            host = urllib.parse.urlsplit(settings.ES_URI).hostname
-            headers = dict(aws_sigv4_headers(
-                settings.ES_AWS_ACCESS_KEY_ID, settings.ES_AWS_SECRET_ACCESS_KEY,
-                settings.ES_AWS_REGION,
-                tuple(headers.items()), 'es', host, method, path, tuple(query.items()), payload
-            ))
+    async with context.es_semaphore:
+        with logged(
+                context.logger.debug, context.logger.warning,
+                'Elasticsearch request (%s) (%s) (%s) (%s)',
+                [settings.ES_URI, method, path, query],
+        ):
+            # It's not ideal, but we have a mix of environments. Some use AWS authentication, and
+            # some basic (and so with credentials in ES_URI)
+            if settings.ES_AWS_ACCESS_KEY_ID:
+                host = urllib.parse.urlsplit(settings.ES_URI).hostname
+                headers = dict(aws_sigv4_headers(
+                    settings.ES_AWS_ACCESS_KEY_ID, settings.ES_AWS_SECRET_ACCESS_KEY,
+                    settings.ES_AWS_REGION,
+                    tuple(headers.items()), 'es', host, method, path, tuple(query.items()), payload
+                ))
 
-        query_string = '&'.join([key + '=' + query[key] for key in query.keys()])
-        return await http_make_request(
-            context.session, context.metrics, method,
-            settings.ES_URI + path + (('?' + query_string) if query_string != '' else ''),
-            data=payload, headers=headers,
-        )
+            query_string = '&'.join([key + '=' + query[key] for key in query.keys()])
+            return await http_make_request(
+                context.session, context.metrics, method,
+                settings.ES_URI + path + (('?' + query_string) if query_string != '' else ''),
+                data=payload, headers=headers,
+            )
 
 
 def aws_sigv4_headers(
