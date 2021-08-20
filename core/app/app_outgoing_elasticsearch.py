@@ -47,22 +47,11 @@ def get_new_index_names(feed_unique_id):
         f'date_{today}__'
         f'timestamp_{now}__'
         f'batch_id_{unique}__',
-        f'{ALIAS_ACTIVITIES_SCHEMAS}__'
-        f'feed_id_{feed_unique_id}__'
-        f'date_{today}__'
-        f'timestamp_{now}__'
-        f'batch_id_{unique}__',
-        ''
         f'{ALIAS_OBJECTS}__'
         f'feed_id_{feed_unique_id}__'
         f'date_{today}__'
         f'timestamp_{now}__'
         f'batch_id_{unique}__',
-        f'{ALIAS_OBJECTS_SCHEMAS}__'
-        f'feed_id_{feed_unique_id}__'
-        f'date_{today}__'
-        f'timestamp_{now}__'
-        f'batch_id_{unique}__'
     )
 
 
@@ -101,13 +90,7 @@ def split_index_names(index_names):
         if index_name.startswith(f'{ALIAS_ACTIVITIES}__')
     ], [
         index_name for index_name in index_names
-        if index_name.startswith(f'{ALIAS_ACTIVITIES_SCHEMAS}__')
-    ], [
-        index_name for index_name in index_names
         if index_name.startswith(f'{ALIAS_OBJECTS}__')
-    ], [
-        index_name for index_name in index_names
-        if index_name.startswith(f'{ALIAS_OBJECTS_SCHEMAS}__')
     ]
 
 
@@ -146,66 +129,23 @@ async def get_old_index_names(context):
         return names
 
 
-def to_schemas(objects):
-    def _maybe_collapse_list(list_instance):
-        # Without this, we end up with lots of "almost" identical schemas. This does lose
-        # information, but hopefully still makes the schema helpful.
-        return \
-            'list-of-strings' if all((item == 'string' for item in list_instance)) else \
-            'list-of-dicts' if all((isinstance(item, dict) for item in list_instance)) else \
-            list_instance
-
-    def _to_schema(obj):
-        return \
-            {
-                key: _to_schema(value)
-                for key, value in obj.items() if value is not None
-            } if isinstance(obj, dict) else \
-            _maybe_collapse_list([
-                _to_schema(value)
-                for value in obj
-                if value if not None
-            ]) if isinstance(obj, list) else \
-            'string' if isinstance(obj, str) else \
-            'number' if isinstance(obj, (int, float)) else \
-            'unknown'
-
-    def _to_schema_id_and_json(obj):
-        schema_json = json_dumps(_to_schema(obj))
-        return (
-            'schema:{:02x}'.format(hash(schema_json)),
-            schema_json,
-        )
-
-    return (_to_schema_id_and_json(obj) for obj in objects)
-
-
 async def add_remove_aliases_atomically(context,
-                                        activity_index_name, activity_objects_index_name,
-                                        object_index_name, object_schemas_index_name,
+                                        activity_index_name,
+                                        object_index_name,
                                         feed_unique_id):
     with logged(context.logger.debug, context.logger.warning,
                 'Atomically flipping {ALIAS_ACTIVITIES} alias to (%s)',
                 [feed_unique_id]):
         activities_remove_pattern = f'{ALIAS_ACTIVITIES}__feed_id_{feed_unique_id}__*'
-        activities_schemas_remove_pattern = \
-            f'{ALIAS_ACTIVITIES_SCHEMAS}__feed_id_{feed_unique_id}__*'
         objects_remove_pattern = f'{ALIAS_OBJECTS}__feed_id_{feed_unique_id}__*'
-        objects_schemas_remove_pattern = f'{ALIAS_OBJECTS_SCHEMAS}__feed_id_{feed_unique_id}__*'
         actions = json_dumps({
             'actions': [
                 {'remove': {'index': activities_remove_pattern,
                             'alias': ALIAS_ACTIVITIES}},
-                {'remove': {'index': activities_schemas_remove_pattern,
-                            'alias': ALIAS_ACTIVITIES_SCHEMAS}},
                 {'remove': {'index': objects_remove_pattern,
                             'alias': ALIAS_OBJECTS}},
-                {'remove': {'index': objects_schemas_remove_pattern,
-                            'alias': ALIAS_OBJECTS_SCHEMAS}},
                 {'add': {'index': activity_index_name, 'alias': ALIAS_ACTIVITIES}},
-                {'add': {'index': activity_objects_index_name, 'alias': ALIAS_ACTIVITIES_SCHEMAS}},
                 {'add': {'index': object_index_name, 'alias': ALIAS_OBJECTS}},
-                {'add': {'index': object_schemas_index_name, 'alias': ALIAS_OBJECTS_SCHEMAS}},
             ]
         })
 
@@ -463,35 +403,6 @@ async def create_objects_index(context, index_name):
                                     num_replicas_per_shard)
 
 
-async def create_schemas_index(context, index_name):
-    num_primary_shards = 1
-    num_replicas_per_shard = 0
-
-    with logged(context.logger.debug, context.logger.warning, 'Creating index (%s)', [index_name]):
-        index_definition = json_dumps({
-            'settings': {
-                'index': {
-                    'number_of_shards': num_primary_shards,
-                    'number_of_replicas': num_replicas_per_shard,
-                    'refresh_interval': '-1',
-                }
-            },
-            'mappings': es_mappings({
-                'dynamic': False,
-            })
-        })
-        await es_request_non_200_exception(
-            context=context,
-            method='PUT',
-            path=f'/{index_name}',
-            query={},
-            headers={'Content-Type': 'application/json'},
-            payload=index_definition,
-        )
-        await wait_until_num_shards(context, index_name, num_primary_shards,
-                                    num_replicas_per_shard)
-
-
 async def wait_until_num_shards(context, index_name, num_primary_shards, num_replicas_per_shard):
     # Have witnessed the default number of shards of 5 created even if requested less, and have
     # witnessed replicas created even if requested 0 which then get filled with documents.
@@ -603,36 +514,6 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
                     for object_index_name in object_index_names
                 ),
             ))
-
-        await _es_bulk_post(context, es_bulk_contents)
-
-
-async def es_ingest_schemas(context, schemas, schema_index_names):
-    with logged(context.logger.debug, context.logger.warning,
-                'Pushing (%s) schemas into Elasticsearch', [len(schemas)]):
-        if not schemas:
-            return
-
-        with logged(context.logger.debug, context.logger.warning,
-                    'Converting to Elasticsearch bulk ingest commands', []):
-            es_bulk_contents = b''.join(
-                flatten_generator(
-                    [
-                        json_dumps({
-                            'index': {
-                                '_id': schema_id,
-                                '_index': schema_index_name,
-                                '_type': '_doc',
-                            }
-                        }),
-                        b'\n',
-                        schema_json,
-                        b'\n',
-                    ]
-                    for schema_id, schema_json in schemas
-                    for schema_index_name in schema_index_names
-                ),
-            )
 
         await _es_bulk_post(context, es_bulk_contents)
 
