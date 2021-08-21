@@ -277,7 +277,7 @@ async def ingest_full(parent_context, feed):
 
 
 async def ingest_updates(parent_context, feed):
-    """Perform a single "updates" ingest cycle of a paginated source feed
+    """Perform "updates" ingest cycle of a paginated source feed
 
     Poll the last page from the last completed "full" ingest and ingest it
     into Elasticsearch.
@@ -307,33 +307,56 @@ async def ingest_updates(parent_context, feed):
     """
     context = get_child_context(parent_context, f'{feed.unique_id},updates')
     metrics = context.metrics
-    with \
-            logged(context.logger.debug, context.logger.warning, 'Updates ingest', []), \
-            metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'updates']):
 
-        href = await get_feed_updates_url(context, feed.unique_id)
-        if not feed.disable_updates:
-            indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
+    # Some sources repeat the same activities, which is suspected to cause memory issues on
+    # Elasticsearch
+    recent_ingests = {}
+    max_recent_ingests = 500
 
-            # We deliberately ingest into both the live and ingesting indexes
-            indexes_to_ingest_into = indexes_matching_feeds(
-                indexes_without_alias + indexes_with_alias, [feed.unique_id])
+    while True:
+        with \
+                logged(context.logger.debug, context.logger.warning, 'Updates ingest', []), \
+                metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'updates']):
 
-            activities_index_names, objects_index_names = split_index_names(indexes_to_ingest_into)
+            href = await get_feed_updates_url(context, feed.unique_id)
+            if not feed.disable_updates:
+                indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
 
-            updates_href = feed.seed
-            async for page_of_activities, href in feed.pages(context, feed, href, 'updates'):
-                updates_href = href
-                await ingest_page(
-                    context, page_of_activities, 'updates', feed,
-                    activities_index_names, objects_index_names,
-                )
+                # We deliberately ingest into both the live and ingesting indexes
+                indexes_to_ingest_into = indexes_matching_feeds(
+                    indexes_without_alias + indexes_with_alias, [feed.unique_id])
 
-            for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
-                await refresh_index(context, index_name, feed.unique_id, 'updates')
-            await set_feed_updates_url(context, feed.unique_id, updates_href)
+                activities_index_names, objects_index_names = split_index_names(
+                    indexes_to_ingest_into)
 
-    await sleep(context, feed.updates_page_interval)
+                updates_href = feed.seed
+                num_ingested = 0
+
+                async for page_of_activities, href in feed.pages(context, feed, href, 'updates'):
+                    updates_href = href
+                    to_ingest = [
+                        activity for activity in page_of_activities
+                        if recent_ingests.get(activity['id'], None) != activity
+                    ]
+                    await ingest_page(
+                        context, to_ingest, 'updates', feed,
+                        activities_index_names, objects_index_names,
+                    )
+                    num_ingested += len(to_ingest)
+
+                    for activity in to_ingest:
+                        recent_ingests[activity['id']] = activity
+
+                    while recent_ingests and len(recent_ingests) > max_recent_ingests:
+                        recent_ingests.pop(next(iter(recent_ingests.keys())))
+
+                if num_ingested:
+                    for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
+                        await refresh_index(context, index_name, feed.unique_id, 'updates')
+
+                await set_feed_updates_url(context, feed.unique_id, updates_href)
+
+        await sleep(context, feed.updates_page_interval)
 
 
 async def create_metrics_application(parent_context, metrics_registry, feeds):
