@@ -30,7 +30,7 @@ from .metrics import (
     metric_timer,
 )
 
-DELETE_TIMEOUTS = [1, 2, 4, 8, 16, 32] + [64] * 120
+DELETE_TIMEOUTS = [1, 2, 4, 8, 16, 32] + [64] * 20
 
 
 def get_new_index_names(feed_unique_id):
@@ -183,18 +183,11 @@ async def delete_indexes(context, index_names):
                         headers={'Content-Type': 'application/json'},
                         payload=b'',
                     )
-                except ESNon200Exception as exception:
-                    status = exception.args[1]
-                    context.logger.exception('Failed index DELETE of (%s)', [index_name])
-                    if 400 <= status < 500:
-                        failed_index_names.append(index_name)
-                        break
-                    await sleep(context, timeout)
                 except Exception:
                     context.logger.exception('Failed index DELETE of (%s)', [index_name])
-                    if i == len(DELETE_TIMEOUTS):
+                    if i == len(DELETE_TIMEOUTS) - 1:
                         failed_index_names.append(index_name)
-                        continue
+                        break
                     await sleep(context, timeout)
                 else:
                     break
