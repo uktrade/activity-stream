@@ -512,8 +512,7 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
 
 
 async def _es_bulk_post(context, es_bulk_contents):
-    max_attempts = 5
-    for i in range(0, max_attempts):
+    for i, timeout in enumerate(RETRY_TIMEOUTS):
         try:
             with logged(context.logger.debug, context.logger.warning,
                         'POSTing bulk ingest to Elasticsearch', []):
@@ -521,12 +520,10 @@ async def _es_bulk_post(context, es_bulk_contents):
                     context=context, method='POST', path='/_bulk', query={},
                     headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,
                 )
-        except ESNon200Exception:
-            raise
-        except asyncio.TimeoutError:
-            if i == max_attempts - 1:
+        except (asyncio.TimeoutError, ESNon200Exception):
+            if i == len(RETRY_TIMEOUTS) - 1:
                 raise
-            await sleep(context, 2)
+            await sleep(context, timeout)
         else:
             return
 
