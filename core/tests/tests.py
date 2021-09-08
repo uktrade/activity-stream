@@ -1619,7 +1619,7 @@ class TestApplication(TestBase):
             # The full ingest has a minimum duration, and the delete is only called at the
             # beginning of the second ingest
             on_delete_fail = True
-            await ORIGINAL_SLEEP(5)
+            await ORIGINAL_SLEEP(40)
 
             # This is the point of the test: the exception should have been
             # captured, since this error is not expected
