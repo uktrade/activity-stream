@@ -30,7 +30,7 @@ from .metrics import (
     metric_timer,
 )
 
-DELETE_TIMEOUTS = [1, 2, 4, 8, 16, 32] + [64] * 20
+RETRY_TIMEOUTS = [1, 2, 4, 8, 16, 32] + [64] * 20
 
 
 def get_new_index_names(feed_unique_id):
@@ -173,7 +173,7 @@ async def delete_indexes(context, index_names):
             return
         failed_index_names = []
         for index_name in index_names:
-            for i, timeout in enumerate(DELETE_TIMEOUTS):
+            for i, timeout in enumerate(RETRY_TIMEOUTS):
                 try:
                     await es_request_non_200_exception(
                         context=context,
@@ -185,7 +185,7 @@ async def delete_indexes(context, index_names):
                     )
                 except Exception:
                     context.logger.exception('Failed index DELETE of (%s)', [index_name])
-                    if i == len(DELETE_TIMEOUTS) - 1:
+                    if i == len(RETRY_TIMEOUTS) - 1:
                         failed_index_names.append(index_name)
                         break
                     await sleep(context, timeout)
@@ -512,8 +512,7 @@ async def es_bulk_ingest(context, activities, activity_index_names, object_index
 
 
 async def _es_bulk_post(context, es_bulk_contents):
-    max_attempts = 5
-    for i in range(0, max_attempts):
+    for i, timeout in enumerate(RETRY_TIMEOUTS):
         try:
             with logged(context.logger.debug, context.logger.warning,
                         'POSTing bulk ingest to Elasticsearch', []):
@@ -521,12 +520,10 @@ async def _es_bulk_post(context, es_bulk_contents):
                     context=context, method='POST', path='/_bulk', query={},
                     headers={'Content-Type': 'application/x-ndjson'}, payload=es_bulk_contents,
                 )
-        except ESNon200Exception:
-            raise
-        except asyncio.TimeoutError:
-            if i == max_attempts - 1:
+        except (asyncio.TimeoutError, ESNon200Exception):
+            if i == len(RETRY_TIMEOUTS) - 1:
                 raise
-            await sleep(context, 2)
+            await sleep(context, timeout)
         else:
             return
 
