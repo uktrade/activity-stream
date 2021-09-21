@@ -243,7 +243,7 @@ async def ingest_full(parent_context, feed):
     context = get_child_context(parent_context, f'{feed.unique_id},full')
     metrics = context.metrics
     with \
-            logged(context.logger.debug, context.logger.warning, 'Full ingest', []), \
+            logged(context.logger.info, context.logger.warning, 'Full ingest', []), \
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'full']), \
             metric_inprogress(metrics['ingest_inprogress_ingests_total']):
 
