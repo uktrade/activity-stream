@@ -113,7 +113,10 @@ class Feed(metaclass=ABCMeta):
                     await sleep(context, int(client_error.headers['Retry-After']))
 
         async def gen_source_pages(href):
+            visited = set()
+            prev = None
             updates_href = href
+
             while updates_href:
                 # Lock so there is only 1 request per feed at any given time
                 async with feed.lock:
@@ -133,7 +136,12 @@ class Feed(metaclass=ABCMeta):
                     activities = await feed.get_activities(context, feed_parsed)
 
                 yield activities, updates_href
+                prev = updates_href
                 updates_href = feed.next_href(feed_parsed)
+
+                if updates_href in visited:
+                    raise Exception(f'Infinite loop detected! {prev} links to {updates_href}')
+                visited.add(prev)
 
         async def gen_evenly_sized_pages(source_pages):
             # pylint: disable=undefined-loop-variable
