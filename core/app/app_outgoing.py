@@ -312,6 +312,7 @@ async def ingest_updates(parent_context, feed):
             metric_timer(metrics['ingest_feed_duration_seconds'], [feed.unique_id, 'updates']):
 
         href = await get_feed_updates_url(context, feed.unique_id)
+        updates_href = None
         if not feed.disable_updates:
             indexes_without_alias, indexes_with_alias = await get_old_index_names(context)
 
@@ -321,7 +322,6 @@ async def ingest_updates(parent_context, feed):
 
             activities_index_names, objects_index_names = split_index_names(indexes_to_ingest_into)
 
-            updates_href = feed.seed
             async for page_of_activities, href in feed.pages(context, feed, href, 'updates'):
                 updates_href = href
                 await ingest_page(
@@ -329,9 +329,10 @@ async def ingest_updates(parent_context, feed):
                     activities_index_names, objects_index_names,
                 )
 
-            for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
-                await refresh_index(context, index_name, feed.unique_id, 'updates')
-            await set_feed_updates_url(context, feed.unique_id, updates_href)
+            if updates_href is not None:
+                for index_name in indexes_matching_feeds(indexes_with_alias, [feed.unique_id]):
+                    await refresh_index(context, index_name, feed.unique_id, 'updates')
+                await set_feed_updates_url(context, feed.unique_id, updates_href)
 
     await sleep(context, feed.updates_page_interval)
 
