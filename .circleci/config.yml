@@ -5,9 +5,15 @@ jobs:
       - image: python:3.7.7
         environment:
           PRE_COMMIT_HOME: /root/cache/pre-commit
-      - image: docker.elastic.co/elasticsearch/elasticsearch:7.9.1
+      - image: opensearchproject/opensearch:1.1.0
         environment:
           discovery.type: single-node
+        entrypoint: bash
+        command: >
+          -c '
+            rm -r -f /usr/share/opensearch/plugins/opensearch-security &&
+            exec /usr/share/opensearch/opensearch-docker-entrypoint.sh
+          '
       - image: redis:4.0.10
     working_directory: ~/repo
     steps:
