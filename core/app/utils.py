@@ -71,8 +71,12 @@ def get_common_config(env):
         es_aws_access_key_id = None
         es_aws_secret_access_key = None
         es_aws_region = None
-        es_uri = vcap_services['elasticsearch'][0]['credentials']['uri']
-        es_version = vcap_services['elasticsearch'][0]['plan'].split('-')[2]
+        try:
+            es_uri = vcap_services['elasticsearch'][0]['credentials']['uri']
+            es_version = vcap_services['elasticsearch'][0]['plan'].split('-')[2]
+        except KeyError:
+            es_uri = vcap_services['opensearch'][0]['credentials']['uri']
+            es_version = vcap_services['opensearch'][0]['plan'].split('-')[2]
 
     redis_uri = vcap_services['redis'][0]['credentials']['uri']
     sentry = {
