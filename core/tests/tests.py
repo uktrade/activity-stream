@@ -1863,6 +1863,7 @@ class TestApplication(TestBase):
         self.assertEqual(attendee['object']['dit:aventri:firstname'], 'Steve')
         self.assertEqual(attendee['object']['dit:aventri:lastname'], 'Gates')
         self.assertEqual(attendee['object']['dit:aventri:companyname'], 'Applesoft')
+        self.assertEqual(attendee['object']['dit:emailAddress'], 'test@test.com')
 
     @async_test
     async def test_aventri_event_with_zero_dates(self):
