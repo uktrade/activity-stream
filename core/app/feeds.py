@@ -562,6 +562,7 @@ class EventFeed(Feed):
                     'please_specify_the_name_of_the_uk_company',
                     None
                 ),
+                'dit:emailAddress': attendee['email'],
             }
         }
 
