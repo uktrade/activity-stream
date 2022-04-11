@@ -125,7 +125,7 @@ async def run_outgoing_application():
     settings.ES_AWS_REGION = es_aws_region
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
-    conn = aiohttp.TCPConnector(limit_per_host=10, use_dns_cache=False,
+    conn = aiohttp.TCPConnector(limit_per_host=10, use_dns_cache=False, force_close=True,
                                 resolver=AioHttpDnsResolver(metrics))
     session = aiohttp.ClientSession(
         connector=conn,
