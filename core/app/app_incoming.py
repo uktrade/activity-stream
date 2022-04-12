@@ -88,7 +88,7 @@ async def run_incoming_application():
     context = Context(
         logger=logger, metrics=metrics,
         raven_client=raven_client, redis_client=redis_client, session=session,
-        es_semaphore=asyncio.Semaphore(value=500),
+        single_use_session=None, es_semaphore=asyncio.Semaphore(value=500),
     )
 
     with logged(context.logger.info, context.logger.warning, 'Creating listening web application',
