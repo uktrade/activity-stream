@@ -682,7 +682,7 @@ class MaxemailFeed(Feed):
             with logged(context.logger.debug, context.logger.warning,
                         'maxemail Fetching campaign (%s) with payload (%s)', [url, payload]):
                 result = await http_make_request(
-                    context.session,
+                    context.single_use_session,
                     context.metrics,
                     'POST',
                     url,
@@ -731,7 +731,7 @@ class MaxemailFeed(Feed):
                     with logged(context.logger.info, context.logger.warning,
                                 'maxemail export key (%s) with payload (%s)', [url, payload]):
                         result = await http_make_request(
-                            context.session,
+                            context.single_use_session,
                             context.metrics,
                             'POST',
                             url,

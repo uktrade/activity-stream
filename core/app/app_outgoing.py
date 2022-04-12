@@ -125,8 +125,10 @@ async def run_outgoing_application():
     settings.ES_AWS_REGION = es_aws_region
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
-    conn = aiohttp.TCPConnector(limit_per_host=10, use_dns_cache=False, force_close=True,
+    conn = aiohttp.TCPConnector(limit_per_host=10, use_dns_cache=False,
                                 resolver=AioHttpDnsResolver(metrics))
+    single_use_conn = aiohttp.TCPConnector(limit_per_host=10, use_dns_cache=False,
+                                           force_close=True, resolver=AioHttpDnsResolver(metrics))
     session = aiohttp.ClientSession(
         connector=conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
@@ -134,13 +136,21 @@ async def run_outgoing_application():
             total=60.0,
         ),
     )
+    single_use_session = aiohttp.ClientSession(
+        connector=single_use_conn,
+        headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
+        timeout=aiohttp.ClientTimeout(
+            total=60.0,
+        ),
+    )
+
     redis_client = await redis_get_client(redis_uri)
     raven_client = get_raven_client(sentry, session, metrics)
 
     context = Context(
         logger=logger, metrics=metrics,
         raven_client=raven_client, redis_client=redis_client, session=session,
-        es_semaphore=asyncio.Semaphore(value=1),
+        single_use_session=single_use_session, es_semaphore=asyncio.Semaphore(value=1),
     )
 
     await acquire_and_keep_lock(context, EXCEPTION_INTERVALS, 'lock')
