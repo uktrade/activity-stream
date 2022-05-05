@@ -679,18 +679,25 @@ class MaxemailFeed(Feed):
             url = feed.campaign_url
             payload = {'method': 'find', 'emailId': email_campaign_id}
 
-            with logged(context.logger.debug, context.logger.warning,
-                        'maxemail Fetching campaign (%s) with payload (%s)', [url, payload]):
-                result = await http_make_request(
-                    context.single_use_session,
-                    context.metrics,
-                    'POST',
-                    url,
-                    data=payload,
-                    headers=await feed.auth_headers(None, None),
-                )
-                result.raise_for_status()
-
+            for _ in range(0, 5):
+                try:
+                    with logged(context.logger.debug, context.logger.warning,
+                                'maxemail Fetching campaign (%s) with payload (%s)', [url, payload]):
+                        result = await http_make_request(
+                            context.single_use_session,
+                            context.metrics,
+                            'POST',
+                            url,
+                            data=payload,
+                            headers=await feed.auth_headers(None, None),
+                        )
+                        result.raise_for_status()
+                except (asyncio.TimeoutError, aiohttp.ClientPayloadError):
+                    await asyncio.sleep(10)
+                else:
+                    break
+            if result.status != 200:
+                raise Exception("Failed fetching maxemail campain {} with payload {}".format(url, payload))
             campaign = json_loads(result._body)
             year, time = campaign['start_ts'].split(' ')
             timestamp = f'{year}T{time}'
@@ -962,22 +969,43 @@ class MaxemailFeed(Feed):
         sent_csv_lines = gen_data_export_csv(sent_data_export_key)
         sent_activities_and_timestamp = gen_sent_activities_and_timestamp(sent_csv_lines)
 
+        async for activity_page, timestamp in paginate(feed.page_size, sent_activities_and_timestamp):
+            timestamps[0] = timestamp
+            yield activity_page, '--'.join(timestamps)
+
         bounced_data_export_key = await get_data_export_key(timestamp_bounced, 'bounced')
         bounced_csv_lines = gen_data_export_csv(bounced_data_export_key)
         bounced_activities_and_timestamp = gen_bounced_activities_and_timestamp(bounced_csv_lines)
+
+        async for activity_page, timestamp in paginate(feed.page_size, bounced_activities_and_timestamp):
+            timestamps[1] = timestamp
+            yield activity_page, '--'.join(timestamps)
 
         opened_data_export_key = await get_data_export_key(timestamp_opened, 'opened')
         opened_csv_lines = gen_data_export_csv(opened_data_export_key)
         opened_activities_and_timestamp = gen_opened_activities_and_timestamp(opened_csv_lines)
 
+        async for activity_page, timestamp in paginate(feed.page_size, opened_activities_and_timestamp):
+            timestamps[2] = timestamp
+            yield activity_page, '--'.join(timestamps)
+
         clicked_data_export_key = await get_data_export_key(timestamp_clicked, 'clicked')
         clicked_csv_lines = gen_data_export_csv(clicked_data_export_key)
         clicked_activities_and_timestamp = gen_clicked_activities_and_timestamp(clicked_csv_lines)
+
+        async for activity_page, timestamp in paginate(feed.page_size, clicked_activities_and_timestamp):
+            timestamps[3] = timestamp
+            yield activity_page, '--'.join(timestamps)
 
         responded_data_export_key = await get_data_export_key(timestamp_clicked, 'responded')
         responded_csv_lines = gen_data_export_csv(responded_data_export_key)
         responded_activities_and_timestamp = gen_responded_activities_and_timestamp(
             responded_csv_lines)
+
+        async for activity_page, timestamp in paginate(feed.page_size, responded_activities_and_timestamp):
+            timestamps[4] = timestamp
+            yield activity_page, '--'.join(timestamps)
+
 
         unsubscribed_data_export_key = await get_data_export_key(timestamp_unsubscribed,
                                                                  'unsubscribed')
@@ -985,19 +1013,10 @@ class MaxemailFeed(Feed):
         unsubscribed_activities_and_timestamp = gen_unsubscribed_activities_and_timestamp(
             unsubscribed_csv_lines)
 
-        multiplexed_activities_and_timestamps = multiplex([
-            (sent_activities_and_timestamp, timestamp_sent),
-            (bounced_activities_and_timestamp, timestamp_bounced),
-            (opened_activities_and_timestamp, timestamp_opened),
-            (clicked_activities_and_timestamp, timestamp_clicked),
-            (responded_activities_and_timestamp, timestamp_responded),
-            (unsubscribed_activities_and_timestamp, timestamp_unsubscribed),
-        ])
+        async for activity_page, timestamp in paginate(feed.page_size, unsubscribed_activities_and_timestamp):
+            timestamps[5] = timestamp
+            yield activity_page, '--'.join(timestamps)
 
-        multiplexed_activity_pages_and_timestamp = paginate(
-            feed.page_size, multiplexed_activities_and_timestamps)
-        async for activity_page, timestamp in multiplexed_activity_pages_and_timestamp:
-            yield activity_page, timestamp
 
         campaigns_activities_and_timestamp = gen_campains_activities_and_timestamp(
             campaigns, timestamp)
