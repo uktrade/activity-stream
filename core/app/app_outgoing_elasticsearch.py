@@ -226,11 +226,20 @@ async def create_activities_index(context, index_name):
     with logged(context.logger.debug, context.logger.warning, 'Creating index (%s)', [index_name]):
         index_definition = json_dumps({
             'settings': {
+                'analysis': {
+                    'normalizer': {
+                        'my_normalizer': {
+                            'type': 'custom',
+                            'char_filter': [],
+                            'filter': ['lowercase']
+                        }
+                    },
+                },
                 'index': {
                     'number_of_shards': num_primary_shards,
                     'number_of_replicas': num_replicas_per_shard,
                     'refresh_interval': '-1',
-                }
+                },
             },
             'mappings': es_mappings({
                 'dynamic': False,
@@ -278,6 +287,7 @@ async def create_activities_index(context, index_name):
                     },
                     'object.dit:emailAddress': {
                         'type': 'keyword',
+                        'normalizer': 'my_normalizer',
                     },
                     'object.url': {
                         'type': 'keyword',
