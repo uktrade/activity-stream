@@ -148,7 +148,7 @@ To look at the data themselves, download Kibana 6.3.0 [here](https://www.elastic
 
 Ensure dependencies are installed and Elasticsearch and Redis are running
 
-    $ install -r core/requirements_test.txt
+    $ pip install -r core/requirements_test.txt
     $ ./tests_es_start.sh && ./tests_redis_start.sh
 
 To run all of the tests
