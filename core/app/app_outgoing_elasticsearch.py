@@ -303,6 +303,7 @@ async def create_activities_index(context, index_name):
                     },
                     'actor.dit:emailAddress': {
                         'type': 'keyword',
+                        'normalizer': 'my_normalizer',
                     },
                     'object.geocoordinates': {
                         'type': 'geo_point'
@@ -335,6 +336,15 @@ async def create_objects_index(context, index_name):
     with logged(context.logger.debug, context.logger.warning, 'Creating index (%s)', [index_name]):
         index_definition = json_dumps({
             'settings': {
+                'analysis': {
+                    'normalizer': {
+                        'my_normalizer': {
+                            'type': 'custom',
+                            'char_filter': [],
+                            'filter': ['lowercase']
+                        }
+                    },
+                },
                 'index': {
                     'number_of_shards': num_primary_shards,
                     'number_of_replicas': num_replicas_per_shard,
@@ -372,6 +382,7 @@ async def create_objects_index(context, index_name):
                     },
                     'dit:emailAddress': {
                         'type': 'keyword',
+                        'normalizer': 'my_normalizer',
                     },
                     'url': {
                         'type': 'keyword',
