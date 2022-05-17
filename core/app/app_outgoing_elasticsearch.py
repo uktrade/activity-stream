@@ -230,7 +230,6 @@ async def create_activities_index(context, index_name):
                     'normalizer': {
                         'my_normalizer': {
                             'type': 'custom',
-                            'char_filter': [],
                             'filter': ['lowercase']
                         }
                     },
@@ -239,7 +238,7 @@ async def create_activities_index(context, index_name):
                     'number_of_shards': num_primary_shards,
                     'number_of_replicas': num_replicas_per_shard,
                     'refresh_interval': '-1',
-                },
+                }
             },
             'mappings': es_mappings({
                 'dynamic': False,
@@ -340,7 +339,6 @@ async def create_objects_index(context, index_name):
                     'normalizer': {
                         'my_normalizer': {
                             'type': 'custom',
-                            'char_filter': [],
                             'filter': ['lowercase']
                         }
                     },
