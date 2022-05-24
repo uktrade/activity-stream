@@ -759,7 +759,7 @@ class MaxemailFeed(Feed):
             with logged(context.logger.debug, context.logger.warning,
                         'maxemail data export csv (%s)', [url]):
                 lines = http_stream_read_lines(
-                    context.session,
+                    context.single_use_session,
                     context.metrics,
                     'POST',
                     url,

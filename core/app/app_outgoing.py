@@ -140,7 +140,8 @@ async def run_outgoing_application():
         connector=single_use_conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
         timeout=aiohttp.ClientTimeout(
-            total=60.0,
+            # MaxEmail responses can take a long time
+            total=1200.0,
         ),
     )
 
