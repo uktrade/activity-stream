@@ -599,7 +599,7 @@ class MaxemailFeed(Feed):
 
     down_grace_period = 60 * 60 * 4
 
-    full_ingest_page_interval = 3
+    full_ingest_page_interval = 0.1
     updates_page_interval = 60 * 60 * 24 * 30
     exception_intervals = [120, 180, 240, 300]
 
