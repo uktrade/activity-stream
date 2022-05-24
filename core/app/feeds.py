@@ -767,20 +767,20 @@ class MaxemailFeed(Feed):
                     headers=await feed.auth_headers(None, None),
                 )
 
-            headers = []
-            async for i, line in async_enumerate(lines):
-                try:
-                    parsed_line = next(csv.reader(
-                        StringIO(line.decode('utf-8')), skipinitialspace=True, delimiter=',',
-                        quotechar='"', quoting=csv.QUOTE_ALL,
-                    ))
-                except StopIteration:
-                    break
+                headers = []
+                async for i, line in async_enumerate(lines):
+                    try:
+                        parsed_line = next(csv.reader(
+                            StringIO(line.decode('utf-8')), skipinitialspace=True, delimiter=',',
+                            quotechar='"', quoting=csv.QUOTE_ALL,
+                        ))
+                    except StopIteration:
+                        break
 
-                if i == 0:
-                    headers = parsed_line
-                else:
-                    yield dict(zip(headers, parsed_line))
+                    if i == 0:
+                        headers = parsed_line
+                    else:
+                        yield dict(zip(headers, parsed_line))
 
         def common(campaign_id, timestamp, email_address):
             year, time = timestamp.split(' ')
