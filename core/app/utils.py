@@ -31,13 +31,6 @@ def sub_dict_lower(super_dict, keys):
     }
 
 
-async def async_enumerate(aiter):
-    i = 0
-    async for item in aiter:
-        yield i, item
-        i += 1
-
-
 async def cancel_non_current_tasks():
     current_task = asyncio.Task.current_task()
     all_tasks = asyncio.Task.all_tasks()
