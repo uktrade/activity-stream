@@ -95,7 +95,8 @@ def get_page(timestamp, get_next_page_href):
                         'Document',
                         'dit:activityStreamVerificationFeed:Verifier'
                     ],
-                    'url': f'https://activitystream.uktrade.io/activities/{activity_id}'
+                    'url': f'https://activitystream.uktrade.io/activities/{activity_id}',
+                    'name': f'{activity_id} Test Object Name'
                 },
                 'published': datetime.utcfromtimestamp(timestamp).isoformat(),
                 'type': 'Create'
