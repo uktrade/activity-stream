@@ -65,7 +65,7 @@ export INCOMING_IP_WHITELIST__1=1.2.3.4
 export INCOMING_IP_WHITELIST__2=2.3.4.5
 export SENTRY_DSN=http://abc:cvb@localhost:9872/123
 export SENTRY_ENVIRONMENT=test
-export VCAP_SERVICES='{"redis":[{"credentials":{"uri":"redis://127.0.0.1:6379"}}],"elasticsearch":[{"credentials":{"uri":"http://some-id:some-secret@127.0.0.1:9200"}}]}'
+export VCAP_SERVICES='{"redis":[{"credentials":{"uri":"redis://127.0.0.1:6379"}}],"opensearch":[{"credentials":{"uri":"http://some-id:some-secret@127.0.0.1:9200"}, "plan": "123-123-123"}]}'
 ```
 
 And add to the bottom of the `deactivate ()` function in that file.

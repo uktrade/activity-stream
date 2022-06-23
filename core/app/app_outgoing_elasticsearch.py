@@ -264,6 +264,11 @@ async def create_activities_index(context, index_name):
                     },
                     'object.name': {
                         'type': 'text',
+                        'fields': {
+                            'raw': {
+                                'type': 'keyword'
+                            }
+                        }
                     },
                     'object.startTime': {
                         'type': 'date',
