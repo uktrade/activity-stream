@@ -276,6 +276,9 @@ async def create_activities_index(context, index_name):
                     'object.endTime': {
                         'type': 'date',
                     },
+                    'object.updated': {
+                        'type': 'date',
+                    },
                     # Not AS 2.0, but is used, and is a space-separated
                     # list of keywords
                     'object.keywords': {
