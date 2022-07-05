@@ -35,7 +35,7 @@ RETRY_TIMEOUTS = [1, 2, 4, 8, 16, 32] + [64] * 20
 
 def get_new_index_names(feed_unique_id):
     today = datetime.date.today().isoformat()
-    now = str(datetime.datetime.now().timestamp()).split('.')[0]
+    now = str(datetime.datetime.now().timestamp()).split('.', maxsplit=1)[0]
     unique = random_url_safe(8)
 
     # Storing metadata in index name allows operations to match on
@@ -193,7 +193,7 @@ async def delete_indexes(context, index_names):
                     break
 
         if failed_index_names:
-            raise Exception('Failed DELETE of indexes ({})'.format(failed_index_names))
+            raise Exception(f'Failed DELETE of indexes ({failed_index_names})')
 
     await wait_for_indexes_to_delete(context, index_names)
 
