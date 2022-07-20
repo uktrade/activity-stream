@@ -310,6 +310,12 @@ async def create_activities_index(context, index_name):
                     },
                     'object.dit:public': {
                         'type': 'boolean'
+                    },
+                    'object.dit:firstName': {
+                        'type': 'keyword'
+                    },
+                    'object.dit:lastName': {
+                        'type': 'keyword'
                     }
                 },
             }),
