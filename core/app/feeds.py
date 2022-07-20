@@ -562,7 +562,9 @@ class EventFeed(Feed):
                     None
                 ),
                 'dit:aventri:virtual_event_attendance': attendee['virtual_event_attendance'],
-                'dit:emailAddress': attendee['email']
+                'dit:emailAddress': attendee['email'],
+                'dit:firstName': attendee['fname'],
+                'dit:lastName': attendee['lname']
             }
         }
 
