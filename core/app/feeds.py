@@ -564,7 +564,11 @@ class EventFeed(Feed):
                 'dit:aventri:virtual_event_attendance': attendee['virtual_event_attendance'],
                 'dit:emailAddress': attendee['email'],
                 'dit:firstName': attendee['fname'],
-                'dit:lastName': attendee['lname']
+                'dit:lastName': attendee['lname'],
+                'dit:companyName': attendee.get(
+                    'please_specify_the_name_of_the_uk_company',
+                    None
+                ),
             }
         }
 
