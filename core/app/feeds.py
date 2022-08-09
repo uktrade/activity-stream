@@ -558,7 +558,7 @@ class EventFeed(Feed):
                 'dit:aventri:firstname': attendee['fname'],
                 'dit:aventri:lastname': attendee['lname'],
                 'dit:aventri:companyname': attendee.get(
-                    'please_specify_the_name_of_the_uk_company',
+                    'company',
                     None
                 ),
                 'dit:aventri:virtual_event_attendance': attendee['virtual_event_attendance'],
@@ -566,7 +566,7 @@ class EventFeed(Feed):
                 'dit:firstName': attendee['fname'],
                 'dit:lastName': attendee['lname'],
                 'dit:companyName': attendee.get(
-                    'please_specify_the_name_of_the_uk_company',
+                    'company',
                     None
                 ),
             }
