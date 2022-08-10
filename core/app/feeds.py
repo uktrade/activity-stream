@@ -569,6 +569,7 @@ class EventFeed(Feed):
                     'company',
                     None
                 ),
+                'dit:registrationStatus': attendee['registrationstatus'],
             }
         }
 

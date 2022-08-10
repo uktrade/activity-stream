@@ -319,6 +319,9 @@ async def create_activities_index(context, index_name):
                     },
                     'object.dit:companyName': {
                         'type': 'keyword'
+                    },
+                    'object.dit:registrationStatus': {
+                        'type': 'keyword'
                     }
                 },
             }),
