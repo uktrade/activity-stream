@@ -565,6 +565,7 @@ class EventFeed(Feed):
                 'dit:emailAddress': attendee['email'],
                 'dit:firstName': attendee['fname'],
                 'dit:lastName': attendee['lname'],
+                'dit:registrationStatus': attendee['registrationstatus'],
                 'dit:companyName': attendee['company']
             }
         }
