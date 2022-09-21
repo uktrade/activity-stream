@@ -331,7 +331,7 @@ async def create_activities_index(context, index_name):
                     },
                     'object.dit:ukRegion.name': {
                         'type': 'keyword'
-                    }
+                    },
                     'object.dit:organiser.name': {
                         'type': 'keyword'
                     }
