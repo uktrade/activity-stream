@@ -322,6 +322,18 @@ async def create_activities_index(context, index_name):
                     },
                     'object.dit:registrationStatus': {
                         'type': 'keyword'
+                    },
+                    'object.dit:aventri:location_country': {
+                        'type': 'keyword'
+                    },
+                    'object.dit:address_country.name': {
+                        'type': 'keyword'
+                    },
+                    'object.dit:ukRegion.name': {
+                        'type': 'keyword'
+                    },
+                    'object.dit:organiser.name': {
+                        'type': 'keyword'
                     }
                 },
             }),
