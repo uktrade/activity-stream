@@ -329,10 +329,13 @@ async def create_activities_index(context, index_name):
                     'object.dit:address_country.name': {
                         'type': 'keyword'
                     },
-                    'object.dit:ukRegion.name': {
+                    'object.dit:ukRegion.id': {
                         'type': 'keyword'
                     },
-                    'object.dit:organiser.name': {
+                    'object.dit:organiser.id': {
+                        'type': 'keyword'
+                    },
+                    'object.dit:eventType.id': {
                         'type': 'keyword'
                     }
                 },
