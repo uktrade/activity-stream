@@ -580,7 +580,7 @@ class EventFeed(Feed):
     def format_date_and_time(aventri_date, aventri_time):
         checked_date = aventri_date if aventri_date else '0000-00-00'
         checked_time = aventri_time if aventri_time else '00:00:00'
-        if checked_date == '0000-00-00' or checked_time == '00:00:00':
+        if checked_date == '0000-00-00':
             return None
 
         return datetime.datetime.strptime(
