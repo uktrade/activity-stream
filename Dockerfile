@@ -13,4 +13,4 @@ RUN pip install -r requirements.txt
 
 ADD . /app/
 
-ENTRYPOINT ["sh", "start-dev.sh"]
+CMD ["sh", "start-dev.sh"]

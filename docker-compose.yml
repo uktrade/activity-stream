@@ -3,12 +3,13 @@ services:
   activity-stream:
     depends_on:
       - activity-stream-redis
-      - activity-stream-postgres
+#      - activity-stream-postgres
       - opensearch
       - verification-feed
     build:
       context: .
     restart: always
+#    command: ["./wait-for-it.sh", "verification-feed:8082", "--", "sh", "start-dev.sh"]
     ports:
       - 8081:8081
     environment:
@@ -37,25 +38,26 @@ services:
   verification-feed:
     depends_on:
       - activity-stream-redis
-      - activity-stream-postgres
+#      - activity-stream-postgres
       - opensearch
     build:
       context: ./verification_feed
     restart: always
+    command: ["./wait-for-it.sh", "opensearch:9200", "--", "python", "app.py"]
     ports:
       - 8082:8082
     environment:
       - PORT=8082
 
-  activity-stream-postgres:
-    image: postgres:9.5
-    restart: always
-    ports:
-      - 5432:5432
-    environment:
-      - POSTGRES_DB=activity-stream
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
+#  activity-stream-postgres:
+#    image: postgres:9.5
+#    restart: always
+#    ports:
+#      - 5432:5432
+#    environment:
+#      - POSTGRES_DB=activity-stream
+#      - POSTGRES_USER=user
+#      - POSTGRES_PASSWORD=password
 
   activity-stream-redis:
     image: redis:6.2.6
@@ -64,12 +66,11 @@ services:
       - '6379:6379'
 
   opensearch:
-    image: opensearchproject/opensearch:1.1.0
+    image: opensearchproject/opensearch:1.2.4
     ports:
       - '9200:9200'
       - '9300:9300'
     environment:
-      - plugins.security.disabled=true
       - cluster.name=cluster-001
       - node.name=node-001
       - discovery.type=single-node
