@@ -5,6 +5,7 @@ from ipaddress import IPv4Network, IPv4Address
 
 from aiohttp import web
 
+from . import settings
 from .app_incoming_elasticsearch import (
     es_search_filtered,
 )
@@ -36,7 +37,6 @@ MISSING_CONTENT_TYPE = 'Content-Type header was not set. ' + \
                        'It must be set for authentication, even if as the empty string.'
 MISSING_X_FORWARDED_PROTO = 'The X-Forwarded-Proto header was not set.'
 UNKNOWN_ERROR = 'An unknown error occurred.'
-
 
 def authenticator(context, incoming_key_pairs, nonce_expire):
 
@@ -281,6 +281,10 @@ def authenticate_by_ip(incorrect, ip_whitelist):
 
     @web.middleware
     async def _authenticate_by_ip(request, handler):
+        if settings.DISABLE_PAAS_IP_CHECK:
+            print('PaaS IP check authentication is disabled.')
+            request['logger'].warning('PaaS IP check authentication is disabled.')
+            return None
         if 'X-Forwarded-For' not in request.headers:
             request['logger'].warning(
                 'Failed authentication: no X-Forwarded-For header passed'

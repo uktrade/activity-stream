@@ -13,7 +13,6 @@ from .logger import (
     get_child_logger,
 )
 
-
 Context = collections.namedtuple(
     'Context', ['logger', 'metrics', 'raven_client', 'redis_client',
                 'session', 'single_use_session', 'es_semaphore'],
@@ -61,10 +60,12 @@ def get_common_config(env):
         es_aws_region = env['ES_AWS_REGION']
         es_uri = env['ES_URI']
         es_version = env['ES_VERSION']
+        disable_paas_check = env['DISABLE_PAAS_IP_CHECK']
     except KeyError:
         es_aws_access_key_id = None
         es_aws_secret_access_key = None
         es_aws_region = None
+        disable_paas_check = False
         try:
             es_uri = vcap_services['elasticsearch'][0]['credentials']['uri']
             es_version = vcap_services['elasticsearch'][0]['plan'].split('-')[2]
@@ -78,7 +79,7 @@ def get_common_config(env):
         'environment': env['SENTRY_ENVIRONMENT'],
     }
     return es_uri, es_version, es_aws_access_key_id, es_aws_secret_access_key, es_aws_region, \
-        redis_uri, sentry
+           redis_uri, sentry, disable_paas_check
 
 
 def normalise_environment(key_values):
@@ -182,7 +183,7 @@ def normalise_environment(key_values):
 
     return \
         list_sorted_by_int_key() if all_keys_are_ints() else \
-        nested_structured_dict
+            nested_structured_dict
 
 
 def json_dumps(data_dict):

@@ -60,7 +60,7 @@ async def run_incoming_application():
     with logged(logger.info, logger.warning, 'Examining environment', []):
         env = normalise_environment(os.environ)
         es_uri, es_version, es_aws_access_key_id, es_aws_secret_access_key, es_aws_region, \
-            redis_uri, sentry = get_common_config(env)
+            redis_uri, sentry, disable_paas_check = get_common_config(env)
         feeds = [parse_feed_config(feed) for feed in env['FEEDS']]
         port = env['PORT']
         incoming_key_pairs = [{
@@ -75,6 +75,7 @@ async def run_incoming_application():
     settings.ES_AWS_ACCESS_KEY_ID = es_aws_access_key_id
     settings.ES_AWS_SECRET_ACCESS_KEY = es_aws_secret_access_key
     settings.ES_AWS_REGION = es_aws_region
+    settings.DISABLE_PAAS_IP_CHECK = disable_paas_check
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
     conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=AioHttpDnsResolver(metrics))
