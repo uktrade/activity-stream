@@ -1,4 +1,5 @@
 import hmac
+import logging
 import time
 
 from ipaddress import IPv4Network, IPv4Address
@@ -38,6 +39,7 @@ MISSING_X_FORWARDED_PROTO = 'The X-Forwarded-Proto header was not set.'
 UNKNOWN_ERROR = 'An unknown error occurred.'
 
 
+
 def authenticator(context, incoming_key_pairs, nonce_expire):
 
     def _lookup_credentials(passed_access_key_id):
@@ -45,6 +47,8 @@ def authenticator(context, incoming_key_pairs, nonce_expire):
 
     @web.middleware
     async def authenticate(request, handler):
+        auth_logger = get_child_logger("auth")
+        auth_logger.setLevel(logging.INFO)
         if 'X-Forwarded-Proto' not in request.headers:
             request['logger'].warning(
                 'Failed authentication: no X-Forwarded-Proto header passed'
@@ -57,7 +61,7 @@ def authenticator(context, incoming_key_pairs, nonce_expire):
         if 'Content-Type' not in request.headers:
             raise web.HTTPUnauthorized(text=MISSING_CONTENT_TYPE)
 
-        request['logger'].warning('Auth header: (%s)', vars(request.headers['Authorization']))
+        auth_logger.info('Auth header: (%s)', vars(request.headers['Authorization']))
 
         is_authentic, private_error_message, credentials = await authenticate_hawk_header(
             context=context,
