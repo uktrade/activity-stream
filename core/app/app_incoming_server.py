@@ -57,6 +57,8 @@ def authenticator(context, incoming_key_pairs, nonce_expire):
         if 'Content-Type' not in request.headers:
             raise web.HTTPUnauthorized(text=MISSING_CONTENT_TYPE)
 
+        request['logger'].info('Auth header: (%s)', vars(request.headers['Authorization']))
+
         is_authentic, private_error_message, credentials = await authenticate_hawk_header(
             context=context,
             nonce_expire=nonce_expire,
