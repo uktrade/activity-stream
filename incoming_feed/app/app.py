@@ -29,7 +29,6 @@ async def create_incoming_application(port):
             os.environ["ACTIVITY_STREAM_OUTGOING_SECRET_ACCESS_KEY"],
             verify_response=False,
         )
-        print(f"hawk_auth: {vars(hawk_auth)}")
 
         api_client = APIClient(
             api_url=os.environ["ACTIVITY_STREAM_OUTGOING_URL"],
@@ -46,7 +45,6 @@ async def create_incoming_application(port):
                 "Content-Type": request.content_type
             },
         )
-        print(f"result: {vars(result)}")
         return web.json_response(result.text, status=result.status_code)
 
     app_logger.debug("Creating incoming feed web application...")
