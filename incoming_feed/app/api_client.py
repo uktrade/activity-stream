@@ -1,11 +1,10 @@
 from logging import getLogger
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import requests
 from mohawk import Sender
 from requests.auth import AuthBase
 from requests.exceptions import ConnectionError
-
 
 logger = getLogger(__name__)
 
@@ -14,13 +13,13 @@ class HawkAuth(AuthBase):
     """Hawk authentication class."""
 
     def __init__(
-        self, api_id, api_key, signing_algorithm="sha256", verify_response=True
+            self, api_id, api_key, signing_algorithm="sha256"
     ):
         """Initialises the authenticator with the signing parameters."""
         self._api_id = api_id
         self._api_key = api_key
         self._signing_algorithm = signing_algorithm
-        self._verify_response = verify_response
+        self._verify_response = False
 
     def __call__(self, request):
         """Signs a request, and attaches a response verifier."""
@@ -29,7 +28,6 @@ class HawkAuth(AuthBase):
             "key": self._api_key,
             "algorithm": self._signing_algorithm,
         }
-
 
         sender = Sender(
             credentials,
@@ -40,42 +38,8 @@ class HawkAuth(AuthBase):
         )
 
         request.headers["Authorization"] = sender.request_header
-        if self._verify_response:
-            request.register_hook("response", _make_response_verifier(sender))
 
         return request
-
-
-class TokenAuth(AuthBase):
-    """
-    Token authentication class.
-    """
-
-    def __init__(self, token, token_keyword="Token"):
-        """
-        Initialise the class with the token.
-        """
-        self.token = token
-        self.token_keyword = token_keyword
-
-    def __call__(self, request):
-        """
-        Inject the Authorization header in to the request.
-        """
-        request.headers["Authorization"] = f"{self.token_keyword} {self.token}"
-        return request
-
-
-def _make_response_verifier(sender):
-    def verify_response(response, *args, **kwargs):
-        if response.ok:
-            sender.accept_response(
-                response.headers["Server-Authorization"],
-                content=response.content,
-                content_type=response.headers["Content-Type"],
-            )
-
-    return verify_response
 
 
 class APIClient:
@@ -85,13 +49,13 @@ class APIClient:
     DEFAULT_ACCEPT = "application/json;q=0.9,*/*;q=0.8"
 
     def __init__(
-        self,
-        api_url,
-        auth=None,
-        accept=DEFAULT_ACCEPT,
-        default_timeout=None,
-        raise_for_status=True,
-        request=None,
+            self,
+            api_url,
+            auth=None,
+            accept=DEFAULT_ACCEPT,
+            default_timeout=None,
+            raise_for_status=True,
+            request=None,
     ):
         """Initialises the API client."""
         self._api_url = api_url

@@ -58,8 +58,6 @@ def authenticator(context, incoming_key_pairs, nonce_expire):
         if "Content-Type" not in request.headers:
             raise web.HTTPUnauthorized(text=MISSING_CONTENT_TYPE)
 
-        request["logger"].info("Auth header: (%s)", vars(request))
-
         (
             is_authentic,
             private_error_message,
@@ -77,7 +75,6 @@ def authenticator(context, incoming_key_pairs, nonce_expire):
             path=request.url.raw_path_qs,
             content_type=request.headers["Content-Type"].encode("utf-8"),
             content=await request.read(),
-            logger=request["logger"],
         )
 
         if not is_authentic:
@@ -266,7 +263,7 @@ def handle_get_metrics(context):
 
 def handle_get_search_v2(context, alias):
     async def handle(request):
-        print(vars(request))
+
         results = await es_request(
             context=context,
             method="GET",

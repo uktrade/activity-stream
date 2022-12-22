@@ -26,8 +26,7 @@ async def create_incoming_application(port):
     async def handle_events(request):
         hawk_auth = HawkAuth(
             os.environ["ACTIVITY_STREAM_OUTGOING_ACCESS_KEY_ID"],
-            os.environ["ACTIVITY_STREAM_OUTGOING_SECRET_ACCESS_KEY"],
-            verify_response=False,
+            os.environ["ACTIVITY_STREAM_OUTGOING_SECRET_ACCESS_KEY"]
         )
 
         api_client = APIClient(
