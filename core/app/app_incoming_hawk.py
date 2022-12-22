@@ -27,12 +27,14 @@ async def authenticate_hawk_header(
     content,
     logger,
 ):
-
+    logger.info("Checking HAWK authentication")
     is_valid_header = re.match(r'^Hawk (((?<="), )?[a-z]+="[^"]*")*$', header)
     if not is_valid_header:
         return False, "Invalid header", {}
 
     parsed_header = dict(re.findall(r'([a-z]+)="([^"]+)"', header))
+
+    logger.info("Parsed header %s", parsed_header)
 
     required_fields = ["ts", "hash", "mac", "nonce", "id"]
     missing_fields = [field for field in required_fields if field not in parsed_header]
