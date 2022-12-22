@@ -66,11 +66,12 @@ async def authenticate_hawk_header(
     if not abs(int(datetime.now().timestamp()) - int(parsed_header["ts"])) <= 60:
         return False, "Stale ts", None
 
+    logger.info(
+        "Correct mac: %s. Invalid mac: %s. secret_access_key: %s. path: %s. host: %s. port: %s", correct_mac,
+        parsed_header["mac"], matching_credentials["key"], path, host, port
+    )
     if not hmac.compare_digest(correct_mac, parsed_header["mac"]):
-        logger.info(
-            "Correct mac: %s. Invalid mac: %s. secret_access_key: %s. path: %s. host: %s. port: %s", correct_mac,
-            parsed_header["mac"], matching_credentials["key"], path, host, port
-        )
+
         return False, "Invalid mac", None
 
     if not await is_nonce_available(

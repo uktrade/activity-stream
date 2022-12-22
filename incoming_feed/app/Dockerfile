@@ -9,6 +9,6 @@ ADD requirements.txt .
 
 RUN pip install -r requirements.txt
 
-ADD . /app/
+ADD .. /app/
 
 CMD ["sh", "start-dev.sh"]

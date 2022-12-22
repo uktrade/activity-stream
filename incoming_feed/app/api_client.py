@@ -30,7 +30,10 @@ class HawkAuth(AuthBase):
             "algorithm": self._signing_algorithm,
         }
 
-        logger.info(f"credentials: {credentials}")
+        print(f"credentials: {credentials}")
+        print(
+            f"request.url: {request.url}. request.method: {request.method}."
+        )
 
         sender = Sender(
             credentials,
