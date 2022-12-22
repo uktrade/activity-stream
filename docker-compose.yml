@@ -8,14 +8,6 @@ services:
     build:
       context: .
     restart: always
-    command:
-      [
-        "./wait-for-it.sh",
-        "verification-feed:8082",
-        "--",
-        "sh",
-        "start-dev.sh"
-      ]
     ports:
       - 8081:8081
     environment:
@@ -43,14 +35,6 @@ services:
     build:
       context: ./verification_feed
     restart: always
-    command:
-      [
-        "./wait-for-it.sh",
-        "opensearch:9200/_cat/indices?v",
-        "--",
-        "python",
-        "app.py"
-      ]
     ports:
       - 8082:8082
     environment:
