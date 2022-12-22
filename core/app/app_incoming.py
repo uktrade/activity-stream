@@ -115,11 +115,7 @@ async def run_incoming_application():
         [],
     ):
         runner = await create_incoming_application(
-            context,
-            port,
-            ip_whitelist,
-            incoming_key_pairs,
-            feeds,
+            context, port, ip_whitelist, incoming_key_pairs, feeds,
         )
 
     async def cleanup():
