@@ -46,7 +46,7 @@ services:
     command:
       [
         "./wait-for-it.sh",
-        "opensearch:9200",
+        "opensearch:9200/_cat/indices?v",
         "--",
         "python",
         "app.py"
