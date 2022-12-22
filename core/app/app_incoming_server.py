@@ -1,5 +1,4 @@
 import hmac
-import logging
 import time
 
 from ipaddress import IPv4Network, IPv4Address
