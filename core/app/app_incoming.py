@@ -108,7 +108,8 @@ async def run_incoming_application():
         es_semaphore=asyncio.Semaphore(value=500),
     )
 
-    with logged(context.logger.info, context.logger.warning, "Creating listening web application", []):
+    with logged(context.logger.info, context.logger.warning,
+                "Creating listening web application", []):
         runner = await create_incoming_application(
             context, port, ip_whitelist, incoming_key_pairs, feeds,
         )
@@ -128,8 +129,7 @@ async def run_incoming_application():
 
 
 async def create_incoming_application(
-    context, port, ip_whitelist, incoming_key_pairs, feeds
-):
+        context, port, ip_whitelist, incoming_key_pairs, feeds):
 
     app = web.Application(
         middlewares=[
