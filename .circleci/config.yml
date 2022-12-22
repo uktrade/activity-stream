@@ -1,20 +1,23 @@
 version: 2
 jobs:
   build:
-    machine:
-      image: ubuntu-2004:2022.07.1
-      docker_layer_caching: false
-    parallelism: 3
-    resource_class: xlarge
-    parameters:
-      staff:
-        type: string   
+    docker:
+      - image: python:3.7.7
+        environment:
+          PRE_COMMIT_HOME: /root/cache/pre-commit
+      - image: opensearchproject/opensearch:1.1.0
+        environment:
+          discovery.type: single-node
+        entrypoint: bash
+        command: >
+          -c '
+            rm -r -f /usr/share/opensearch/plugins/opensearch-security &&
+            exec /usr/share/opensearch/opensearch-docker-entrypoint.sh
+          '
+      - image: redis:4.0.10
     working_directory: ~/repo
     steps:
       - checkout
-      - run:
-          name: Run docker compose
-          command: make start-dev
       - restore_cache:
           keys:
             - v1-dependencies-{{ checksum "core/requirements_test.txt" }}-{{ checksum ".pre-commit-config.yaml" }}
@@ -48,17 +51,3 @@ jobs:
             coverage combine
             coverage xml
             ./cc-test-reporter after-build --exit-code $?
-
-commands:
-  run_make:
-    description: Run makefile target with some setup
-    parameters:
-      label:
-        type: string
-        default: Execute make << parameters.target >>
-      target:
-        type: string
-    steps:
-      - run:
-          name: << parameters.label >>
-          command: make << parameters.target >>
