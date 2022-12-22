@@ -13,7 +13,7 @@ jobs:
     steps:
       - checkout
       - run_make:
-          label: Run build
+          label: Run docker compose
           target: start-dev
       - restore_cache:
           keys:
@@ -48,3 +48,17 @@ jobs:
             coverage combine
             coverage xml
             ./cc-test-reporter after-build --exit-code $?
+
+commands:
+  run_make:
+    description: Run makefile target with some setup
+    parameters:
+      label:
+        type: string
+        default: Execute make << parameters.target >>
+      target:
+        type: string
+    steps:
+      - run:
+          name: << parameters.label >>
+          command: make << parameters.target >>
