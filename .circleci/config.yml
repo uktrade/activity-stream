@@ -12,9 +12,9 @@ jobs:
     working_directory: ~/repo
     steps:
       - checkout
-      - run_make:
-          label: Run docker compose
-          target: start-dev
+      - run:
+          name: Run docker compose
+          command: make start-dev
       - restore_cache:
           keys:
             - v1-dependencies-{{ checksum "core/requirements_test.txt" }}-{{ checksum ".pre-commit-config.yaml" }}
