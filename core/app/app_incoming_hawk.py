@@ -15,7 +15,7 @@ from .app_incoming_redis import (
 
 
 async def authenticate_hawk_header(context, nonce_expire, lookup_credentials,
-                                   header, method, host, port, path, content_type, content):
+                                   header, method, host, port, path, content_type, content, request):
 
     is_valid_header = re.match(r'^Hawk (((?<="), )?[a-z]+="[^"]*")*$', header)
     if not is_valid_header:
@@ -57,6 +57,7 @@ async def authenticate_hawk_header(context, nonce_expire, lookup_credentials,
         return False, 'Stale ts', None
 
     if not hmac.compare_digest(correct_mac, parsed_header['mac']):
+        request["logger"].info(f"Correct mac: {correct_mac}, invalid mac: {parsed_header['mac']}")
         return False, 'Invalid mac', None
 
     if not await is_nonce_available(context, parsed_header['nonce'], matching_credentials['id'],

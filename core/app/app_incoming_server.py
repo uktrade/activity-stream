@@ -78,6 +78,7 @@ def authenticator(context, incoming_key_pairs, nonce_expire):
             path=request.url.raw_path_qs,
             content_type=request.headers["Content-Type"].encode("utf-8"),
             content=await request.read(),
+            request=request
         )
 
         if not is_authentic:

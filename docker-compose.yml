@@ -3,7 +3,6 @@ services:
   activity-stream:
     depends_on:
       - activity-stream-redis
-      #      - activity-stream-postgres
       - opensearch
       - verification-feed
     build:
@@ -40,7 +39,6 @@ services:
   verification-feed:
     depends_on:
       - activity-stream-redis
-      #      - activity-stream-postgres
       - opensearch
     build:
       context: ./verification_feed
@@ -71,16 +69,6 @@ services:
       - ACTIVITY_STREAM_OUTGOING_URL= http://activity-stream:8081/v2/activities
       - ACTIVITY_STREAM_OUTGOING_ACCESS_KEY_ID=incoming-some-id-1
       - ACTIVITY_STREAM_OUTGOING_SECRET_ACCESS_KEY=incoming-some-secret-1
-
-  #  activity-stream-postgres:
-  #    image: postgres:9.5
-  #    restart: always
-  #    ports:
-  #      - 5432:5432
-  #    environment:
-  #      - POSTGRES_DB=activity-stream
-  #      - POSTGRES_USER=user
-  #      - POSTGRES_PASSWORD=password
 
   activity-stream-redis:
     image: redis:6.2.6
