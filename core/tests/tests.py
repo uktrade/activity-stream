@@ -1896,7 +1896,7 @@ class TestApplication(TestBase):
             'FEEDS__1__ATTENDEES_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listAttendees_no_company.json',
             'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
-            'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
+            'http://localhost:8081/tests_fixture_aventri_listQuestions_empty.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -1945,10 +1945,7 @@ class TestApplication(TestBase):
         self.assertEqual(attendee['object']['dit:aventri:companyname'], None)
         self.assertEqual(attendee['object']['dit:emailAddress'], 'test@test.com')
         self.assertEqual(attendee['object']['dit:aventri:virtual_event_attendance'], 'Yes')
-        self.assertEqual(
-            attendee['object']['dit:aventri:attendeeQuestions'],
-            {'question_1': '1', 'question_2': 'Answer', 'question_3': '2'}
-        )
+        self.assertEqual(attendee['object']['dit:aventri:attendeeQuestions'], {})
 
     @async_test
     async def test_aventri_event_with_zero_dates(self):
