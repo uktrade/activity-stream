@@ -402,16 +402,14 @@ class EventFeed(Feed):
                     async for attendee in gen_attendees(event):
                         yield self.map_to_attendee_activity(attendee, event)
 
-        async def gen_event_questions(event):
+        async def gen_event_questions(event_id):
             response = await self.http_make_aventri_request(
                 context,
                 'GET',
-                self.event_questions_list_url.format(event_id=event['eventid']),
+                self.event_questions_list_url.format(event_id=event_id),
                 data=b'',
             )
-            return [
-                question['ds_fieldname'] for question in response.json()['ResultSet']
-            ]
+            return [question['ds_fieldname'] for question in response.values()]
 
         async def gen_events():
             next_page = 1
