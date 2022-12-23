@@ -9,6 +9,7 @@ from io import TextIOWrapper, BytesIO
 import aiohttp
 import yarl
 
+from . import settings
 from .hawk import (
     get_hawk_header,
 )
@@ -47,7 +48,8 @@ class Feed(metaclass=ABCMeta):
     down_grace_period = 60 * 2
 
     full_ingest_page_interval = 0.25
-    full_ingest_interval = 120
+    full_ingest_interval = settings.FULL_INGEST_SECONDS_INTERVAL
+    print(f"full_ingest_interval: {full_ingest_interval}")
     updates_page_interval = 1
     exception_intervals = [1, 2, 4, 8, 16, 32, 64]
 

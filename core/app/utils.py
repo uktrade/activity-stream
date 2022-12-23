@@ -77,8 +77,9 @@ def get_common_config(env):
         'dsn': env['SENTRY_DSN'],
         'environment': env['SENTRY_ENVIRONMENT'],
     }
+    full_ingest_interval = env.get('FULL_INGEST_SECONDS_INTERVAL')
     return es_uri, es_version, es_aws_access_key_id, es_aws_secret_access_key, es_aws_region, \
-        redis_uri, sentry
+        redis_uri, sentry, full_ingest_interval
 
 
 def normalise_environment(key_values):
