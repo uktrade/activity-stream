@@ -1867,9 +1867,10 @@ class TestApplication(TestBase):
         self.assertEqual(attendee['object']['dit:aventri:companyname'], 'Applesoft')
         self.assertEqual(attendee['object']['dit:emailAddress'], 'test@test.com')
         self.assertEqual(attendee['object']['dit:aventri:virtual_event_attendance'], 'Yes')
-        self.assertEqual(attendee['object']['dit:aventri:question_1'], '1')
-        self.assertEqual(attendee['object']['dit:aventri:question_2'], 'Answer')
-        self.assertEqual(attendee['object']['dit:aventri:question_3'], '2')
+        self.assertEqual(
+            attendee['object']['dit:aventri:attendeeQuestions'],
+            {'question_1': '1', 'question_2': 'Answer', 'question_3': '2'}
+        )
 
     @async_test
     async def test_aventri_attendee_with_no_company(self):
@@ -1944,9 +1945,10 @@ class TestApplication(TestBase):
         self.assertEqual(attendee['object']['dit:aventri:companyname'], None)
         self.assertEqual(attendee['object']['dit:emailAddress'], 'test@test.com')
         self.assertEqual(attendee['object']['dit:aventri:virtual_event_attendance'], 'Yes')
-        self.assertEqual(attendee['object']['dit:aventri:question_1'], '1')
-        self.assertEqual(attendee['object']['dit:aventri:question_2'], 'Answer')
-        self.assertEqual(attendee['object']['dit:aventri:question_3'], '2')
+        self.assertEqual(
+            attendee['object']['dit:aventri:attendeeQuestions'],
+            {'question_1': '1', 'question_2': 'Answer', 'question_3': '2'}
+        )
 
     @async_test
     async def test_aventri_event_with_zero_dates(self):
