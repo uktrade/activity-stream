@@ -273,11 +273,13 @@ class EventFeed(Feed):
 
     @classmethod
     def parse_config(cls, config):
-        return cls(**sub_dict_lower(
-            config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL', 'ATTENDEES_LIST_URL'
-                     ]))
+        return cls(
+            **sub_dict_lower(
+                config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL',
+                         'ATTENDEES_LIST_URL', 'EVENT_QUESTIONS_LIST_URL']))
 
-    def __init__(self, unique_id, seed, account_id, api_key, auth_url, attendees_list_url):
+    def __init__(self, unique_id, seed, account_id, api_key, auth_url, attendees_list_url,
+                 event_questions_list_url):
         self.lock = asyncio.Lock()
         self.unique_id = unique_id
         self.seed = seed
@@ -285,6 +287,7 @@ class EventFeed(Feed):
         self.api_key = api_key
         self.auth_url = auth_url
         self.attendees_list_url = attendees_list_url
+        self.event_questions_list_url = event_questions_list_url
         self.accesstoken = None
 
     @staticmethod
@@ -397,7 +400,18 @@ class EventFeed(Feed):
                     yield self.map_to_event_activity(event)
 
                     async for attendee in gen_attendees(event):
-                        yield self.map_to_attendee_activity(attendee)
+                        yield self.map_to_attendee_activity(attendee, event)
+
+        async def gen_event_questions(event):
+            response = await self.http_make_aventri_request(
+                context,
+                'GET',
+                self.event_questions_list_url.format(event_id=event['eventid']),
+                data=b'',
+            )
+            return [
+                question['ds_fieldname'] for question in response.json()['ResultSet']
+            ]
 
         async def gen_events():
             next_page = 1
@@ -413,6 +427,7 @@ class EventFeed(Feed):
                     context, 'GET', self.seed, data=b'', params=params,
                 )
                 for event in page_of_events:
+                    event['questions'] = await gen_event_questions(event['eventid'])
                     yield event
 
                 if len(page_of_events) != page_size:
@@ -531,8 +546,8 @@ class EventFeed(Feed):
             }
         }
 
-    def map_to_attendee_activity(self, attendee):
-        event_id = attendee['eventid']
+    def map_to_attendee_activity(self, attendee, event):
+        event_id = event['eventid']
         attendee_id = attendee['attendeeid']
         return {
             'id': 'dit:aventri:Event:' + event_id + ':Attendee:' + attendee_id + ':Create',
@@ -561,6 +576,10 @@ class EventFeed(Feed):
                     'company',
                     None
                 ),
+                'dit:aventri:attendeeQuestions': {
+                    question: attendee.get(question)
+                    for question in event['questions']
+                },
                 'dit:aventri:virtual_event_attendance': attendee['virtual_event_attendance'],
                 'dit:emailAddress': attendee['email'],
                 'dit:firstName': attendee['fname'],

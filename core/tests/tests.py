@@ -1817,6 +1817,8 @@ class TestApplication(TestBase):
             'FEEDS__1__AUTH_URL': 'http://localhost:8081/tests_fixture_aventri_authorize.json',
             'FEEDS__1__ATTENDEES_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listAttendees.json',
+            'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -1865,6 +1867,9 @@ class TestApplication(TestBase):
         self.assertEqual(attendee['object']['dit:aventri:companyname'], 'Applesoft')
         self.assertEqual(attendee['object']['dit:emailAddress'], 'test@test.com')
         self.assertEqual(attendee['object']['dit:aventri:virtual_event_attendance'], 'Yes')
+        self.assertEqual(attendee['object']['dit:aventri:question_1'], '1')
+        self.assertEqual(attendee['object']['dit:aventri:question_2'], 'Answer')
+        self.assertEqual(attendee['object']['dit:aventri:question_3'], '2')
 
     @async_test
     async def test_aventri_attendee_with_no_company(self):
@@ -1889,6 +1894,8 @@ class TestApplication(TestBase):
             'FEEDS__1__AUTH_URL': 'http://localhost:8081/tests_fixture_aventri_authorize.json',
             'FEEDS__1__ATTENDEES_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listAttendees_no_company.json',
+            'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -1937,6 +1944,9 @@ class TestApplication(TestBase):
         self.assertEqual(attendee['object']['dit:aventri:companyname'], None)
         self.assertEqual(attendee['object']['dit:emailAddress'], 'test@test.com')
         self.assertEqual(attendee['object']['dit:aventri:virtual_event_attendance'], 'Yes')
+        self.assertEqual(attendee['object']['dit:aventri:question_1'], '1')
+        self.assertEqual(attendee['object']['dit:aventri:question_2'], 'Answer')
+        self.assertEqual(attendee['object']['dit:aventri:question_3'], '2')
 
     @async_test
     async def test_aventri_event_with_zero_dates(self):
@@ -1962,6 +1972,8 @@ class TestApplication(TestBase):
             'FEEDS__1__AUTH_URL': 'http://localhost:8081/tests_fixture_aventri_authorize.json',
             'FEEDS__1__ATTENDEES_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listAttendees_empty.json',
+            'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -2013,6 +2025,8 @@ class TestApplication(TestBase):
             'FEEDS__1__AUTH_URL': 'http://localhost:8081/tests_fixture_aventri_authorize.json',
             'FEEDS__1__ATTENDEES_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listAttendees_empty.json',
+            'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
