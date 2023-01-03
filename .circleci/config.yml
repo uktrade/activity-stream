@@ -5,6 +5,16 @@ jobs:
       - image: python:3.7.7
         environment:
           PRE_COMMIT_HOME: /root/cache/pre-commit
+      - image: opensearchproject/opensearch:1.1.0
+        environment:
+          discovery.type: single-node
+        entrypoint: bash
+        command: >
+          -c '
+            rm -r -f /usr/share/opensearch/plugins/opensearch-security &&
+            exec /usr/share/opensearch/opensearch-docker-entrypoint.sh
+          '
+      - image: redis:4.0.10
     working_directory: ~/repo
     steps:
       - checkout
@@ -31,20 +41,7 @@ jobs:
             - ./cc-test-reporter
       - run:
           name: Run linting
-          command: pre-commit run --files core/* core/*/* verification_feed/* verification_feed/*/*
-      - setup_remote_docker:
-          version: 20.10.14
-      - run:
-          name: Install Docker Compose
-          command: |
-            set -x
-            curl -L https://github.com/docker/compose/releases/download/1.11.2/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
-            chmod +x /usr/local/bin/docker-compose
-      - run:
-          name: Start container and verify it's working
-          command: |
-            set -x
-            docker-compose up -d
+          command: pre-commit run --files core/* core/*/* verification_feed/* verification_feed/*/*      
       - run:
           name: Run tests
           command: |
