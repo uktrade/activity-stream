@@ -13,7 +13,12 @@ Data is collected from:
 - https://www.datahub.trade.gov.uk/
 - Specific ad-hoc web pages added to search at https://www.great.gov.uk/search-key-pages
 
-# Installation
+# Running using Docker
+Running `docker-compose up` will create a local docker environment that contains:
+- The Activity Stream app, that is running the `core.app.app_incoming` and `core.app.app_outgoing` scripts
+- The verification feed that populates the ES database with example data
+
+# Native Installation
 
     $ git clone https://github.com/uktrade/activity-stream
     $ cd activity-stream
@@ -104,7 +109,7 @@ And add to the bottom of the `deactivate ()` function in that file.
     unset VCAP_SERVICES
 ```
 
-# Running the apps locally
+## Running the apps locally
 
 Run Elasticsearch and Redis using docker
 
@@ -122,7 +127,7 @@ Running an example app that Outgoing will pull data from:
 
     PORT=8082 python3 verification_feed/app.py
 
-## Populating an empty local database with data
+### Populating an empty local database with data
 
 The database ActivityStream is in a docker image and it is wiped of data each time you restart the image.
 
@@ -134,7 +139,7 @@ Or:
 
 2. Add a new set of environment variables that point the locally running Outgoing script to the currently running endpoints for one of the projects in staging. A few sets of environment variables to add for various feeds can be found in Vault in the "Activity Stream > Staging" folder. When these have been added, run the Outgoing script. Optionally add these environment variables to your `ENV/bin/activate` script to have them run each time
 
-## Viewing your local data
+# Viewing your local data
 
 To quickly check how many documents are in your activity stream database and the current names of the indices, use:
 
@@ -158,6 +163,8 @@ To run all of the tests
 Running a single test takes the format:
 
     python3 -m unittest -v -b core.tests.tests.TestApplication.test_aventri
+
+
 
 ## Release process
 
