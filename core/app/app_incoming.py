@@ -79,7 +79,6 @@ async def run_incoming_application():
             for key_pair in env["INCOMING_ACCESS_KEY_PAIRS"]
         ]
         ip_whitelist = env["INCOMING_IP_WHITELIST"]
-        print(f"incoming_key_pairs: {(incoming_key_pairs)}")
 
     settings.ES_URI = es_uri
     settings.ES_VERSION = es_version

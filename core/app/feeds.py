@@ -2,7 +2,7 @@ from abc import ABCMeta, abstractmethod
 import asyncio
 import csv
 import datetime
-from distutils.util import strtobool    # pylint: disable=import-error, no-name-in-module
+from distutils.util import strtobool  # pylint: disable=import-error, no-name-in-module
 from json import JSONDecodeError
 import re
 from io import TextIOWrapper, BytesIO
@@ -161,14 +161,17 @@ class ActivityStreamFeed(Feed):
     @classmethod
     def parse_config(cls, config):
         return cls(**sub_dict_lower(config,
-                                    ['UNIQUE_ID', 'SEED', 'ACCESS_KEY_ID', 'SECRET_ACCESS_KEY']))
+                                    ['UNIQUE_ID', 'SEED', 'ACCESS_KEY_ID', 'SECRET_ACCESS_KEY',
+                                     'FULL_INGEST_INTERVAL']))
 
-    def __init__(self, unique_id, seed, access_key_id, secret_access_key):
+    def __init__(self, unique_id, seed, access_key_id, secret_access_key, full_ingest_interval):
         self.lock = asyncio.Lock()
         self.unique_id = unique_id
         self.seed = seed
         self.access_key_id = access_key_id
         self.secret_access_key = secret_access_key
+        if full_ingest_interval is not None:
+            self.full_ingest_interval = full_ingest_interval
 
     @classmethod
     async def get_activities(cls, _, feed):
@@ -257,7 +260,6 @@ class ZendeskFeed(Feed):
 
 
 class EventFeed(Feed):
-
     down_grace_period = 60 * 60 * 4
     full_ingest_page_interval = 0  # There are sleeps in tht HTTP requests in this class
     full_ingest_interval = 60 * 60
@@ -360,7 +362,7 @@ class EventFeed(Feed):
                 return results
             except aiohttp.ClientResponseError as client_error:
                 if (num_attempts >= max_attempts or client_error.status not in [
-                        429, 502, 504,
+                    429, 502, 504,
                 ]):
                     raise
                 logger.debug(
@@ -574,7 +576,7 @@ class EventFeed(Feed):
     def format_datetime(aventri_datetime):
         return \
             None if (aventri_datetime is None or aventri_datetime == '0000-00-00 00:00:00') else \
-            datetime.datetime.strptime(aventri_datetime, '%Y-%m-%d %H:%M:%S').isoformat()
+                datetime.datetime.strptime(aventri_datetime, '%Y-%m-%d %H:%M:%S').isoformat()
 
     @staticmethod
     def format_date_and_time(aventri_date, aventri_time):
@@ -592,7 +594,7 @@ class EventFeed(Feed):
     def format_date(aventri_datetime):
         return \
             None if (aventri_datetime is None or aventri_datetime == '0000-00-00') else \
-            datetime.datetime.strptime(aventri_datetime, '%Y-%m-%d').isoformat()
+                datetime.datetime.strptime(aventri_datetime, '%Y-%m-%d').isoformat()
 
     @classmethod
     async def get_activities(cls, _, feed):
@@ -600,7 +602,6 @@ class EventFeed(Feed):
 
 
 class MaxemailFeed(Feed):
-
     down_grace_period = 60 * 60 * 4
 
     full_ingest_page_interval = 0.1
@@ -708,19 +709,19 @@ class MaxemailFeed(Feed):
             year, time = campaign['start_ts'].split(' ')
             timestamp = f'{year}T{time}'
             return {
-                'type': 'dit:maxemail:Campaign',
-                'id': 'dit:maxemail:Campaign:' + email_campaign_id,
-                'name': campaign['name'],
-                'content': campaign['description'],
-                'dit:emailSubject': campaign['subject_line'],
-                'dit:maxemail:Campaign:id': int(email_campaign_id),
-                'published': timestamp
-            }, {
-                'type': ['Organization', 'dit:maxemail:Sender'],
-                'id': 'dit:maxemail:Sender:' + campaign['from_address'],
-                'name': campaign['from_address_alias'],
-                'dit:emailAddress': campaign['from_address'],
-            }
+                       'type': 'dit:maxemail:Campaign',
+                       'id': 'dit:maxemail:Campaign:' + email_campaign_id,
+                       'name': campaign['name'],
+                       'content': campaign['description'],
+                       'dit:emailSubject': campaign['subject_line'],
+                       'dit:maxemail:Campaign:id': int(email_campaign_id),
+                       'published': timestamp
+                   }, {
+                       'type': ['Organization', 'dit:maxemail:Sender'],
+                       'id': 'dit:maxemail:Sender:' + campaign['from_address'],
+                       'name': campaign['from_address_alias'],
+                       'dit:emailAddress': campaign['from_address'],
+                   }
 
         async def get_data_export_key(timestamp, method):
             """
@@ -771,7 +772,6 @@ class MaxemailFeed(Feed):
             url = feed.data_export_url.format(key=key)
             with logged(context.logger.debug, context.logger.warning,
                         'maxemail data export csv (%s)', [url]):
-
                 lines_iter = TextIOWrapper(BytesIO((await http_make_request(
                     context.single_use_session,
                     context.metrics,
@@ -905,13 +905,13 @@ class MaxemailFeed(Feed):
         async def gen_campains_activities_and_timestamp(campaigns, timestamp):
             for campaign_obj, campaign_sender in campaigns.values():
                 yield {
-                    'id': campaign_obj['id'] + ':Create',
-                    'type': 'Create',
-                    'dit:application': 'maxemail',
-                    'published': campaign_obj['published'],
-                    'object': campaign_obj,
-                    'actor': campaign_sender
-                }, timestamp
+                          'id': campaign_obj['id'] + ':Create',
+                          'type': 'Create',
+                          'dit:application': 'maxemail',
+                          'published': campaign_obj['published'],
+                          'object': campaign_obj,
+                          'actor': campaign_sender
+                      }, timestamp
 
         async def paginate(page_size, objs):
             page = []

@@ -28,6 +28,7 @@ services:
       - FEEDS__1__ACCESS_KEY_ID=some-id
       - FEEDS__1__SECRET_ACCESS_KEY=some-secret
       - FEEDS__1__TYPE=activity_stream
+      - FEEDS__1__FULL_INGEST_INTERVAL=15
       - INCOMING_ACCESS_KEY_PAIRS__1__KEY_ID=incoming-some-id-1
       - INCOMING_ACCESS_KEY_PAIRS__1__SECRET_KEY=incoming-some-secret-1
       - INCOMING_ACCESS_KEY_PAIRS__1__PERMISSIONS__activities__1=__MATCH_ALL__
