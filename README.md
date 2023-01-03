@@ -159,6 +159,12 @@ Running a single test takes the format:
 
     python3 -m unittest -v -b core.tests.tests.TestApplication.test_aventri
 
+## Running using Docker
+Running `docker-compose up` will create a local docker environment that contains:
+- The Activity Stream app, that is running the `core.app.app_incoming` and `core.app.app_outgoing` scripts
+- The verification feed that populates the ES database with example data
+- The incoming feed app, that accepts requests on the `/events` endpoint and forwards them to the activity stream app via an nginx proxy. This app is in place to mimic the logic provided by GOV PASS, which forwards HTTP Headers to the activity stream app
+
 ## Release process
 
 ### Linting
