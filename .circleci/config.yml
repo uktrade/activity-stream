@@ -41,7 +41,7 @@ jobs:
             - ./cc-test-reporter
       - run:
           name: Run linting
-          command: pre-commit run --files core/* core/*/* verification_feed/* verification_feed/*/*
+          command: pre-commit run --files core/* core/*/* verification_feed/* verification_feed/*/*      
       - run:
           name: Run tests
           command: |
