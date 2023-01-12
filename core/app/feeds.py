@@ -578,7 +578,8 @@ class EventFeed(Feed):
                     question: attendee.get(question)
                     for question in event['questions']
                 },
-                'dit:aventri:virtual_event_attendance': attendee['virtual_event_attendance'],
+                'dit:aventri:virtualEventAttendance': attendee['virtual_event_attendance'],
+                'dit:aventri:lastLobbyLogin': self.format_datetime(attendee['last_lobby_login']),
                 'dit:emailAddress': attendee['email'],
                 'dit:firstName': attendee['fname'],
                 'dit:lastName': attendee['lname'],
