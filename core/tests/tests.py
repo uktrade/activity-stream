@@ -1867,7 +1867,7 @@ class TestApplication(TestBase):
         self.assertEqual(attendee['object']['dit:aventri:companyname'], 'Applesoft')
         self.assertEqual(attendee['object']['dit:emailAddress'], 'test@test.com')
         self.assertEqual(attendee['object']['dit:aventri:virtualEventAttendance'], 'Yes')
-        self.assertEqual(event['object']['dit:aventri:lastLobbyLogin'], '2018-08-23T04:37:39')
+        self.assertEqual(attendee['object']['dit:aventri:lastLobbyLogin'], '2018-08-23T04:37:39')
         self.assertEqual(
             attendee['object']['dit:aventri:attendeeQuestions'],
             {'question_1': '1', 'question_2': 'Answer', 'question_3': '2'}
