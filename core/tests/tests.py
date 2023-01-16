@@ -1866,7 +1866,8 @@ class TestApplication(TestBase):
         self.assertEqual(attendee['object']['dit:aventri:lastname'], 'Gates')
         self.assertEqual(attendee['object']['dit:aventri:companyname'], 'Applesoft')
         self.assertEqual(attendee['object']['dit:emailAddress'], 'test@test.com')
-        self.assertEqual(attendee['object']['dit:aventri:virtual_event_attendance'], 'Yes')
+        self.assertEqual(attendee['object']['dit:aventri:virtualEventAttendance'], 'Yes')
+        self.assertEqual(attendee['object']['dit:aventri:lastLobbyLogin'], '2018-08-23T04:37:39')
         self.assertEqual(
             attendee['object']['dit:aventri:attendeeQuestions'],
             {'question_1': '1', 'question_2': 'Answer', 'question_3': '2'}
@@ -1944,7 +1945,7 @@ class TestApplication(TestBase):
         self.assertEqual(attendee['object']['dit:aventri:lastname'], 'Gates')
         self.assertEqual(attendee['object']['dit:aventri:companyname'], None)
         self.assertEqual(attendee['object']['dit:emailAddress'], 'test@test.com')
-        self.assertEqual(attendee['object']['dit:aventri:virtual_event_attendance'], 'Yes')
+        self.assertEqual(attendee['object']['dit:aventri:virtualEventAttendance'], 'Yes')
         self.assertEqual(attendee['object']['dit:aventri:attendeeQuestions'], {})
 
     @async_test
