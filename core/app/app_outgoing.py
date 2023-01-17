@@ -285,6 +285,9 @@ async def ingest_full(parent_context, feed):
                                             objects_index_name, feed.unique_id)
         await set_feed_updates_seed_url(context, feed.unique_id, updates_href)
 
+    asyncio.ensure_future(set_feed_status(
+        context, feed.unique_id, feed.down_grace_period, b'GREEN'))
+
 
 async def ingest_updates(parent_context, feed):
     """Perform a single "updates" ingest cycle of a paginated source feed
@@ -414,9 +417,6 @@ async def ingest_page(context, activities, ingest_type, feed, activity_index_nam
                 metric_counter(context.metrics['ingest_activities_nonunique_total'],
                                [feed.unique_id, ingest_type], num_es_documents):
             await es_bulk_ingest(context, activities, activity_index_names, objects_index_names)
-
-        asyncio.ensure_future(set_feed_status(
-            context, feed.unique_id, feed.down_grace_period, b'GREEN'))
 
 
 async def set_metric_if_can(metric, labels, get_value_coroutine):
