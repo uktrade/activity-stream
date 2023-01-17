@@ -390,6 +390,7 @@ class EventFeed(Feed):
                     await sleep(context, retry_interval)
 
     async def pages(self, context, feed, href, ingest_type):
+        # pylint: disable=too-many-statements
         logger = context.logger
 
         async def gen_activities(href):
@@ -672,8 +673,9 @@ class EventFeed(Feed):
         event_id = event['eventid']
         session_id = registration['sessionid']
         attendee_id = registration['attendeeid']
+        as_id = ':Session:' + session_id + ':Attendee:' + attendee_id
         return {
-            'id': 'dit:aventri:Event:' + event_id + ':Session:' + session_id + ':Attendee:' + attendee_id + ':Create',
+            'id': 'dit:aventri:Event:' + event_id + as_id + ':Create',
             'type': 'dit:aventri:SessionRegistration',
             'dit:application': 'aventri',
             'object': {
@@ -685,7 +687,7 @@ class EventFeed(Feed):
                 'type': ['dit:aventri:SessionRegistration'],
                 'dit:aventri:session_id': session_id,
                 'dit:aventri:attendee_id': attendee_id,
-                'dit:aventri:lastmodified': registration['lastmodified'],
+                'dit:aventri:lastmodified': self.format_datetime(registration['lastmodified']),
                 'dit:aventri:registration_status': registration['registration_status'],
             }
         }

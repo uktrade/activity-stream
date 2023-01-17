@@ -1796,6 +1796,7 @@ class TestApplication(TestBase):
 
     @async_test
     async def test_aventri(self):
+        # pylint: disable=too-many-statements
         def aventri_fetch(results):
             if 'hits' not in results or 'hits' not in results['hits']:
                 return False
@@ -1820,6 +1821,10 @@ class TestApplication(TestBase):
             'http://localhost:8081/tests_fixture_aventri_listAttendees.json',
             'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
+            'FEEDS__1__SESSIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessions.json',
+            'FEEDS__1__SESSION_REGISTRATIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessionRegistrations.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -1888,6 +1893,43 @@ class TestApplication(TestBase):
         attendee_deleted_event = attendees[1]
         self.assertEqual(deleted_event['object']['type'], ['dit:aventri:Event', 'Tombstone'])
         self.assertEqual(attendee_deleted_event['object']['dit:aventri:attendeeQuestions'], None)
+        
+        session = results_dict['hits']['hits'][2]['_source']
+
+        self.assertEqual(session['dit:application'], 'aventri')
+        self.assertEqual(session['id'], 'dit:aventri:Event:1:Session:2:Create')
+        self.assertEqual(session['type'], 'dit:aventri:Session')
+
+        self.assertEqual(
+            session['object']['attributedTo'],
+            {'type': 'dit:aventri:Event', 'id': 'dit:aventri:Event:1'}
+        )
+        self.assertEqual(session['object']['id'], 'dit:aventri:Session:2')
+        self.assertEqual(session['object']['type'], ['dit:aventri:Session'])
+        self.assertEqual(session['object']['published'], '2019-11-12T00:00:00')
+        self.assertEqual(session['object']['dit:aventri:starttime'], '11:15:00')
+        self.assertEqual(session['object']['dit:aventri:endtime'], '12:45:00')
+        self.assertEqual(session['object']['dit:aventri:name'], 'Session 2')
+        self.assertEqual(session['object']['dit:aventri:desc'],
+                         'Export Market Research Clinic: Session 2')
+
+        registration = results_dict['hits']['hits'][3]['_source']
+
+        self.assertEqual(registration['dit:application'], 'aventri')
+        self.assertEqual(registration['id'], 'dit:aventri:Event:1:Session:2:Attendee:1:Create')
+        self.assertEqual(registration['type'], 'dit:aventri:SessionRegistration')
+
+        self.assertEqual(
+            registration['object']['attributedTo'],
+            {'type': 'dit:aventri:Event', 'id': 'dit:aventri:Event:1'}
+        )
+        self.assertEqual(registration['object']['id'], 'dit:aventri:Session:2:Attendee:1')
+        self.assertEqual(registration['object']['type'], ['dit:aventri:SessionRegistration'])
+        # self.assertEqual(registration['object']['published'], '2018-08-31T11:44:00')
+        self.assertEqual(registration['object']['dit:aventri:session_id'], '2')
+        self.assertEqual(registration['object']['dit:aventri:attendee_id'], '1')
+        self.assertEqual(registration['object']['dit:aventri:lastmodified'], '2019-11-06T11:55:52')
+        self.assertEqual(registration['object']['dit:aventri:registration_status'], 'Cancelled')
 
     @async_test
     async def test_aventri_attendee_with_no_company(self):
@@ -1914,6 +1956,10 @@ class TestApplication(TestBase):
             'http://localhost:8081/tests_fixture_aventri_listAttendees_no_company.json',
             'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listQuestions_empty.json',
+            'FEEDS__1__SESSIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessions.json',
+            'FEEDS__1__SESSION_REGISTRATIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessionRegistrations.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -1990,6 +2036,10 @@ class TestApplication(TestBase):
             'http://localhost:8081/tests_fixture_aventri_listAttendees_empty.json',
             'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
+            'FEEDS__1__SESSIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessions.json',
+            'FEEDS__1__SESSION_REGISTRATIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessionRegistrations.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -2043,6 +2093,10 @@ class TestApplication(TestBase):
             'http://localhost:8081/tests_fixture_aventri_listAttendees_empty.json',
             'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
+            'FEEDS__1__SESSIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessions.json',
+            'FEEDS__1__SESSION_REGISTRATIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessionRegistrations.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
