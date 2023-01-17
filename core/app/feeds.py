@@ -44,7 +44,7 @@ class Feed(metaclass=ABCMeta):
     """
     Abstract base class for all feeds with default functionality defined
     """
-    down_grace_period = 60 * 2
+    down_grace_period = 60 * 60 * 48
 
     full_ingest_page_interval = 0.25
     full_ingest_interval = 120
@@ -258,7 +258,7 @@ class ZendeskFeed(Feed):
 
 class EventFeed(Feed):
 
-    down_grace_period = 60 * 60 * 48
+    down_grace_period = 60 * 60 * 4
     full_ingest_page_interval = 0  # There are sleeps in tht HTTP requests in this class
     full_ingest_interval = 60 * 60
 
