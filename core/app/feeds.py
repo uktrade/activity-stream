@@ -276,10 +276,11 @@ class EventFeed(Feed):
         return cls(
             **sub_dict_lower(
                 config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL',
-                         'ATTENDEES_LIST_URL', 'EVENT_QUESTIONS_LIST_URL']))
+                         'ATTENDEES_LIST_URL', 'EVENT_QUESTIONS_LIST_URL', 'SESSIONS_LIST_URL',
+                         'SESSION_REGISTRATIONS_LIST_URL']))
 
     def __init__(self, unique_id, seed, account_id, api_key, auth_url, attendees_list_url,
-                 event_questions_list_url):
+                 event_questions_list_url, sessions_list_url, session_registrations_list_url):
         self.lock = asyncio.Lock()
         self.unique_id = unique_id
         self.seed = seed
@@ -288,6 +289,8 @@ class EventFeed(Feed):
         self.auth_url = auth_url
         self.attendees_list_url = attendees_list_url
         self.event_questions_list_url = event_questions_list_url
+        self.sessions_list_url = sessions_list_url
+        self.session_registrations_list_url = session_registrations_list_url
         self.accesstoken = None
 
     @staticmethod
@@ -402,6 +405,12 @@ class EventFeed(Feed):
                     async for attendee in gen_attendees(event):
                         yield self.map_to_attendee_activity(attendee, event)
 
+                    async for session in gen_sessions(event):
+                        yield self.map_to_session_activity(session, event)
+
+                    async for registration in gen_registrations(event):
+                        yield self.map_to_registration_activity(registration, event)
+
         async def gen_event_questions(event_id):
             response = await self.http_make_aventri_request(
                 context,
@@ -459,6 +468,54 @@ class EventFeed(Feed):
                     yield attendee
 
                 if len(attendees) != page_size:
+                    break
+
+                next_page += 1
+
+        async def gen_sessions(event):
+            logger = context.logger
+            url = self.sessions_list_url.format(event_id=event['eventid'])
+
+            next_page = 1
+            # Be careful of bigger: sometimes is very slow
+            page_size = 100
+            while True:
+                params = (
+                    ('pageNumber', str(next_page)),
+                    ('pageSize', str(page_size)),
+                )
+                with logged(logger.debug, logger.warning, 'Fetching sessions list', []):
+                    sessions = await self.http_make_aventri_request(
+                        context, 'GET', url, data=b'', params=params,
+                    )
+                for session in sessions:
+                    yield session
+
+                if len(sessions) != page_size:
+                    break
+
+                next_page += 1
+
+        async def gen_registrations(event):
+            logger = context.logger
+            url = self.session_registrations_list_url.format(event_id=event['eventid'])
+
+            next_page = 1
+            # Be careful of bigger: sometimes is very slow
+            page_size = 100
+            while True:
+                params = (
+                    ('pageNumber', str(next_page)),
+                    ('pageSize', str(page_size)),
+                )
+                with logged(logger.debug, logger.warning, 'Fetching sessions list', []):
+                    sessions = await self.http_make_aventri_request(
+                        context, 'GET', url, data=b'', params=params,
+                    )
+                for session in sessions:
+                    yield session
+
+                if len(sessions) != page_size:
                     break
 
                 next_page += 1
@@ -554,7 +611,7 @@ class EventFeed(Feed):
         event_id = event['eventid']
         attendee_id = attendee['attendeeid']
         return {
-            'id': 'dit:aventri:Event:' + event_id + ':Attendee:' + attendee_id + ':Create',
+            'id': 'dit:aventri:Event:' + event_id + ':Session:' + attendee_id + ':Create',
             'published': self.format_datetime(attendee['created']),
             'type': 'dit:aventri:Attendee',
             'dit:application': 'aventri',
@@ -585,6 +642,51 @@ class EventFeed(Feed):
                     question: attendee.get(question)
                     for question in event['questions']
                 } if event['questions'] is not None else None,
+            }
+        }
+
+    def map_to_session_activity(self, session, event):
+        event_id = event['eventid']
+        session_id = session['sessionid']
+        return {
+            'id': 'dit:aventri:Event:' + event_id + ':Session:' + session_id + ':Create',
+            'published': self.format_datetime(session['sessiondate']),
+            'type': 'dit:aventri:Session',
+            'dit:application': 'aventri',
+            'object': {
+                'attributedTo': {
+                    'type': 'dit:aventri:Event',
+                    'id': f'dit:aventri:Event:{event_id}'
+                },
+                'id': 'dit:aventri:Session:' + session_id,
+                'published': self.format_datetime(session['sessiondate']),
+                'type': ['dit:aventri:Session'],
+                'dit:aventri:starttime': session['starttime'],
+                'dit:aventri:endtime': session['endtime'],
+                'dit:aventri:name': session['name'],
+                'dit:aventri:desc': session['desc'],
+            }
+        }
+
+    def map_to_registration_activity(self, registration, event):
+        event_id = event['eventid']
+        session_id = registration['sessionid']
+        attendee_id = registration['attendeeid']
+        return {
+            'id': 'dit:aventri:Event:' + event_id + ':Session:' + session_id + ':Attendee:' + attendee_id + ':Create',
+            'type': 'dit:aventri:SessionRegistration',
+            'dit:application': 'aventri',
+            'object': {
+                'attributedTo': {
+                    'type': 'dit:aventri:Event',
+                    'id': f'dit:aventri:Event:{event_id}'
+                },
+                'id': 'dit:aventri:Session:' + session_id + ':Attendee:' + attendee_id,
+                'type': ['dit:aventri:SessionRegistration'],
+                'dit:aventri:session_id': session_id,
+                'dit:aventri:attendee_id': attendee_id,
+                'dit:aventri:lastmodified': registration['lastmodified'],
+                'dit:aventri:registration_status': registration['registration_status'],
             }
         }
 
