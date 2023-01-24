@@ -1813,7 +1813,8 @@ class TestApplication(TestBase):
             'FEEDS__1__ACCOUNT_ID': '1234',
             'FEEDS__1__API_KEY': '5678',
             'FEEDS__1__TYPE': 'aventri',
-            'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_aventri_listEvents.json',
+            'FEEDS__1__SEED':
+            'http://localhost:8081/tests_fixture_aventri_listEvents_deleted.json',
             'FEEDS__1__AUTH_URL': 'http://localhost:8081/tests_fixture_aventri_authorize.json',
             'FEEDS__1__ATTENDEES_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listAttendees.json',
@@ -1830,7 +1831,7 @@ class TestApplication(TestBase):
 
         self.assertEqual(event['dit:application'], 'aventri')
         self.assertEqual(event['id'], 'dit:aventri:Event:1:Create')
-        self.assertEqual(event['type'], 'dit:aventri:Event')
+        self.assertEqual(event['type'], ['dit:aventri:Event', 'Tombstone'])
 
         self.assertEqual(
             event['object']['attributedTo'],
