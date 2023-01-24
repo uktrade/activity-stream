@@ -2111,7 +2111,6 @@ class TestApplication(TestBase):
         self.assertEqual(
             attendee['object']['dit:aventri:attendeeQuestions'], None
         )
-        
 
     @async_test
     async def test_maxemail(self):
