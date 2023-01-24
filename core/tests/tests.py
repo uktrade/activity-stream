@@ -2065,7 +2065,7 @@ class TestApplication(TestBase):
                 for source in [item['_source']]
                 if 'dit:application' in source and source['dit:application'] == 'aventri'
             ]
-            return len(aventri_events) == 1
+            return len(aventri_events) == 2
 
         env = {
             **mock_env(),
@@ -2077,7 +2077,7 @@ class TestApplication(TestBase):
             'http://localhost:8081/tests_fixture_aventri_listEvents_deleted.json',
             'FEEDS__1__AUTH_URL': 'http://localhost:8081/tests_fixture_aventri_authorize.json',
             'FEEDS__1__ATTENDEES_LIST_URL':
-            'http://localhost:8081/tests_fixture_aventri_listAttendees_empty.json',
+            'http://localhost:8081/tests_fixture_aventri_listAttendees.json',
             'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
             'http://localhost:8081/nonexistent.json',
         }
