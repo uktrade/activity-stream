@@ -2099,7 +2099,7 @@ class TestApplication(TestBase):
             {'type': 'dit:aventri:Folder', 'id': 'dit:aventri:Folder:Test'}
         )
         self.assertEqual(event['object']['id'], 'dit:aventri:Event:1')
-        self.assertEqual(event['object']['type'], ['dit:aventri:Event'])
+        self.assertEqual(event['object']['type'], ['dit:aventri:Event', 'Tombstone'])
         self.assertEqual(event['object']['name'], 'Demo Event')
         self.assertEqual(event['object']['published'], '2018-08-23T04:37:39')
         self.assertEqual(event['object']['dit:aventri:location_city'], 'Melbourne')
