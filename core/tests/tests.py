@@ -1805,7 +1805,7 @@ class TestApplication(TestBase):
                 for source in [item['_source']]
                 if 'dit:application' in source and source['dit:application'] == 'aventri'
             ]
-            return len(aventri_events) == 2
+            return len(aventri_events) == 4
 
         env = {
             **mock_env(),
@@ -1813,7 +1813,8 @@ class TestApplication(TestBase):
             'FEEDS__1__ACCOUNT_ID': '1234',
             'FEEDS__1__API_KEY': '5678',
             'FEEDS__1__TYPE': 'aventri',
-            'FEEDS__1__SEED': 'http://localhost:8081/tests_fixture_aventri_listEvents.json',
+            'FEEDS__1__SEED':
+            'http://localhost:8081/tests_fixture_aventri_listEvents_deleted.json',
             'FEEDS__1__AUTH_URL': 'http://localhost:8081/tests_fixture_aventri_authorize.json',
             'FEEDS__1__ATTENDEES_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listAttendees.json',
@@ -1826,7 +1827,18 @@ class TestApplication(TestBase):
                                     mock_headers=lambda: {})
             results_dict = await fetch_all_es_data_until(aventri_fetch)
 
-        event = results_dict['hits']['hits'][0]['_source']
+        # Sort events by ID here, so we're not hit by flakiness in case the results from
+        # OpenSearch are not guarenteed to be sorted
+        sources = [hit['_source'] for hit in results_dict['hits']['hits']]
+        events = sorted(
+            [source for source in sources if source['type'] == 'dit:aventri:Event'],
+            key=lambda e: e['id']
+        )
+        attendees = sorted(
+            [source for source in sources if source['type'] == 'dit:aventri:Attendee'],
+            key=lambda a: a['id']
+        )
+        event = events[0]
 
         self.assertEqual(event['dit:application'], 'aventri')
         self.assertEqual(event['id'], 'dit:aventri:Event:1:Create')
@@ -1847,7 +1859,7 @@ class TestApplication(TestBase):
         self.assertEqual(event['object']['dit:aventri:location_city'], 'Melbourne')
         self.assertEqual(event['object']['dit:public'], True)
 
-        attendee = results_dict['hits']['hits'][1]['_source']
+        attendee = attendees[0]
 
         self.assertEqual(attendee['dit:application'], 'aventri')
         self.assertEqual(attendee['id'], 'dit:aventri:Event:1:Attendee:1:Create')
@@ -1872,6 +1884,11 @@ class TestApplication(TestBase):
             attendee['object']['dit:aventri:attendeeQuestions'],
             {'question_1': '1', 'question_2': 'Answer', 'question_3': '2'}
         )
+
+        deleted_event = events[1]
+        attendee_deleted_event = attendees[1]
+        self.assertEqual(deleted_event['object']['type'], ['dit:aventri:Event', 'Tombstone'])
+        self.assertEqual(attendee_deleted_event['object']['dit:aventri:attendeeQuestions'], None)
 
     @async_test
     async def test_aventri_attendee_with_no_company(self):
