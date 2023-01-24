@@ -1822,7 +1822,7 @@ class TestApplication(TestBase):
             'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
             'FEEDS__1__SESSIONS_LIST_URL':
-            'http://localhost:8081/tests_fixture_aventri_listSessions.json',
+            'http://localhost:8081/tests_fixture_aventri_listSessions_empty.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):

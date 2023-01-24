@@ -583,7 +583,7 @@ class EventFeed(Feed):
         event_id = event['eventid']
         attendee_id = attendee['attendeeid']
         return {
-            'id': 'dit:aventri:Event:' + event_id + ':Session:' + attendee_id + ':Create',
+            'id': 'dit:aventri:Event:' + event_id + ':Attendee:' + attendee_id + ':Create',
             'published': self.format_datetime(attendee['created']),
             'type': 'dit:aventri:Attendee',
             'dit:application': 'aventri',
