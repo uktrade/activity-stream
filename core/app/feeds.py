@@ -425,7 +425,9 @@ class EventFeed(Feed):
                     context, 'GET', self.seed, data=b'', params=params,
                 )
                 for event in page_of_events:
-                    event['questions'] = await gen_event_questions(event['eventid'])
+                    event['questions'] = \
+                        await gen_event_questions(event['eventid']) \
+                        if event['event_deleted'] == '0' else None
                     yield event
 
                 if len(page_of_events) != page_size:
@@ -577,7 +579,7 @@ class EventFeed(Feed):
                 'dit:aventri:attendeeQuestions': {
                     question: attendee.get(question)
                     for question in event['questions']
-                },
+                } if event['questions'] is not None else None,
                 'dit:aventri:virtualEventAttendance': attendee['virtual_event_attendance'],
                 'dit:aventri:lastLobbyLogin': self.format_datetime(attendee['last_lobby_login']),
                 'dit:emailAddress': attendee['email'],
