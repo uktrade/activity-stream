@@ -425,9 +425,13 @@ class EventFeed(Feed):
                     context, 'GET', self.seed, data=b'', params=params,
                 )
                 for event in page_of_events:
+                    # If events are deleted, a request for questions returns a 500
+                    # But also, some other non-deleted events fail as well, ones
+                    # that have many null values. We arbitrarily choose url as the
+                    # sensor for this state
                     event['questions'] = \
                         await gen_event_questions(event['eventid']) \
-                        if event['event_deleted'] == '0' else None
+                        if event['event_deleted'] == '0' and event['url'] is not None else None
                     yield event
 
                 if len(page_of_events) != page_size:
