@@ -576,21 +576,15 @@ class EventFeed(Feed):
                 'dit:aventri:email': attendee['email'],
                 'dit:aventri:firstname': attendee['fname'],
                 'dit:aventri:lastname': attendee['lname'],
-                'dit:aventri:companyname': attendee.get(
-                    'company',
-                    None
+                'dit:aventri:companyname': attendee.get('company', None),
+                'dit:aventri:virtualeventattendance': attendee['virtual_event_attendance'],
+                'dit:aventri:lastlobbylogin': self.format_datetime(
+                    attendee.get('last_lobby_login', None)
                 ),
                 'dit:aventri:attendeeQuestions': {
                     question: attendee.get(question)
                     for question in event['questions']
                 } if event['questions'] is not None else None,
-                'dit:aventri:virtualEventAttendance': attendee['virtual_event_attendance'],
-                'dit:aventri:lastLobbyLogin': self.format_datetime(attendee['last_lobby_login']),
-                'dit:emailAddress': attendee['email'],
-                'dit:firstName': attendee['fname'],
-                'dit:lastName': attendee['lname'],
-                'dit:registrationStatus': attendee['registrationstatus'],
-                'dit:companyName': attendee['company']
             }
         }
 
