@@ -1823,6 +1823,8 @@ class TestApplication(TestBase):
             'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
             'FEEDS__1__SESSIONS_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listSessions_empty.json',
+            'FEEDS__1__SESSION_REGISTRATIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessionRegistrations_empty.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -1938,6 +1940,8 @@ class TestApplication(TestBase):
             'http://localhost:8081/tests_fixture_aventri_listQuestions_empty.json',
             'FEEDS__1__SESSIONS_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listSessions_empty.json',
+            'FEEDS__1__SESSION_REGISTRATIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessionRegistrations_empty.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -2016,6 +2020,8 @@ class TestApplication(TestBase):
             'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
             'FEEDS__1__SESSIONS_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listSessions_empty.json',
+            'FEEDS__1__SESSION_REGISTRATIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessionRegistrations_empty.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -2071,6 +2077,8 @@ class TestApplication(TestBase):
             'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
             'FEEDS__1__SESSIONS_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listSessions_empty.json',
+            'FEEDS__1__SESSION_REGISTRATIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessionRegistrations_empty.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
