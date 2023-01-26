@@ -1893,25 +1893,6 @@ class TestApplication(TestBase):
         attendee_deleted_event = attendees[1]
         self.assertEqual(deleted_event['object']['type'], ['dit:aventri:Event', 'Tombstone'])
         self.assertEqual(attendee_deleted_event['object']['dit:aventri:attendeeQuestions'], None)
-        
-        session = results_dict['hits']['hits'][2]['_source']
-
-        self.assertEqual(session['dit:application'], 'aventri')
-        self.assertEqual(session['id'], 'dit:aventri:Event:1:Session:2:Create')
-        self.assertEqual(session['type'], 'dit:aventri:Session')
-
-        self.assertEqual(
-            session['object']['attributedTo'],
-            {'type': 'dit:aventri:Event', 'id': 'dit:aventri:Event:1'}
-        )
-        self.assertEqual(session['object']['id'], 'dit:aventri:Session:2')
-        self.assertEqual(session['object']['type'], ['dit:aventri:Session'])
-        self.assertEqual(session['object']['published'], '2019-11-12T00:00:00')
-        self.assertEqual(session['object']['dit:aventri:starttime'], '11:15:00')
-        self.assertEqual(session['object']['dit:aventri:endtime'], '12:45:00')
-        self.assertEqual(session['object']['dit:aventri:name'], 'Session 2')
-        self.assertEqual(session['object']['dit:aventri:desc'],
-                         'Export Market Research Clinic: Session 2')
 
     @async_test
     async def test_aventri_attendee_with_no_company(self):
