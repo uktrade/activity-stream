@@ -585,7 +585,8 @@ class EventFeed(Feed):
                     question: attendee.get(question)
                     for question in event['questions']
                 } if event['questions'] is not None else None,
-                'dit:emailAddress': attendee['email'],  # although dups, below fields are used by datahub crm
+                # although dups, below fields are used by datahub crm
+                'dit:emailAddress': attendee['email'],
                 'dit:firstName': attendee['fname'],
                 'dit:lastName': attendee['lname'],
                 'dit:registrationStatus': attendee['registrationstatus'],
