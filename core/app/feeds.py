@@ -700,6 +700,7 @@ class EventFeed(Feed):
                 'dit:aventri:registration_status': registration['registration_status'],
             }
         }
+
     @staticmethod
     def format_datetime(aventri_datetime):
         return \
