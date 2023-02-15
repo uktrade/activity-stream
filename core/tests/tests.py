@@ -1796,6 +1796,7 @@ class TestApplication(TestBase):
 
     @async_test
     async def test_aventri(self):
+        # pylint: disable=too-many-statements
         def aventri_fetch(results):
             if 'hits' not in results or 'hits' not in results['hits']:
                 return False
@@ -1820,6 +1821,8 @@ class TestApplication(TestBase):
             'http://localhost:8081/tests_fixture_aventri_listAttendees.json',
             'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
+            'FEEDS__1__SESSIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessions_empty.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -1914,6 +1917,8 @@ class TestApplication(TestBase):
             'http://localhost:8081/tests_fixture_aventri_listAttendees_no_company.json',
             'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listQuestions_empty.json',
+            'FEEDS__1__SESSIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessions_empty.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -1990,6 +1995,8 @@ class TestApplication(TestBase):
             'http://localhost:8081/tests_fixture_aventri_listAttendees_empty.json',
             'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
+            'FEEDS__1__SESSIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessions_empty.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):
@@ -2043,6 +2050,8 @@ class TestApplication(TestBase):
             'http://localhost:8081/tests_fixture_aventri_listAttendees_empty.json',
             'FEEDS__1__EVENT_QUESTIONS_LIST_URL':
             'http://localhost:8081/tests_fixture_aventri_listQuestions.json',
+            'FEEDS__1__SESSIONS_LIST_URL':
+            'http://localhost:8081/tests_fixture_aventri_listSessions_empty.json',
         }
 
         with patch('asyncio.sleep', wraps=fast_sleep):

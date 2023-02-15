@@ -276,10 +276,10 @@ class EventFeed(Feed):
         return cls(
             **sub_dict_lower(
                 config, ['UNIQUE_ID', 'SEED', 'ACCOUNT_ID', 'API_KEY', 'AUTH_URL',
-                         'ATTENDEES_LIST_URL', 'EVENT_QUESTIONS_LIST_URL']))
+                         'ATTENDEES_LIST_URL', 'EVENT_QUESTIONS_LIST_URL', 'SESSIONS_LIST_URL']))
 
     def __init__(self, unique_id, seed, account_id, api_key, auth_url, attendees_list_url,
-                 event_questions_list_url):
+                 event_questions_list_url, sessions_list_url):
         self.lock = asyncio.Lock()
         self.unique_id = unique_id
         self.seed = seed
@@ -288,6 +288,7 @@ class EventFeed(Feed):
         self.auth_url = auth_url
         self.attendees_list_url = attendees_list_url
         self.event_questions_list_url = event_questions_list_url
+        self.sessions_list_url = sessions_list_url
         self.accesstoken = None
 
     @staticmethod
@@ -387,6 +388,7 @@ class EventFeed(Feed):
                     await sleep(context, retry_interval)
 
     async def pages(self, context, feed, href, ingest_type):
+        # pylint: disable=too-many-statements
         logger = context.logger
 
         async def gen_activities(href):
@@ -401,6 +403,9 @@ class EventFeed(Feed):
 
                     async for attendee in gen_attendees(event):
                         yield self.map_to_attendee_activity(attendee, event)
+
+                    async for session in gen_sessions(event):
+                        yield self.map_to_session_activity(session, event)
 
         async def gen_event_questions(event_id):
             response = await self.http_make_aventri_request(
@@ -459,6 +464,30 @@ class EventFeed(Feed):
                     yield attendee
 
                 if len(attendees) != page_size:
+                    break
+
+                next_page += 1
+
+        async def gen_sessions(event):
+            logger = context.logger
+            url = self.sessions_list_url.format(event_id=event['eventid'])
+
+            next_page = 1
+            # Be careful of bigger: sometimes is very slow
+            page_size = 100
+            while True:
+                params = (
+                    ('pageNumber', str(next_page)),
+                    ('pageSize', str(page_size)),
+                )
+                with logged(logger.debug, logger.warning, 'Fetching sessions list', []):
+                    sessions = await self.http_make_aventri_request(
+                        context, 'GET', url, data=b'', params=params,
+                    )
+                for session in sessions:
+                    yield session
+
+                if len(sessions) != page_size:
                     break
 
                 next_page += 1
@@ -591,6 +620,32 @@ class EventFeed(Feed):
                 'dit:lastName': attendee['lname'],
                 'dit:registrationStatus': attendee['registrationstatus'],
                 'dit:companyName': attendee['company']
+            }
+        }
+
+    def map_to_session_activity(self, session, event):
+        event_id = event['eventid']
+        session_id = session['sessionid']
+        sesiondate = session['sessiondate']
+        starttime = session['starttime']
+        timestamp = self.format_datetime(f'{sesiondate} {starttime}')
+        return {
+            'id': 'dit:aventri:Event:' + event_id + ':Session:' + session_id + ':Create',
+            'published': timestamp,
+            'type': 'dit:aventri:Session',
+            'dit:application': 'aventri',
+            'object': {
+                'attributedTo': {
+                    'type': 'dit:aventri:Event',
+                    'id': f'dit:aventri:Event:{event_id}'
+                },
+                'id': 'dit:aventri:Session:' + session_id,
+                'published': timestamp,
+                'type': ['dit:aventri:Session'],
+                'dit:aventri:starttime': session['starttime'],
+                'dit:aventri:endtime': session['endtime'],
+                'dit:aventri:name': session['name'],
+                'dit:aventri:desc': session['desc'],
             }
         }
 
