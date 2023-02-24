@@ -655,12 +655,10 @@ class EventFeed(Feed):
     def map_to_session_activity(self, session, event):
         event_id = event['eventid']
         session_id = session['sessionid']
-        sesiondate = session['sessiondate']
-        starttime = session['starttime']
-        timestamp = self.format_datetime(f'{sesiondate} {starttime}')
+        published = self.format_datetime(event['event_created'])
         return {
             'id': 'dit:aventri:Event:' + event_id + ':Session:' + session_id + ':Create',
-            'published': timestamp,
+            'published': published,
             'type': 'dit:aventri:Session',
             'dit:application': 'aventri',
             'object': {
@@ -669,7 +667,7 @@ class EventFeed(Feed):
                     'id': f'dit:aventri:Event:{event_id}'
                 },
                 'id': 'dit:aventri:Session:' + session_id,
-                'published': timestamp,
+                'published': published,
                 'type': ['dit:aventri:Session'],
                 'dit:aventri:starttime': session['starttime'],
                 'dit:aventri:endtime': session['endtime'],
@@ -682,9 +680,11 @@ class EventFeed(Feed):
         event_id = event['eventid']
         session_id = registration['sessionid']
         attendee_id = registration['attendeeid']
+        published = self.format_datetime(event['event_created'])
         as_id = ':Session:' + session_id + ':Attendee:' + attendee_id
         return {
             'id': 'dit:aventri:Event:' + event_id + as_id + ':Create',
+            'published': published,
             'type': 'dit:aventri:SessionRegistration',
             'dit:application': 'aventri',
             'object': {
@@ -693,6 +693,7 @@ class EventFeed(Feed):
                     'id': f'dit:aventri:Event:{event_id}'
                 },
                 'id': 'dit:aventri:Session:' + session_id + ':Attendee:' + attendee_id,
+                'published': published,
                 'type': ['dit:aventri:SessionRegistration'],
                 'dit:aventri:session_id': session_id,
                 'dit:aventri:attendee_id': attendee_id,
