@@ -760,6 +760,26 @@ class TestApplication(TestBase):
         self.assertEqual(len(result['aggregations']['my_agg']['buckets']), 2)
 
     @async_test
+    async def test_v3_root(self):
+        url = 'http://127.0.0.1:8080/v3/'
+        x_forwarded_for = '1.2.3.4, 127.0.0.0'
+
+        with patch('asyncio.sleep', wraps=fast_sleep):
+            await self.setup_manual(env=mock_env(), mock_feed=read_file,
+                                    mock_feed_status=lambda: 200,
+                                    mock_headers=lambda: {})
+        _, status, _ = await get_until_with_body(
+            url, x_forwarded_for, lambda _: True, json.dumps({
+                'aggs': {
+                    'my_agg': {
+                        'terms': {'field': 'published', 'size': 3},
+                    }
+                },
+            }).encode('utf-8'))
+
+        self.assertEqual(status, 200)
+
+    @async_test
     async def test_v3_activities_get_aggs_query(self):
         url = 'http://127.0.0.1:8080/v3/activities/_search'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'

@@ -215,6 +215,26 @@ def handle_get_metrics(context):
     return handle
 
 
+def handle_root(context):
+
+    async def handle(_):
+        results = await es_request(
+            context=context,
+            method='GET',
+            path='/',
+            query={},
+            headers={},
+            payload=b''
+        )
+
+        return web.Response(body=results._body, status=results.status, headers={
+            'Content-Type': 'application/json; charset=utf-8',
+            'Server': 'activity-stream'
+        })
+
+    return handle
+
+
 def handle_get_search_v2(context, alias):
 
     async def handle(request):
