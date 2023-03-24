@@ -28,6 +28,7 @@ from .app_incoming_server import (
     authenticate_by_ip,
     authenticator,
     convert_errors_to_json,
+    handle_root,
     handle_get_metrics,
     handle_get_p1_check,
     handle_get_p2_check,
@@ -154,6 +155,10 @@ async def create_incoming_application(
         authenticator(context, incoming_key_pairs, NONCE_EXPIRE),
     ])
     private_app_v3.add_routes([
+        web.get(
+            '/',
+            handle_root(context),
+        ),
         web.get(
             '/activities/_search',
             handle_get_search_v2(context, ALIAS_ACTIVITIES),
