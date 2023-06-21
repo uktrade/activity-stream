@@ -409,8 +409,8 @@ class EventFeed(Feed):
                     async for session in gen_sessions(event):
                         yield self.map_to_session_activity(session, event)
 
-                    async for registration in gen_registrations(event):
-                        yield self.map_to_registration_activity(registration, event)
+                    # async for registration in gen_registrations(event):
+                    #     yield self.map_to_registration_activity(registration, event)
 
         async def gen_event_questions(event_id):
             response = await self.http_make_aventri_request(
@@ -497,29 +497,29 @@ class EventFeed(Feed):
 
                 next_page += 1
 
-        async def gen_registrations(event):
-            logger = context.logger
-            url = self.session_registrations_list_url.format(event_id=event['eventid'])
+        # async def gen_registrations(event):
+        #     logger = context.logger
+        #     url = self.session_registrations_list_url.format(event_id=event['eventid'])
 
-            next_page = 1
-            # Be careful of bigger: sometimes is very slow
-            page_size = 100
-            while True:
-                params = (
-                    ('pageNumber', str(next_page)),
-                    ('pageSize', str(page_size)),
-                )
-                with logged(logger.debug, logger.warning, 'Fetching sessions list', []):
-                    sessions = await self.http_make_aventri_request(
-                        context, 'GET', url, data=b'', params=params,
-                    )
-                for session in sessions:
-                    yield session
+        #     next_page = 1
+        #     # Be careful of bigger: sometimes is very slow
+        #     page_size = 100
+        #     while True:
+        #         params = (
+        #             ('pageNumber', str(next_page)),
+        #             ('pageSize', str(page_size)),
+        #         )
+        #         with logged(logger.debug, logger.warning, 'Fetching sessions list', []):
+        #             sessions = await self.http_make_aventri_request(
+        #                 context, 'GET', url, data=b'', params=params,
+        #             )
+        #         for session in sessions:
+        #             yield session
 
-                if len(sessions) != page_size:
-                    break
+        #         if len(sessions) != page_size:
+        #             break
 
-                next_page += 1
+        #         next_page += 1
 
         async def paginate(items):
             # pylint: disable=undefined-loop-variable
