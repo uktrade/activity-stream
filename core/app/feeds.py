@@ -409,8 +409,8 @@ class EventFeed(Feed):
                     async for session in gen_sessions(event):
                         yield self.map_to_session_activity(session, event)
 
-                    async for registration in gen_registrations(event):
-                        yield self.map_to_registration_activity(registration, event)
+                    # async for registration in gen_registrations(event):
+                    #     yield self.map_to_registration_activity(registration, event)
 
         async def gen_event_questions(event_id):
             response = await self.http_make_aventri_request(
