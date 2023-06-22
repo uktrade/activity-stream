@@ -409,8 +409,8 @@ class EventFeed(Feed):
                     async for session in gen_sessions(event):
                         yield self.map_to_session_activity(session, event)
 
-                    # async for registration in gen_registrations(event):
-                    #     yield self.map_to_registration_activity(registration, event)
+                    async for registration in gen_registrations(event):
+                        yield self.map_to_registration_activity(registration, event)
 
         async def gen_event_questions(event_id):
             response = await self.http_make_aventri_request(
@@ -435,13 +435,14 @@ class EventFeed(Feed):
                     context, 'GET', self.seed, data=b'', params=params,
                 )
                 for event in page_of_events:
+                    event['question'] = None
                     # If events are deleted, a request for questions returns a 500
                     # But also, some other non-deleted events fail as well, ones
                     # that have many null values. We arbitrarily choose url as the
                     # sensor for this state
-                    event['questions'] = \
-                        await gen_event_questions(event['eventid']) \
-                        if event['event_deleted'] == '0' and event['url'] is not None else None
+                    # event['questions'] = \
+                    #     await gen_event_questions(event['eventid']) \
+                    #     if event['event_deleted'] == '0' and event['url'] is not None else None
                     yield event
 
                 if len(page_of_events) != page_size:
@@ -497,29 +498,29 @@ class EventFeed(Feed):
 
                 next_page += 1
 
-        # async def gen_registrations(event):
-        #     logger = context.logger
-        #     url = self.session_registrations_list_url.format(event_id=event['eventid'])
+        async def gen_registrations(event):
+            logger = context.logger
+            url = self.session_registrations_list_url.format(event_id=event['eventid'])
 
-        #     next_page = 1
-        #     # Be careful of bigger: sometimes is very slow
-        #     page_size = 100
-        #     while True:
-        #         params = (
-        #             ('pageNumber', str(next_page)),
-        #             ('pageSize', str(page_size)),
-        #         )
-        #         with logged(logger.debug, logger.warning, 'Fetching sessions list', []):
-        #             sessions = await self.http_make_aventri_request(
-        #                 context, 'GET', url, data=b'', params=params,
-        #             )
-        #         for session in sessions:
-        #             yield session
+            next_page = 1
+            # Be careful of bigger: sometimes is very slow
+            page_size = 100
+            while True:
+                params = (
+                    ('pageNumber', str(next_page)),
+                    ('pageSize', str(page_size)),
+                )
+                with logged(logger.debug, logger.warning, 'Fetching sessions list', []):
+                    sessions = await self.http_make_aventri_request(
+                        context, 'GET', url, data=b'', params=params,
+                    )
+                for session in sessions:
+                    yield session
 
-        #         if len(sessions) != page_size:
-        #             break
+                if len(sessions) != page_size:
+                    break
 
-        #         next_page += 1
+                next_page += 1
 
         async def paginate(items):
             # pylint: disable=undefined-loop-variable
