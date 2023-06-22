@@ -412,14 +412,14 @@ class EventFeed(Feed):
                     async for registration in gen_registrations(event):
                         yield self.map_to_registration_activity(registration, event)
 
-        async def gen_event_questions(event_id):
-            response = await self.http_make_aventri_request(
-                context,
-                'GET',
-                self.event_questions_list_url.format(event_id=event_id),
-                data=b'',
-            )
-            return [question['ds_fieldname'] for question in response.values()]
+        # async def gen_event_questions(event_id):
+        #     response = await self.http_make_aventri_request(
+        #         context,
+        #         'GET',
+        #         self.event_questions_list_url.format(event_id=event_id),
+        #         data=b'',
+        #     )
+        #     return [question['ds_fieldname'] for question in response.values()]
 
         async def gen_events():
             next_page = 1
