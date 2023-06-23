@@ -412,14 +412,14 @@ class EventFeed(Feed):
                     # async for registration in gen_registrations(event):
                     #     yield self.map_to_registration_activity(registration, event)
 
-        async def gen_event_questions(event_id):
-            response = await self.http_make_aventri_request(
-                context,
-                'GET',
-                self.event_questions_list_url.format(event_id=event_id),
-                data=b'',
-            )
-            return [question['ds_fieldname'] for question in response.values()]
+        # async def gen_event_questions(event_id):
+        #     response = await self.http_make_aventri_request(
+        #         context,
+        #         'GET',
+        #         self.event_questions_list_url.format(event_id=event_id),
+        #         data=b'',
+        #     )
+        #     return [question['ds_fieldname'] for question in response.values()]
 
         async def gen_events():
             next_page = 1
@@ -435,13 +435,15 @@ class EventFeed(Feed):
                     context, 'GET', self.seed, data=b'', params=params,
                 )
                 for event in page_of_events:
+                    
+                    event['question'] = None
                     # If events are deleted, a request for questions returns a 500
                     # But also, some other non-deleted events fail as well, ones
                     # that have many null values. We arbitrarily choose url as the
                     # sensor for this state
-                    event['questions'] = \
-                        await gen_event_questions(event['eventid']) \
-                        if event['event_deleted'] == '0' and event['url'] is not None else None
+                    # event['questions'] = \
+                    #     await gen_event_questions(event['eventid']) \
+                    #     if event['event_deleted'] == '0' and event['url'] is not None else None
                     yield event
 
                 if len(page_of_events) != page_size:
