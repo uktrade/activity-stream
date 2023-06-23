@@ -338,8 +338,16 @@ async def create_activities_index(context, index_name):
                     'object.dit:eventType.id': {
                         'type': 'keyword'
                     },
-                    'object.dit:relatedProgrammes.id': {
-                        'type': 'keyword'
+                    'object.dit:relatedProgrammes': {
+                        'type': 'nested',
+                        'properties': {
+                            'id': {
+                                'type': 'keyword',
+                            },
+                            'name': {
+                                'type': 'text',
+                            },
+                        },
                     }
                 },
             }),
