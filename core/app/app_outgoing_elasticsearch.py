@@ -184,7 +184,8 @@ async def delete_indexes(context, index_names):
                         payload=b'',
                     )
                 except Exception:
-                    context.logger.exception('Failed index DELETE of (%s)', [index_name])
+                    context.logger.exception(
+                        'Failed index DELETE of (%s)', [index_name])
                     if i == len(RETRY_TIMEOUTS) - 1:
                         failed_index_names.append(index_name)
                         break
@@ -215,7 +216,8 @@ async def wait_for_indexes_to_delete(context, index_names):
                 if response.status == 404:
                     continue
                 if i == max_attempts - 1:
-                    raise Exception(f'Failed waiting for deletion of index ({index_name})')
+                    raise Exception(
+                        f'Failed waiting for deletion of index ({index_name})')
                 await asyncio.sleep(2)
 
 
@@ -444,7 +446,8 @@ async def create_objects_index(context, index_name):
 
 async def wait_until_num_shards(context, index_name, num_primary_shards, num_replicas_per_shard):
     # Have witnessed the default number of shards of 5 created even if requested less, and have
-    # witnessed replicas created even if requested 0 which then get filled with documents.
+    # witnessed replicas created even if requested 0 which then get filled
+    # with documents.
 
     # Check how many shards we actually can start based on the number of nodes. This is mostly
     # for a test environment when we can't start enough replicas
@@ -457,11 +460,12 @@ async def wait_until_num_shards(context, index_name, num_primary_shards, num_rep
         payload=b'',
     )
     num_nodes = len(json_loads(response._body))
-    num_desired_shards = num_primary_shards + num_primary_shards * num_replicas_per_shard
+    num_desired_shards = num_primary_shards + \
+        num_primary_shards * num_replicas_per_shard
 
     max_allowed_replicas_per_shard = min(num_nodes - 1, num_replicas_per_shard)
-    num_expected_started_shards = \
-        num_primary_shards + num_primary_shards * max_allowed_replicas_per_shard
+    num_expected_started_shards = num_primary_shards + \
+        num_primary_shards * max_allowed_replicas_per_shard
     num_expected_non_started_shards = num_desired_shards - num_expected_started_shards
 
     with logged(context.logger.debug, context.logger.warning,
@@ -489,7 +493,8 @@ async def wait_until_num_shards(context, index_name, num_primary_shards, num_rep
                 return
             await asyncio.sleep(2)
 
-        raise Exception(f'Unable to create index with correct number of shards {index_name}')
+        raise Exception(
+            f'Unable to create index with correct number of shards {index_name}')
 
 
 async def refresh_index(context, index_name, *metric_labels):
@@ -618,7 +623,8 @@ async def es_feed_activities_total(context, feed_id):
         headers={'Content-Type': 'application/json'},
         payload=b'',
     )
-    searchable = max(json_loads(total_results._body)['count'] - nonsearchable, 0)
+    searchable = max(json_loads(total_results._body)
+                     ['count'] - nonsearchable, 0)
 
     return searchable, nonsearchable
 
