@@ -435,8 +435,8 @@ class EventFeed(Feed):
                     context, 'GET', self.seed, data=b'', params=params,
                 )
                 for event in page_of_events:
-                    
-                    event['question'] = None
+
+                    event['questions'] = None
                     # If events are deleted, a request for questions returns a 500
                     # But also, some other non-deleted events fail as well, ones
                     # that have many null values. We arbitrarily choose url as the
