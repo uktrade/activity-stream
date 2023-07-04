@@ -441,9 +441,9 @@ class EventFeed(Feed):
                     # But also, some other non-deleted events fail as well, ones
                     # that have many null values. We arbitrarily choose url as the
                     # sensor for this state
-                    # event['questions'] = \
-                    #     await gen_event_questions(event['eventid']) \
-                    #     if event['event_deleted'] == '0' and event['url'] is not None else None
+                    event['questions'] = \
+                        await gen_event_questions(event['eventid']) \
+                        if event['event_deleted'] == '0' and event['url'] is not None else None
                     yield event
 
                 if len(page_of_events) != page_size:
