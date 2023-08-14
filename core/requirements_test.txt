@@ -6,7 +6,7 @@
 #
 aiodnsresolver==0.0.120
     # via -r requirements.in
-aiohttp==3.7.4
+aiohttp==3.8.5
     # via -r requirements.in
 aioredis==1.1.0
     # via -r requirements.in
@@ -14,7 +14,7 @@ aspy.yaml==1.2.0
     # via pre-commit
 astroid==2.2.5
     # via pylint
-async-timeout==3.0.0
+async-timeout==4.0.2
     # via
     #   aiohttp
     #   aioredis
