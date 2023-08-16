@@ -8,7 +8,6 @@ import re
 from io import TextIOWrapper, BytesIO
 import aiohttp
 import yarl
-from dateutil.relativedelta import relativedelta
 
 from .hawk import (
     get_hawk_header,
@@ -797,7 +796,7 @@ class MaxemailFeed(Feed):
         logger = context.logger
         campaigns = {}
         now = datetime.datetime.now()
-        one_month_ago = (now - relativedelta(months=1)).strftime('%Y-%m-%d 00:00:00')
+        one_month_ago = (now - datetime.timedelta(days=31)).strftime('%Y-%m-%d 00:00:00')
         if ingest_type == 'full':
             timestamp = one_month_ago
 
