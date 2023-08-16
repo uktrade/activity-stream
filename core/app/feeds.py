@@ -8,6 +8,7 @@ import re
 from io import TextIOWrapper, BytesIO
 import aiohttp
 import yarl
+from dateutil.relativedelta import relativedelta
 
 from .hawk import (
     get_hawk_header,
@@ -796,9 +797,9 @@ class MaxemailFeed(Feed):
         logger = context.logger
         campaigns = {}
         now = datetime.datetime.now()
-        six_weeks_ago = (now - datetime.timedelta(days=42)).strftime('%Y-%m-%d 00:00:00')
+        one_month_ago = (now - relativedelta(months=1)).strftime('%Y-%m-%d 00:00:00')
         if ingest_type == 'full':
-            timestamp = six_weeks_ago
+            timestamp = one_month_ago
 
         async def get_email_campaign(email_campaign_id):
             if email_campaign_id not in campaigns:
@@ -1066,7 +1067,7 @@ class MaxemailFeed(Feed):
                 return default
 
         timestamps = timestamp.split('--')
-        timestamp_sent = get_with_default(timestamps, 0, six_weeks_ago)
+        timestamp_sent = get_with_default(timestamps, 0, one_month_ago)
         timestamp_bounced = get_with_default(timestamps, 1, timestamp_sent)
         timestamp_opened = get_with_default(timestamps, 2, timestamp_bounced)
         timestamp_clicked = get_with_default(timestamps, 3, timestamp_opened)
