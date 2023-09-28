@@ -16,21 +16,39 @@ async-timeout==3.0.0
     #   aioredis
 attrs==18.1.0
     # via aiohttp
+boto3==1.28.56
+    # via -r requirements.in
+botocore==1.31.56
+    # via
+    #   boto3
+    #   s3transfer
 chardet==3.0.4
     # via aiohttp
 hiredis==0.2.0
     # via aioredis
 idna==2.6
     # via yarl
+jmespath==1.0.1
+    # via
+    #   boto3
+    #   botocore
 multidict==4.7.6
     # via
     #   aiohttp
     #   yarl
-prometheus_client==0.3.0
+prometheus-client==0.3.0
     # via -r requirements.in
+python-dateutil==2.8.2
+    # via botocore
 raven==6.9.0
     # via -r requirements.in
+s3transfer==0.7.0
+    # via boto3
+six==1.16.0
+    # via python-dateutil
 typing-extensions==3.10.0.0
     # via aiohttp
+urllib3==1.26.16
+    # via botocore
 yarl==1.2.4
     # via aiohttp
