@@ -1,4 +1,3 @@
-import codecs
 from abc import ABCMeta, abstractmethod
 import asyncio
 import csv
@@ -8,12 +7,11 @@ from json import JSONDecodeError
 import re
 from io import TextIOWrapper, BytesIO
 
-import aioboto3
 import aiocsv
 import aiohttp
-import boto3
 import yarl
 from aiobotocore.session import get_session
+from botocore.config import Config
 
 from .hawk import (
     get_hawk_header,
@@ -1191,6 +1189,7 @@ class MaxemailFeed2(MaxemailFeed):
             'aws_access_key_id': self.aws_access_key_id,
             'aws_secret_access_key': self.aws_secret_access_key,
             'region_name': 'eu-west-2',
+            'config': Config(signature_version='s3v4'),
         }
 
     @classmethod
@@ -1216,13 +1215,17 @@ class MaxemailFeed2(MaxemailFeed):
             }
 
         async def gen_sent_activities_and_timestamp():
+            context.logger.info('Generating sent activities')
             async with feed.session.create_client('s3', **feed.s3_conf) as s3_client:
+                context.logger.info('Client created')
                 s3_object = await s3_client.get_object(
                     Bucket=feed.bucket_name,
                     Key=feed.s3_filename_pattern.format(event_type='sent')
                 )
                 async with aiocsv.AsyncDictReader(s3_object['Body'], delimiter=',') as reader:
+                    context.logger.info('CSV reader created')
                     async for record in reader:
+                        context.logger.info('Got a record with id %s', record['event_id'])
                         yield {
                             'id': f'dit:{feed.activity_key}:Email:Sent:{record["event_id"]}:Create',
                             'type': 'Create',
