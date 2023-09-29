@@ -7,6 +7,9 @@ from distutils.util import strtobool    # pylint: disable=import-error, no-name-
 from json import JSONDecodeError
 import re
 from io import TextIOWrapper, BytesIO
+
+import aioboto3
+import aiocsv
 import aiohttp
 import boto3
 import yarl
@@ -1150,7 +1153,7 @@ class MaxemailFeed2(MaxemailFeed):
     full_ingest_page_interval = 0.1
     updates_page_interval = 60 * 60 * 24 * 30
     exception_intervals = [120, 180, 240, 300]
-    activity_key = "maxemail2"
+    activity_key = 'maxemail2'
 
     @classmethod
     def parse_config(cls, config):
@@ -1182,214 +1185,226 @@ class MaxemailFeed2(MaxemailFeed):
         self.aws_access_key_id = username
         self.aws_secret_access_key = password
         self.s3_filename_pattern = campaign_url
-
-        self.client = boto3.client(
-            "s3",
-            aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_access_key,
-            region_name="eu-west-2",
-            config=boto3.session.Config(signature_version="s3v4"),
-        )
+        self.session = aioboto3.Session()
+        self.s3_conf = {
+            'aws_access_key_id': self.aws_access_key_id,
+            'aws_secret_access_key': self.aws_secret_access_key,
+            'region_name': 'eu-west-2',
+            'config': boto3.session.Config(signature_version='s3v4'),
+        }
 
     @classmethod
     async def pages(cls, context, feed, href, ingest_type):
         """
         Ingest maxemail data from an s3 bucket
         """
-        if ingest_type != "full":
+        if ingest_type != 'full':
             return
 
-        def _get_event_reader(event_type):
-            file = feed.client.get_object(
-                Bucket=feed.bucket_name, Key=feed.s3_filename_pattern.format(event_type=event_type)
-            )
-            return csv.DictReader(codecs.iterdecode(file["Body"].iter_lines(), "utf-8"))
-
-        def _gen_campaign(record):
+        async def _gen_campaign(record):
             return {
                 'type': f'dit:{feed.activity_key}:Campaign',
-                'id': f'dit:{feed.activity_key}:Campaign:' + record["campaign_id"],
+                'id': f'dit:{feed.activity_key}:Campaign:' + record['campaign_id'],
                 'name': record['campaign_title'],
                 'content': record['campaign_description'],
                 'dit:emailSubject': record['email_subject'],
-                f'dit:{feed.activity_key}:Campaign:id': int(record["campaign_id"]),
-                'published': record["campaign_started"]
+                f'dit:{feed.activity_key}:Campaign:id': int(record['campaign_id']),
+                'published': record['campaign_started']
             }
 
         async def gen_sent_activities_and_timestamp():
-            for record in _get_event_reader("sent"):
-                yield {
-                    'id': f'dit:{feed.activity_key}:Email:Sent:' + record["event_id"] + ':Create',
-                    'type': 'Create',
-                    'dit:application': feed.activity_key,
-                    'published': record["occurred"],
-                    'object': {
-                        'type': [f'dit:{feed.activity_key}:Email', f'dit:{feed.activity_key}:Email:Sent'],
-                        'id': record["event_id"],
-                        'dit:emailAddress': record["email_address"],
-                        'attributedTo': _gen_campaign(record)
-                    }
-                }, record["occurred"]
+            async with feed.session.client('s3', **feed.s3_conf) as s3_client:
+                async with s3_client.get_object(
+                    Bucket=feed.bucket_name,
+                    Key=feed.s3_filename_pattern.format(event_type='sent')
+                ) as s3_object:
+                    async with aiocsv.AsyncDictReader(s3_object['Body'], delimiter=',') as reader:
+                        async for record in reader:
+                            yield {
+                                'id': f'dit:{feed.activity_key}:Email:Sent:{record["event_id"]}:Create',
+                                'type': 'Create',
+                                'dit:application': feed.activity_key,
+                                'published': record['occurred'],
+                                'object': {
+                                    'type': [
+                                        f'dit:{feed.activity_key}:Email',
+                                        f'dit:{feed.activity_key}:Email:Sent'
+                                    ],
+                                    'id': record['event_id'],
+                                    'dit:emailAddress': record['email_address'],
+                                    'attributedTo': await _gen_campaign(record)
+                                }
+                            }, record['occurred']
 
-        async def gen_bounced_activities_and_timestamp():
-            for record in _get_event_reader("bounced"):
-                yield {
-                    'id': f'dit:{feed.activity_key}:Email:Bounced:' + record["event_id"] + ':Create',
-                    'type': 'Create',
-                    'dit:application': feed.activity_key,
-                    'published': record["occurred"],
-                    'object': {
-                        'type': [f'dit:{feed.activity_key}:Email', f'dit:{feed.activity_key}:Email:Bounced'],
-                        'id': f'dit:{feed.activity_key}:Email:Bounced:' + record["event_id"],
-                        'dit:emailAddress': record['email_address'],
-                        'content': record['bounced_reason'],
-                        'attributedTo': _gen_campaign(record)
-                    }
-                }, record["occurred"]
+        # async def gen_bounced_activities_and_timestamp():
+        #     for record in _get_event_reader("bounced"):
+        #         yield {
+        #             'id': f'dit:{feed.activity_key}:Email:Bounced:' + record["event_id"] + ':Create',
+        #             'type': 'Create',
+        #             'dit:application': feed.activity_key,
+        #             'published': record["occurred"],
+        #             'object': {
+        #                 'type': [f'dit:{feed.activity_key}:Email', f'dit:{feed.activity_key}:Email:Bounced'],
+        #                 'id': f'dit:{feed.activity_key}:Email:Bounced:' + record["event_id"],
+        #                 'dit:emailAddress': record['email_address'],
+        #                 'content': record['bounced_reason'],
+        #                 'attributedTo': _gen_campaign(record)
+        #             }
+        #         }, record["occurred"]
+        #
+        # async def gen_opened_activities_and_timestamp():
+        #     for record in _get_event_reader("opened"):
+        #         yield {
+        #             'id': f'dit:{feed.activity_key}:Email:Opened:' + record["event_id"] + ':Create',
+        #             'type': 'Create',
+        #             'dit:application': feed.activity_key,
+        #             'published': record["occurred"],
+        #             'object': {
+        #                 'type': [f'dit:{feed.activity_key}:Email', f'dit:{feed.activity_key}:Email:Opened'],
+        #                 'id': f'dit:{feed.activity_key}:Email:Opened:' + record["event_id"],
+        #                 'dit:emailAddress': record['email_address'],
+        #                 'attributedTo': _gen_campaign(record)
+        #             }
+        #         }, record["occurred"]
+        #
+        # async def gen_clicked_activities_and_timestamp():
+        #     for record in _get_event_reader("clicked"):
+        #         yield {
+        #             'id': f'dit:{feed.activity_key}:Email:Clicked:' + record["event_id"] + ':Create',
+        #             'type': 'Create',
+        #             'dit:application': feed.activity_key,
+        #             'published': record["occurred"],
+        #             'object': {
+        #                 'type': [f'dit:{feed.activity_key}:Email', f'dit:{feed.activity_key}:Email:Clicked'],
+        #                 'id': f'dit:{feed.activity_key}:Email:Clicked:' + record["event_id"],
+        #                 'dit:emailAddress': record['email_address'],
+        #                 'url': record['clicked_url'],
+        #                 'attributedTo': _gen_campaign(record)
+        #             }
+        #         }, record["occurred"]
+        #
+        # async def gen_responded_activities_and_timestamp():
+        #     for record in _get_event_reader("responded"):
+        #         yield {
+        #             'id': f'dit:{feed.activity_key}:Email:Responded:' + record["event_id"] + ':Create',
+        #             'type': 'Create',
+        #             'dit:application': feed.activity_key,
+        #             'published': record["occurred"],
+        #             'object': {
+        #                 'type': [f'dit:{feed.activity_key}:Email', f'dit:{feed.activity_key}:Email:Responded'],
+        #                 'id': f'dit:{feed.activity_key}:Email:Responded:' + record["event_id"],
+        #                 'dit:emailAddress': record['email_address'],
+        #                 'attributedTo': _gen_campaign(record)
+        #             }
+        #         }, record["occurred"]
+        #
+        # async def gen_unsubscribed_activities_and_timestamp():
+        #     for record in _get_event_reader("unsubscribed"):
+        #         yield {
+        #             'id': f'dit:{feed.activity_key}:Email:Unsubscribed:' + record["event_id"] + ':Create',
+        #             'type': 'Create',
+        #             'dit:application': feed.activity_key,
+        #             'published': record["occurred"],
+        #             'object': {
+        #                 'type': [f'dit:{feed.activity_key}:Email', f'dit:{feed.activity_key}:Email:Unsubscribed'],
+        #                 'id': f'dit:{feed.activity_key}:Email:Unsubscribed:' + record["event_id"],
+        #                 'dit:emailAddress': record['email_address'],
+        #                 'attributedTo': _gen_campaign(record)
+        #             }
+        #         }, record["occurred"]
+        #
+        # async def gen_campaigns_activities_and_timestamp():
+        #     seen_ids = []
+        #     async for record in _get_event_reader("sent"):
+        #         if record["campaign_id"] not in seen_ids:
+        #             seen_ids.append(record["campaign_id"])
+        #             yield {
+        #                 'id': record["campaign_id"] + ':Create',
+        #                 'type': 'Create',
+        #                 'dit:application': feed.activity_key,
+        #                 'published': record['campaign_started'],
+        #                 'object': {
+        #                     "content": record["campaign_description"],
+        #                     "dit:emailSubject": record["email_subject"],
+        #                     f"dit:{feed.activity_key}:Campaign:id": record["campaign_id"],
+        #                     "id": f"dit:{feed.activity_key}:Campaign:{record['campaign_id']}",
+        #                     "name": record["campaign_title"],
+        #                     "published": record["campaign_started"],
+        #                     "type": f"dit:{feed.activity_key}:Campaign",
+        #                 },
+        #                 'actor': {
+        #                     "dit:emailAddress": record["email_from_address"],
+        #                     "id": f"dit:{feed.activity_key}:Sender:{record['email_from_address']}",
+        #                     "name": record["email_from_name"],
+        #                     "type": ["Organization", f"dit:{feed.activity_key}:Sender"],
+        #                 }
+        #             }, record["campaign_started"]
 
-        async def gen_opened_activities_and_timestamp():
-            for record in _get_event_reader("opened"):
-                yield {
-                    'id': f'dit:{feed.activity_key}:Email:Opened:' + record["event_id"] + ':Create',
-                    'type': 'Create',
-                    'dit:application': feed.activity_key,
-                    'published': record["occurred"],
-                    'object': {
-                        'type': [f'dit:{feed.activity_key}:Email', f'dit:{feed.activity_key}:Email:Opened'],
-                        'id': f'dit:{feed.activity_key}:Email:Opened:' + record["event_id"],
-                        'dit:emailAddress': record['email_address'],
-                        'attributedTo': _gen_campaign(record)
-                    }
-                }, record["occurred"]
+        async def paginate(page_size, objs):
+            page = []
+            timestamp = None
+            async for obj, timestamp in objs:
+                page.append(obj)
+                if len(page) == page_size:
+                    yield page, timestamp
+                    page = []
 
-        async def gen_clicked_activities_and_timestamp():
-            for record in _get_event_reader("clicked"):
-                yield {
-                    'id': f'dit:{feed.activity_key}:Email:Clicked:' + record["event_id"] + ':Create',
-                    'type': 'Create',
-                    'dit:application': feed.activity_key,
-                    'published': record["occurred"],
-                    'object': {
-                        'type': [f'dit:{feed.activity_key}:Email', f'dit:{feed.activity_key}:Email:Clicked'],
-                        'id': f'dit:{feed.activity_key}:Email:Clicked:' + record["event_id"],
-                        'dit:emailAddress': record['email_address'],
-                        'url': record['clicked_url'],
-                        'attributedTo': _gen_campaign(record)
-                    }
-                }, record["occurred"]
+            if page:
+                yield page, timestamp
 
-        async def gen_responded_activities_and_timestamp():
-            for record in _get_event_reader("responded"):
-                yield {
-                    'id': f'dit:{feed.activity_key}:Email:Responded:' + record["event_id"] + ':Create',
-                    'type': 'Create',
-                    'dit:application': feed.activity_key,
-                    'published': record["occurred"],
-                    'object': {
-                        'type': [f'dit:{feed.activity_key}:Email', f'dit:{feed.activity_key}:Email:Responded'],
-                        'id': f'dit:{feed.activity_key}:Email:Responded:' + record["event_id"],
-                        'dit:emailAddress': record['email_address'],
-                        'attributedTo': _gen_campaign(record)
-                    }
-                }, record["occurred"]
-
-        async def gen_unsubscribed_activities_and_timestamp():
-            for record in _get_event_reader("unsubscribed"):
-                yield {
-                    'id': f'dit:{feed.activity_key}:Email:Unsubscribed:' + record["event_id"] + ':Create',
-                    'type': 'Create',
-                    'dit:application': feed.activity_key,
-                    'published': record["occurred"],
-                    'object': {
-                        'type': [f'dit:{feed.activity_key}:Email', f'dit:{feed.activity_key}:Email:Unsubscribed'],
-                        'id': f'dit:{feed.activity_key}:Email:Unsubscribed:' + record["event_id"],
-                        'dit:emailAddress': record['email_address'],
-                        'attributedTo': _gen_campaign(record)
-                    }
-                }, record["occurred"]
-
-        async def gen_campaigns_activities_and_timestamp():
-            seen_ids = []
-            for record in _get_event_reader("sent"):
-                if record["campaign_id"] not in seen_ids:
-                    seen_ids.append(record["campaign_id"])
-                    yield {
-                        'id': record["campaign_id"] + ':Create',
-                        'type': 'Create',
-                        'dit:application': feed.activity_key,
-                        'published': record['campaign_started'],
-                        'object': {
-                            "content": record["campaign_description"],
-                            "dit:emailSubject": record["email_subject"],
-                            f"dit:{feed.activity_key}:Campaign:id": record["campaign_id"],
-                            "id": f"dit:{feed.activity_key}:Campaign:{record['campaign_id']}",
-                            "name": record["campaign_title"],
-                            "published": record["campaign_started"],
-                            "type": f"dit:{feed.activity_key}:Campaign",
-                        },
-                        'actor': {
-                            "dit:emailAddress": record["email_from_address"],
-                            "id": f"dit:{feed.activity_key}:Sender:{record['email_from_address']}",
-                            "name": record["email_from_name"],
-                            "type": ["Organization", f"dit:{feed.activity_key}:Sender"],
-                        }
-                    }, record["campaign_started"]
-
-        start_date = (datetime.datetime(year=2021, month=4, day=15) - datetime.timedelta(days=31)).strftime('%Y-%m-%d 00:00:00')
+        start_date = (datetime.datetime(year=2021, month=4, day=15) -
+                      datetime.timedelta(days=31)).strftime('%Y-%m-%d 00:00:00')
         timestamps = [start_date] * 6
 
         sent_activities_and_timestamp = gen_sent_activities_and_timestamp()
-        async for activity_page, timestamp in feed.paginate(
-            feed.page_size,
-            sent_activities_and_timestamp
-        ):
+        async for activity_page, timestamp in paginate(feed.page_size, sent_activities_and_timestamp):
             timestamps[0] = timestamp
             yield activity_page, '--'.join(timestamps)
 
-        bounced_activities_and_timestamp = gen_bounced_activities_and_timestamp()
-        async for activity_page, timestamp in feed.paginate(
-            feed.page_size,
-            bounced_activities_and_timestamp
-        ):
-            timestamps[1] = timestamp
-            yield activity_page, '--'.join(timestamps)
-
-        opened_activities_and_timestamp = gen_opened_activities_and_timestamp()
-        async for activity_page, timestamp in feed.paginate(
-            feed.page_size,
-            opened_activities_and_timestamp
-        ):
-            timestamps[2] = timestamp
-            yield activity_page, '--'.join(timestamps)
-
-        clicked_activities_and_timestamp = gen_clicked_activities_and_timestamp()
-        async for activity_page, timestamp in feed.paginate(
-            feed.page_size,
-            clicked_activities_and_timestamp
-        ):
-            timestamps[3] = timestamp
-            yield activity_page, '--'.join(timestamps)
-
-        responded_activities_and_timestamp = gen_responded_activities_and_timestamp()
-        async for activity_page, timestamp in feed.paginate(
-            feed.page_size,
-            responded_activities_and_timestamp
-        ):
-            timestamps[4] = timestamp
-            yield activity_page, '--'.join(timestamps)
-
-        unsubscribed_activities_and_timestamp = gen_unsubscribed_activities_and_timestamp()
-        async for activity_page, timestamp in feed.paginate(
-            feed.page_size,
-            unsubscribed_activities_and_timestamp
-        ):
-            timestamps[5] = timestamp
-            yield activity_page, '--'.join(timestamps)
-
-        campaigns_activities_and_timestamp = gen_campaigns_activities_and_timestamp()
-        campaigns_activity_pages_and_timestamp = feed.paginate(
-            feed.page_size,
-            campaigns_activities_and_timestamp
-        )
-        async for activity_page, timestamp in campaigns_activity_pages_and_timestamp:
-            yield activity_page, timestamp
+        # bounced_activities_and_timestamp = gen_bounced_activities_and_timestamp()
+        # async for activity_page, timestamp in paginate(
+        #     feed.page_size,
+        #     bounced_activities_and_timestamp
+        # ):
+        #     timestamps[1] = timestamp
+        #     yield activity_page, '--'.join(timestamps)
+        #
+        # opened_activities_and_timestamp = gen_opened_activities_and_timestamp()
+        # async for activity_page, timestamp in paginate(
+        #     feed.page_size,
+        #     opened_activities_and_timestamp
+        # ):
+        #     timestamps[2] = timestamp
+        #     yield activity_page, '--'.join(timestamps)
+        #
+        # clicked_activities_and_timestamp = gen_clicked_activities_and_timestamp()
+        # async for activity_page, timestamp in paginate(
+        #     feed.page_size,
+        #     clicked_activities_and_timestamp
+        # ):
+        #     timestamps[3] = timestamp
+        #     yield activity_page, '--'.join(timestamps)
+        #
+        # responded_activities_and_timestamp = gen_responded_activities_and_timestamp()
+        # async for activity_page, timestamp in paginate(
+        #     feed.page_size,
+        #     responded_activities_and_timestamp
+        # ):
+        #     timestamps[4] = timestamp
+        #     yield activity_page, '--'.join(timestamps)
+        #
+        # unsubscribed_activities_and_timestamp = gen_unsubscribed_activities_and_timestamp()
+        # async for activity_page, timestamp in paginate(
+        #     feed.page_size,
+        #     unsubscribed_activities_and_timestamp
+        # ):
+        #     timestamps[5] = timestamp
+        #     yield activity_page, '--'.join(timestamps)
+        #
+        # campaigns_activities_and_timestamp = gen_campaigns_activities_and_timestamp()
+        # campaigns_activity_pages_and_timestamp = paginate(
+        #     feed.page_size,
+        #     campaigns_activities_and_timestamp
+        # )
+        # async for activity_page, timestamp in campaigns_activity_pages_and_timestamp:
+        #     yield activity_page, timestamp
