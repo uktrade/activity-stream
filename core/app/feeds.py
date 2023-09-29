@@ -1233,6 +1233,7 @@ class MaxemailFeed2(MaxemailFeed):
 
                 decoder_factory = codecs.getincrementaldecoder(encoding)
                 self.decoder = decoder_factory(errors)
+            TextIOWrapper
 
             async def read(self, size=-1):
                 raw_data = await self.obj.read(size)
@@ -1252,12 +1253,7 @@ class MaxemailFeed2(MaxemailFeed):
                 )
                 context.logger.info('Attempting to read records from csv')
                 async with s3_object['Body'] as csv_file:
-                    async for record in aiocsv.AsyncDictReader(
-                        AsyncTextReaderWrapper(
-                            csv_file,
-                            encoding='utf-8',
-                        ), delimiter=','
-                    ):
+                    for record in csv.DictReader(csv_file):
                         yield {
                             'id': f'dit:{feed.activity_key}:Email:Sent:{record["event_id"]}:Create',
                             'type': 'Create',
