@@ -1186,12 +1186,11 @@ class MaxemailFeed2(MaxemailFeed):
         self.aws_access_key_id = username
         self.aws_secret_access_key = password
         self.s3_filename_pattern = campaign_url
-        self.session = aioboto3.Session()
+        self.session = get_session()
         self.s3_conf = {
             'aws_access_key_id': self.aws_access_key_id,
             'aws_secret_access_key': self.aws_secret_access_key,
             'region_name': 'eu-west-2',
-            'config': boto3.session.Config(signature_version='s3v4'),
         }
 
     @classmethod
@@ -1199,7 +1198,10 @@ class MaxemailFeed2(MaxemailFeed):
         """
         Ingest maxemail data from an s3 bucket
         """
+        context.logger.info('Starting Maxmemail sync')
+
         if ingest_type != 'full':
+            context.logger.info('Skipping maxemail run as ingest type is %s', ingest_type)
             return
 
         async def _gen_campaign(record):
@@ -1214,8 +1216,7 @@ class MaxemailFeed2(MaxemailFeed):
             }
 
         async def gen_sent_activities_and_timestamp():
-            session = get_session()
-            async with session.create_client('s3', **feed.s3_conf) as s3_client:
+            async with feed.session.create_client('s3', **feed.s3_conf) as s3_client:
                 s3_object = await s3_client.get_object(
                     Bucket=feed.bucket_name,
                     Key=feed.s3_filename_pattern.format(event_type='sent')
@@ -1410,3 +1411,4 @@ class MaxemailFeed2(MaxemailFeed):
         # )
         # async for activity_page, timestamp in campaigns_activity_pages_and_timestamp:
         #     yield activity_page, timestamp
+        context.logger.info('Maxemail full sync finished')
