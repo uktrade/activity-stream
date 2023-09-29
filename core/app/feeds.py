@@ -13,6 +13,7 @@ import aiocsv
 import aiohttp
 import boto3
 import yarl
+from aiobotocore.session import get_session
 
 from .hawk import (
     get_hawk_header,
@@ -1213,7 +1214,8 @@ class MaxemailFeed2(MaxemailFeed):
             }
 
         async def gen_sent_activities_and_timestamp():
-            async with feed.session.client('s3', **feed.s3_conf) as s3_client:
+            session = get_session()
+            async with session.client('s3', **feed.s3_conf) as s3_client:
                 s3_object = s3_client.get_object(
                     Bucket=feed.bucket_name,
                     Key=feed.s3_filename_pattern.format(event_type='sent')

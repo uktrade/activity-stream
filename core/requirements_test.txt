@@ -7,7 +7,9 @@
 aioboto3==11.3.0
     # via -r requirements.in
 aiobotocore[boto3]==2.6.0
-    # via aioboto3
+    # via
+    #   -r requirements.in
+    #   aioboto3
 aiocsv==1.2.4
     # via -r requirements.in
 aiodnsresolver==0.0.120

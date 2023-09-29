@@ -5,3 +5,4 @@ prometheus_client==0.3.0
 raven==6.9.0
 aioboto3
 aiocsv
+aiobotocore
