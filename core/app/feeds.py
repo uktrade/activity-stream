@@ -1228,17 +1228,17 @@ class MaxemailFeed2(MaxemailFeed):
             }
 
         class AsyncTextReaderWrapper:
-            def __init__(self, obj, encoding, errors="strict"):
+            def __init__(self, obj, encoding, errors='strict'):
                 self.obj = obj
 
                 decoder_factory = codecs.getincrementaldecoder(encoding)
                 self.decoder = decoder_factory(errors)
 
-            async def read(self, size):
+            async def read(self, size=-1):
                 raw_data = await self.obj.read(size)
 
                 if not raw_data:
-                    return self.decoder.decode(b"", final=True)
+                    return self.decoder.decode(b'', final=True)
 
                 return self.decoder.decode(raw_data, final=False)
 
@@ -1255,7 +1255,7 @@ class MaxemailFeed2(MaxemailFeed):
                     async for record in aiocsv.AsyncDictReader(
                         AsyncTextReaderWrapper(
                             csv_file,
-                            encoding="utf-8",
+                            encoding='utf-8',
                         ), delimiter=','
                     ):
                         yield {
