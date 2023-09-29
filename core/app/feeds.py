@@ -6,8 +6,13 @@ from distutils.util import strtobool    # pylint: disable=import-error, no-name-
 from json import JSONDecodeError
 import re
 from io import TextIOWrapper, BytesIO
+
+import aiocsv
+import aiofiles
 import aiohttp
 import yarl
+from aiobotocore.session import get_session
+from botocore.config import Config
 
 from .hawk import (
     get_hawk_header,
@@ -35,6 +40,7 @@ def parse_feed_config(feed_config):
         'activity_stream': ActivityStreamFeed,
         'zendesk': ZendeskFeed,
         'maxemail': MaxemailFeed,
+        'maxemail-full': MaxemailFeedFull,
         'aventri': EventFeed,
     }
     return by_feed_type[feed_config['TYPE']].parse_config(feed_config)
@@ -1138,3 +1144,309 @@ class MaxemailFeed(Feed):
             feed.page_size, campaigns_activities_and_timestamp)
         async for activity_page, timestamp in campaigns_activity_pages_and_timestamp:
             yield activity_page, timestamp
+
+
+class MaxemailFeedFull(MaxemailFeed):
+
+    down_grace_period = 60 * 60 * 4
+
+    full_ingest_page_interval = 0.1
+    updates_page_interval = 60 * 60 * 24 * 30
+    exception_intervals = [120, 180, 240, 300]
+    activity_key = 'maxemail-full'
+
+    @classmethod
+    def parse_config(cls, config):
+        return cls(**sub_dict_lower(
+            config,
+            [
+                'UNIQUE_ID',
+                'SEED',
+                'DATA_EXPORT_URL',  # bucket name
+                'CAMPAIGN_URL',  # s3 file name
+                'USERNAME',  # access key id
+                'PASSWORD',  # secret access key
+                'PAGE_SIZE'
+            ]
+        ))
+
+    def __init__(
+            self,
+            unique_id,
+            seed,
+            data_export_url,
+            campaign_url,
+            username,
+            password,
+            page_size
+    ):
+        super().__init__(
+            unique_id, seed, data_export_url, campaign_url, username, password, page_size
+        )
+        self.bucket_name = data_export_url
+        self.aws_access_key_id = username
+        self.aws_secret_access_key = password
+        self.s3_filename_pattern = campaign_url
+        self.session = get_session()
+        self.chunk_size = 1024 * 1024
+        self.s3_conf = {
+            'aws_access_key_id': self.aws_access_key_id,
+            'aws_secret_access_key': self.aws_secret_access_key,
+            'region_name': 'eu-west-2',
+            'config': Config(signature_version='s3v4'),
+        }
+
+    @classmethod
+    async def pages(cls, context, feed, href, ingest_type):
+        """
+        Ingest maxemail data from an s3 bucket
+        """
+        # pylint: disable=too-many-statements
+        context.logger.info('Starting Maxmemail-full sync')
+
+        if ingest_type != 'full':
+            context.logger.info('Skipping maxemail-full run as ingest type is %s', ingest_type)
+            return
+
+        async def _gen_campaign(record):
+            return {
+                'type': f'dit:{feed.activity_key}:Campaign',
+                'id': f'dit:{feed.activity_key}:Campaign:{record["campaign_id"]}',
+                'name': record['campaign_title'],
+                'content': record['campaign_description'],
+                'dit:emailSubject': record['email_subject'],
+                f'dit:{feed.activity_key}:Campaign:id': int(record['campaign_id']),
+                'published': record['campaign_started']
+            }
+
+        async def _process_maxemail_event_file(event_type):
+            context.logger.info('Generating %s activities', event_type)
+            record_count = 0
+            async with feed.session.create_client('s3', **feed.s3_conf) as s3_client:
+                s3_object = await s3_client.get_object(
+                    Bucket=feed.bucket_name,
+                    Key=feed.s3_filename_pattern.format(event_type=event_type)
+                )
+                async with aiofiles.tempfile.NamedTemporaryFile() as temp_file:
+                    async with aiofiles.open(temp_file.name, mode='wb') as file_handle:
+                        async for chunk in s3_object['Body'].iter_chunks(
+                                feed.chunk_size
+                        ):
+                            await file_handle.write(chunk)
+                    async with aiofiles.open(
+                            temp_file.name, mode='r', encoding='utf-8'
+                    ) as file_handle:
+                        async for record in aiocsv.AsyncDictReader(file_handle):
+                            yield record
+                            record_count += 1
+            context.logger.info('Processed %d %s records', record_count, event_type)
+
+        async def gen_sent_activities_and_timestamp():
+            async for record in _process_maxemail_event_file('sent'):
+                yield {
+                    'id': f'dit:{feed.activity_key}:Email:Sent:{record["event_id"]}:Create',
+                    'type': 'Create',
+                    'dit:application': feed.activity_key,
+                    'published': record['occurred'],
+                    'object': {
+                        'type': [
+                            f'dit:{feed.activity_key}:Email',
+                            f'dit:{feed.activity_key}:Email:Sent'
+                        ],
+                        'id': record['event_id'],
+                        'dit:emailAddress': record['email_address'],
+                        'attributedTo': await _gen_campaign(record)
+                    }
+                }, record['occurred']
+
+        async def gen_bounced_activities_and_timestamp():
+            async for record in _process_maxemail_event_file('bounced'):
+                yield {
+                    'id': f'dit:{feed.activity_key}:Email:Bounced:{record["event_id"]}:Create',
+                    'type': 'Create',
+                    'dit:application': feed.activity_key,
+                    'published': record['occurred'],
+                    'object': {
+                        'type': [
+                            f'dit:{feed.activity_key}:Email',
+                            f'dit:{feed.activity_key}:Email:Bounced'
+                        ],
+                        'id': f'dit:{feed.activity_key}:Email:Bounced:' + record['event_id'],
+                        'dit:emailAddress': record['email_address'],
+                        'content': record['bounced_reason'],
+                        'attributedTo': await _gen_campaign(record)
+                    }
+                }, record['occurred']
+
+        async def gen_opened_activities_and_timestamp():
+            async for record in _process_maxemail_event_file('opened'):
+                yield {
+                    'id': f'dit:{feed.activity_key}:Email:Opened:{record["event_id"]}:Create',
+                    'type': 'Create',
+                    'dit:application': feed.activity_key,
+                    'published': record['occurred'],
+                    'object': {
+                        'type': [
+                            f'dit:{feed.activity_key}:Email',
+                            f'dit:{feed.activity_key}:Email:Opened'
+                        ],
+                        'id': f'dit:{feed.activity_key}:Email:Opened:' + record['event_id'],
+                        'dit:emailAddress': record['email_address'],
+                        'attributedTo': await _gen_campaign(record)
+                    }
+                }, record['occurred']
+
+        async def gen_clicked_activities_and_timestamp():
+            async for record in _process_maxemail_event_file('clicked'):
+                yield {
+                    'id': f'dit:{feed.activity_key}:Email:Clicked:{record["event_id"]}:Create',
+                    'type': 'Create',
+                    'dit:application': feed.activity_key,
+                    'published': record['occurred'],
+                    'object': {
+                        'type': [
+                            f'dit:{feed.activity_key}:Email',
+                            f'dit:{feed.activity_key}:Email:Clicked'
+                        ],
+                        'id': f'dit:{feed.activity_key}:Email:Clicked:' + record['event_id'],
+                        'dit:emailAddress': record['email_address'],
+                        'url': record['clicked_url'],
+                        'attributedTo': await _gen_campaign(record)
+                    }
+                }, record['occurred']
+
+        async def gen_responded_activities_and_timestamp():
+            async for record in _process_maxemail_event_file('responded'):
+                yield {
+                    'id': f'dit:{feed.activity_key}:Email:Responded:{record["event_id"]}:Create',
+                    'type': 'Create',
+                    'dit:application': feed.activity_key,
+                    'published': record['occurred'],
+                    'object': {
+                        'type': [
+                            f'dit:{feed.activity_key}:Email',
+                            f'dit:{feed.activity_key}:Email:Responded'
+                        ],
+                        'id': f'dit:{feed.activity_key}:Email:Responded:' + record['event_id'],
+                        'dit:emailAddress': record['email_address'],
+                        'attributedTo': await _gen_campaign(record)
+                    }
+                }, record['occurred']
+
+        async def gen_unsubscribed_activities_and_timestamp():
+            async for record in _process_maxemail_event_file('unsubscribed'):
+                yield {
+                    'id': f'dit:{feed.activity_key}:Email:Unsubscribed'
+                          f':{record["event_id"]}:Create',
+                    'type': 'Create',
+                    'dit:application': feed.activity_key,
+                    'published': record['occurred'],
+                    'object': {
+                        'type': [
+                            f'dit:{feed.activity_key}:Email',
+                            f'dit:{feed.activity_key}:Email:Unsubscribed'
+                        ],
+                        'id': f'dit:{feed.activity_key}:Email:Unsubscribed:' + record['event_id'],
+                        'dit:emailAddress': record['email_address'],
+                        'attributedTo': await _gen_campaign(record)
+                    }
+                }, record['occurred']
+
+        async def gen_campaigns_activities_and_timestamp():
+            seen_ids = []
+            async for record in _process_maxemail_event_file('sent'):
+                if record['campaign_id'] in seen_ids:
+                    continue
+                seen_ids.append(record['campaign_id'])
+                yield {
+                    'id': record['campaign_id'] + ':Create',
+                    'type': 'Create',
+                    'dit:application': feed.activity_key,
+                    'published': record['campaign_started'],
+                    'object': {
+                        'content': record['campaign_description'],
+                        'dit:emailSubject': record['email_subject'],
+                        f'dit:{feed.activity_key}:Campaign:id': record['campaign_id'],
+                        'id': f"dit:{feed.activity_key}:Campaign:{record['campaign_id']}",
+                        'name': record['campaign_title'],
+                        'published': record['campaign_started'],
+                        'type': f'dit:{feed.activity_key}:Campaign',
+                    },
+                    'actor': {
+                        'dit:emailAddress': record['email_from_address'],
+                        'id': f"dit:{feed.activity_key}:Sender:{record['email_from_address']}",
+                        'name': record['email_from_name'],
+                        'type': ['Organization', f'dit:{feed.activity_key}:Sender'],
+                    }
+                }, record['campaign_started']
+
+        async def paginate(page_size, objs):
+            page = []
+            timestamp = None
+            async for obj, timestamp in objs:
+                page.append(obj)
+                if len(page) == page_size:
+                    yield page, timestamp
+                    page = []
+
+            if page:
+                yield page, timestamp
+
+        start_date = (datetime.datetime(year=2021, month=4, day=15) -
+                      datetime.timedelta(days=31)).strftime('%Y-%m-%d 00:00:00')
+        timestamps = [start_date] * 6
+
+        sent_activities_and_timestamp = gen_sent_activities_and_timestamp()
+        async for activity_page, timestamp in paginate(
+                feed.page_size,
+                sent_activities_and_timestamp
+        ):
+            timestamps[0] = timestamp
+            yield activity_page, '--'.join(timestamps)
+
+        bounced_activities_and_timestamp = gen_bounced_activities_and_timestamp()
+        async for activity_page, timestamp in paginate(
+                feed.page_size,
+                bounced_activities_and_timestamp
+        ):
+            timestamps[1] = timestamp
+            yield activity_page, '--'.join(timestamps)
+
+        opened_activities_and_timestamp = gen_opened_activities_and_timestamp()
+        async for activity_page, timestamp in paginate(
+                feed.page_size,
+                opened_activities_and_timestamp
+        ):
+            timestamps[2] = timestamp
+            yield activity_page, '--'.join(timestamps)
+
+        clicked_activities_and_timestamp = gen_clicked_activities_and_timestamp()
+        async for activity_page, timestamp in paginate(
+                feed.page_size,
+                clicked_activities_and_timestamp
+        ):
+            timestamps[3] = timestamp
+            yield activity_page, '--'.join(timestamps)
+
+        responded_activities_and_timestamp = gen_responded_activities_and_timestamp()
+        async for activity_page, timestamp in paginate(
+                feed.page_size, responded_activities_and_timestamp
+        ):
+            timestamps[4] = timestamp
+            yield activity_page, '--'.join(timestamps)
+
+        unsubscribed_activities_and_timestamp = gen_unsubscribed_activities_and_timestamp()
+        async for activity_page, timestamp in paginate(
+                feed.page_size, unsubscribed_activities_and_timestamp
+        ):
+            timestamps[5] = timestamp
+            yield activity_page, '--'.join(timestamps)
+
+        campaigns_activities_and_timestamp = gen_campaigns_activities_and_timestamp()
+        campaigns_activity_pages_and_timestamp = paginate(
+            feed.page_size, campaigns_activities_and_timestamp
+        )
+        async for activity_page, timestamp in campaigns_activity_pages_and_timestamp:
+            yield activity_page, timestamp
+
+        context.logger.info('Maxemail-full sync finished')
