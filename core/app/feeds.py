@@ -1215,7 +1215,7 @@ class MaxemailFeed2(MaxemailFeed):
 
         async def gen_sent_activities_and_timestamp():
             session = get_session()
-            async with session.client('s3', **feed.s3_conf) as s3_client:
+            async with session.create_client('s3', **feed.s3_conf) as s3_client:
                 s3_object = s3_client.get_object(
                     Bucket=feed.bucket_name,
                     Key=feed.s3_filename_pattern.format(event_type='sent')
