@@ -1,3 +1,4 @@
+import codecs
 from abc import ABCMeta, abstractmethod
 import asyncio
 import csv
@@ -1226,6 +1227,21 @@ class MaxemailFeed2(MaxemailFeed):
                 'published': record['campaign_started']
             }
 
+        class AsyncTextReaderWrapper:
+            def __init__(self, obj, encoding, errors="strict"):
+                self.obj = obj
+
+                decoder_factory = codecs.getincrementaldecoder(encoding)
+                self.decoder = decoder_factory(errors)
+
+            async def read(self, size):
+                raw_data = await self.obj.read(size)
+
+                if not raw_data:
+                    return self.decoder.decode(b"", final=True)
+
+                return self.decoder.decode(raw_data, final=False)
+
         async def gen_sent_activities_and_timestamp():
             context.logger.info('Generating sent activities')
             async with feed.session.create_client('s3', **feed.s3_conf) as s3_client:
@@ -1236,23 +1252,27 @@ class MaxemailFeed2(MaxemailFeed):
                 )
                 context.logger.info('Attempting to read records from csv')
                 async with s3_object['Body'] as csv_file:
-                    async for chunk in csv_file.iter_chunks():
-                        async for record in aiocsv.AsyncDictReader(chunk.decode('utf-8'), delimiter=','):
-                            yield {
-                                'id': f'dit:{feed.activity_key}:Email:Sent:{record["event_id"]}:Create',
-                                'type': 'Create',
-                                'dit:application': feed.activity_key,
-                                'published': record['occurred'],
-                                'object': {
-                                    'type': [
-                                        f'dit:{feed.activity_key}:Email',
-                                        f'dit:{feed.activity_key}:Email:Sent'
-                                    ],
-                                    'id': record['event_id'],
-                                    'dit:emailAddress': record['email_address'],
-                                    'attributedTo': await _gen_campaign(record)
-                                }
-                            }, record['occurred']
+                    async for record in aiocsv.AsyncDictReader(
+                        AsyncTextReaderWrapper(
+                            csv_file,
+                            encoding="utf-8",
+                        ), delimiter=','
+                    ):
+                        yield {
+                            'id': f'dit:{feed.activity_key}:Email:Sent:{record["event_id"]}:Create',
+                            'type': 'Create',
+                            'dit:application': feed.activity_key,
+                            'published': record['occurred'],
+                            'object': {
+                                'type': [
+                                    f'dit:{feed.activity_key}:Email',
+                                    f'dit:{feed.activity_key}:Email:Sent'
+                                ],
+                                'id': record['event_id'],
+                                'dit:emailAddress': record['email_address'],
+                                'attributedTo': await _gen_campaign(record)
+                            }
+                        }, record['occurred']
 
         # async def gen_bounced_activities_and_timestamp():
         #     for record in _get_event_reader("bounced"):
