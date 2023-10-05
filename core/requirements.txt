@@ -4,33 +4,55 @@
 #
 #    pip-compile --output-file=requirements.txt requirements.in
 #
+aiobotocore==2.5.4
+    # via -r requirements.in
+aiocsv==1.2.4
+    # via -r requirements.in
 aiodnsresolver==0.0.120
     # via -r requirements.in
-aiohttp==3.7.4
+aiofiles==23.2.1
     # via -r requirements.in
+aiohttp==3.7.4
+    # via
+    #   -r requirements.in
+    #   aiobotocore
+aioitertools==0.11.0
+    # via aiobotocore
 aioredis==1.1.0
     # via -r requirements.in
-async-timeout==3.0.0
+async-timeout==3.0.1
     # via
     #   aiohttp
     #   aioredis
-attrs==18.1.0
+attrs==23.1.0
     # via aiohttp
+botocore==1.31.17
+    # via aiobotocore
 chardet==3.0.4
     # via aiohttp
-hiredis==0.2.0
+hiredis==2.2.3
     # via aioredis
-idna==2.6
+idna==3.4
     # via yarl
-multidict==4.7.6
+jmespath==1.0.1
+    # via botocore
+multidict==6.0.4
     # via
     #   aiohttp
     #   yarl
-prometheus_client==0.3.0
+prometheus-client==0.3.0
     # via -r requirements.in
+python-dateutil==2.8.2
+    # via botocore
 raven==6.9.0
     # via -r requirements.in
-typing-extensions==3.10.0.0
+six==1.16.0
+    # via python-dateutil
+typing-extensions==4.8.0
     # via aiohttp
-yarl==1.2.4
+urllib3==1.26.16
+    # via botocore
+wrapt==1.15.0
+    # via aiobotocore
+yarl==1.9.2
     # via aiohttp
