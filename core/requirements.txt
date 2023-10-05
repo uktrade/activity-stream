@@ -50,7 +50,7 @@ six==1.16.0
     # via python-dateutil
 typing-extensions==4.7.1
     # via aiohttp
-urllib3==1.26.16
+urllib3==1.26.17
     # via botocore
 wrapt==1.15.0
     # via aiobotocore
