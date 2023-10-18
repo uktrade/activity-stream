@@ -86,10 +86,8 @@ six==1.16.0
     #   mohawk
     #   python-dateutil
 typing-extensions==4.7.1
-    # via
-    #   aiohttp
-    #   astroid
-urllib3==1.26.16
+    # via aiohttp
+urllib3==1.26.18
     # via botocore
 virtualenv==20.24.5
     # via pre-commit
