@@ -4,3 +4,4 @@ applications:
   - https://github.com/cloudfoundry/python-buildpack.git#v1.7.30
   memory: 128M
   disk_quota: 512M
+  stack: cflinuxfs4
