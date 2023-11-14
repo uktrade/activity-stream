@@ -1,7 +1,7 @@
 -r requirements.in
 
-coverage==4.5.1
-freezegun==0.3.10
-mohawk==0.3.4
-pylint==2.3.1
+coverage
+freezegun
+mohawk
+pylint
 pre-commit
