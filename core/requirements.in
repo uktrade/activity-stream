@@ -1,5 +1,5 @@
 aiodnsresolver==0.0.120
-aiohttp==3.7.4
+aiohttp==3.8.6
 aioredis==1.1.0
 prometheus_client==0.3.0
 raven==6.9.0
