@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 import aiohttp
 from aiohttp import web
-import aioredis
 from freezegun import freeze_time
 
 
@@ -40,6 +39,7 @@ from .tests_utils import (
     wait_until_get_working,
     _web_application
 )
+from ..app.redis import redis_get_client
 
 
 class TestBase(unittest.TestCase):
@@ -2298,9 +2298,8 @@ class TestApplication(TestBase):
             raven_client().remote.get_transport().close = mock_close
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                     mock_feed_status=lambda: 200, mock_headers=lambda: {})
-            redis = await aioredis.from_url('redis://127.0.0.1:6379')
-            async with redis.client() as conn:
-                await conn.delete('lock')
+            redis = await redis_get_client('redis://127.0.0.1:6379')
+            await redis.delete('lock')
             await ORIGINAL_SLEEP(2)
 
         raven_client().captureMessage.assert_called()

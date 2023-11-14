@@ -4,12 +4,11 @@ import os
 
 import aiohttp
 from aiohttp import web
-import aioredis
 import mohawk
 
 from ..app.app_incoming import run_incoming_application
 from ..app.app_outgoing import run_outgoing_application
-
+from ..app.redis import redis_get_client
 
 ORIGINAL_SLEEP = asyncio.sleep
 
@@ -91,9 +90,8 @@ async def delete_all_es_data():
 
 
 async def delete_all_redis_data():
-    redis = await aioredis.from_url('redis://127.0.0.1:6379')
-    async with redis.client() as conn:
-        await conn.flushdb()
+    redis = await redis_get_client('redis://127.0.0.1:6379')
+    await redis.flushdb()
 
 
 async def fetch_all_es_data_until(condition):
