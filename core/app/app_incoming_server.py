@@ -141,8 +141,8 @@ def handle_get_p1_check(parent_context):
         context = get_child_context(parent_context, 'check')
 
         with logged(context.logger.debug, context.logger.warning, 'Checking', []):
-            await context.redis_client.execute_command('SET', 'redis-check', b'GREEN', 'EX', 1)
-            redis_result = await context.redis_client.execute_command('GET', 'redis-check')
+            await context.redis_client.set('redis-check', b'GREEN', 'EX', 1)
+            redis_result = await context.redis_client.get('redis-check')
             is_redis_green = redis_result == b'GREEN'
 
             min_age = await es_min_verification_age(context)
