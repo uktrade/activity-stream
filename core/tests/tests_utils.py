@@ -91,8 +91,9 @@ async def delete_all_es_data():
 
 
 async def delete_all_redis_data():
-    redis_client = await aioredis.from_url('redis://127.0.0.1:6379')
-    await redis_client.execute('FLUSHDB')
+    redis = await aioredis.from_url('redis://127.0.0.1:6379')
+    async with redis.client() as conn:
+        await conn.execute('FLUSHDB')
 
 
 async def fetch_all_es_data_until(condition):
