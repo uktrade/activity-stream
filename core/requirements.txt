@@ -48,7 +48,7 @@ prometheus-client==0.3.0
     # via -r requirements.in
 python-dateutil==2.8.2
     # via botocore
-raven==6.9.0
+raven==6.10.0
     # via -r requirements.in
 six==1.16.0
     # via python-dateutil
