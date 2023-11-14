@@ -2300,7 +2300,7 @@ class TestApplication(TestBase):
                                     mock_feed_status=lambda: 200, mock_headers=lambda: {})
             redis = await aioredis.from_url('redis://127.0.0.1:6379')
             async with redis.client() as conn:
-                await conn.execute('DEL', 'lock')
+                await conn.delete('lock')
             await ORIGINAL_SLEEP(2)
 
         raven_client().captureMessage.assert_called()
