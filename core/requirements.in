@@ -1,8 +1,8 @@
-aiodnsresolver==0.0.120
+aiodnsresolver
 aiohttp
-aioredis==1.1.0
-prometheus_client==0.3.0
-raven==6.9.0
+aioredis
+prometheus_client
+raven
 aiofiles
 aiobotocore
 aiocsv
