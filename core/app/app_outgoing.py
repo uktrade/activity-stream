@@ -389,6 +389,7 @@ async def create_metrics_application(parent_context, metrics_registry, feeds):
                         feed_id, 'nonsearchable').set(nonsearchable)
                 except ESMetricsUnavailable:
                     pass
+                await asyncio.sleep(1)
 
         await redis_set_metrics(context, generate_latest(metrics_registry))
         await sleep(context, METRICS_INTERVAL)
