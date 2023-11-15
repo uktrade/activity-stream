@@ -223,7 +223,7 @@ async def wait_for_indexes_to_delete(context, index_names):
 
 async def create_activities_index(context, index_name):
     num_primary_shards = 3
-    num_replicas_per_shard = 1
+    num_replicas_per_shard = 0
 
     with logged(context.logger.debug, context.logger.warning, 'Creating index (%s)', [index_name]):
         index_definition = json_dumps({
