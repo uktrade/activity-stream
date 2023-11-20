@@ -32,8 +32,8 @@ def sub_dict_lower(super_dict, keys):
 
 
 async def cancel_non_current_tasks():
-    current_task = asyncio.Task.current_task()
-    all_tasks = asyncio.Task.all_tasks()
+    current_task = asyncio.current_task()
+    all_tasks = asyncio.all_tasks()
     non_current_tasks = [task for task in all_tasks if task != current_task]
     for task in non_current_tasks:
         task.cancel()
@@ -200,7 +200,7 @@ def json_loads(data):
 def main(run_application_coroutine):
     stdout_handler = logging.StreamHandler(sys.stdout)
     app_logger = logging.getLogger('activity-stream')
-    app_logger.setLevel(logging.INFO)
+    app_logger.setLevel(logging.DEBUG)
     app_logger.addHandler(stdout_handler)
 
     loop = asyncio.get_event_loop()
