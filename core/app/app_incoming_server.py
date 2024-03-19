@@ -10,7 +10,7 @@ from .app_incoming_elasticsearch import (
 )
 from .elasticsearch import (
     es_request,
-    es_min_verification_age,
+    # es_min_verification_age,
 )
 from .app_incoming_hawk import (
     authenticate_hawk_header,
@@ -145,15 +145,24 @@ def handle_get_p1_check(parent_context):
             redis_result = await context.redis_client.execute('GET', 'redis-check')
             is_redis_green = redis_result == b'GREEN'
 
-            min_age = await es_min_verification_age(context)
-            is_elasticsearch_green = min_age < 60 * 60 * 12
+            # Ideally we would check ES, but it seems to now return 429s even when not hitting it
+            # that often and everything else is fine, it's just the healthcheck that fails. We
+            # have some indirect checks on the Activity Stream (e.g. Great Search), so we have
+            # disabled the check on Elasticsearch. Leaving the code commented here so it's
+            # more clear where happened if there are other incidents.
 
-            all_green = is_redis_green and is_elasticsearch_green
+            # min_age = await es_min_verification_age(context)
+            # is_elasticsearch_green = min_age < 60 * 60 * 12
+
+            # all_green = is_redis_green and is_elasticsearch_green
+
+            # status = \
+            #     (b'__UP__' if all_green else b'__DOWN__') + b'\n' + \
+            #     (b'redis:' + (b'GREEN' if is_redis_green else b'RED')) + b'\n' + \
+            #     (b'elasticsearch:' + (b'GREEN' if is_elasticsearch_green else b'RED')) + b'\n'
 
             status = \
-                (b'__UP__' if all_green else b'__DOWN__') + b'\n' + \
-                (b'redis:' + (b'GREEN' if is_redis_green else b'RED')) + b'\n' + \
-                (b'elasticsearch:' + (b'GREEN' if is_elasticsearch_green else b'RED')) + b'\n'
+                (b'__UP__' if is_redis_green else b'__DOWN__') + b'\n'
 
         return web.Response(body=status, status=200, headers={
             'Content-Type': 'text/plain; charset=utf-8',
