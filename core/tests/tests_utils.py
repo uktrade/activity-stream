@@ -230,7 +230,7 @@ def respond_shards(request):
     is_schema = 'schema' in request.match_info['index_name']
     shard_state = \
         [{'state': 'STARTED'}] * 1 if is_schema else \
-        [{'state': 'STARTED'}] * 2
+        [{'state': 'STARTED'}] * 6
     return web.Response(text=json.dumps(shard_state), status=200, content_type='application/json')
 
 
