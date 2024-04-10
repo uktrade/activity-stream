@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: python:3.7.14
+      - image: python:3.11.8
         environment:
           PRE_COMMIT_HOME: /root/cache/pre-commit
       - image: opensearchproject/opensearch:2.11.0
