@@ -12,7 +12,7 @@ aiodnsresolver==0.0.120
     # via -r requirements.in
 aiofiles==23.2.1
     # via -r requirements.in
-aiohttp==3.7.4
+aiohttp==3.9.3
     # via
     #   -r requirements.in
     #   aiobotocore
@@ -20,9 +20,11 @@ aioitertools==0.11.0
     # via aiobotocore
 aioredis==1.1.0
     # via -r requirements.in
+aiosignal==1.3.1
+    # via aiohttp
 astroid==2.15.8
     # via pylint
-async-timeout==3.0.1
+async-timeout==4.0.3
     # via
     #   aiohttp
     #   aioredis
@@ -32,8 +34,6 @@ botocore==1.31.17
     # via aiobotocore
 cfgv==3.3.1
     # via pre-commit
-chardet==3.0.4
-    # via aiohttp
 coverage==4.5.1
     # via -r requirements_test.in
 distlib==0.3.7
@@ -42,6 +42,10 @@ filelock==3.12.2
     # via virtualenv
 freezegun==0.3.10
     # via -r requirements_test.in
+frozenlist==1.4.1
+    # via
+    #   aiohttp
+    #   aiosignal
 hiredis==2.2.3
     # via aioredis
 identify==2.5.24
@@ -87,7 +91,6 @@ six==1.16.0
     #   python-dateutil
 typing-extensions==4.7.1
     # via
-    #   aiohttp
     #   aioitertools
     #   astroid
 urllib3==1.26.18
