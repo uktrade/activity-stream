@@ -1,5 +1,6 @@
-import aioredis
+import redis.asyncio as redis
 
 
 async def redis_get_client(redis_uri):
-    return await aioredis.create_redis_pool(redis_uri, minsize=3, maxsize=3)
+    pool = redis.ConnectionPool.from_url(redis_uri)
+    return redis.Redis.from_pool(pool)

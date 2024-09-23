@@ -32,8 +32,8 @@ def sub_dict_lower(super_dict, keys):
 
 
 async def cancel_non_current_tasks():
-    current_task = asyncio.Task.current_task()
-    all_tasks = asyncio.Task.all_tasks()
+    current_task = asyncio.current_task()
+    all_tasks = asyncio.all_tasks()
     non_current_tasks = [task for task in all_tasks if task != current_task]
     for task in non_current_tasks:
         task.cancel()

@@ -192,7 +192,8 @@ class ActivityStreamFeed(Feed):
                 path=parsed_url.raw_path_qs,
                 content_type=b'',
                 content=b'',
-            )
+            ),
+            'Content-Type': '',
         }
 
 

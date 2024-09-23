@@ -162,9 +162,9 @@ async def run_outgoing_application():
     async def cleanup():
         await cancel_non_current_tasks()
 
-        redis_client.close()
-        await redis_client.wait_closed()
+        await redis_client.aclose()
 
+        await single_use_session.close()
         await session.close()
         # https://github.com/aio-libs/aiohttp/issues/1925
         await asyncio.sleep(0.250)
