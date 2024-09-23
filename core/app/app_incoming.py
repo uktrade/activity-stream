@@ -102,8 +102,7 @@ async def run_incoming_application():
         await cancel_non_current_tasks()
         await runner.cleanup()
 
-        redis_client.close()
-        await redis_client.wait_closed()
+        await redis_client.aclose()
 
         await session.close()
         # https://github.com/aio-libs/aiohttp/issues/1925

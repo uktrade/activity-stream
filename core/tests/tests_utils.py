@@ -4,7 +4,7 @@ import os
 
 import aiohttp
 from aiohttp import web
-import aioredis
+import redis.asyncio as redis
 import mohawk
 
 from ..app.app_incoming import run_incoming_application
@@ -16,14 +16,6 @@ ORIGINAL_SLEEP = asyncio.sleep
 
 async def fast_sleep(_):
     await ORIGINAL_SLEEP(0.5)
-
-
-def async_test(func):
-    def wrapper(*args, **kwargs):
-        future = func(*args, **kwargs)
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(future)
-    return wrapper
 
 
 async def run_app_until_accepts_http():
@@ -91,8 +83,10 @@ async def delete_all_es_data():
 
 
 async def delete_all_redis_data():
-    redis_client = await aioredis.create_redis('redis://127.0.0.1:6379')
-    await redis_client.execute('FLUSHDB')
+    pool = redis.ConnectionPool.from_url('redis://127.0.0.1:6379')
+    redis_client = redis.Redis.from_pool(pool)
+    await redis_client.execute_command('FLUSHDB')
+    await redis_client.aclose()
 
 
 async def fetch_all_es_data_until(condition):

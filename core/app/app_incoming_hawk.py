@@ -68,6 +68,5 @@ async def authenticate_hawk_header(context, nonce_expire, lookup_credentials,
 
 async def is_nonce_available(context, nonce, access_key_id, nonce_expire):
     nonce_key = f'nonce-{access_key_id}-{nonce}'
-    redis_response = await set_nonce_nx(context, nonce_key, nonce_expire)
-    nonce_available = redis_response == b'OK'
+    nonce_available = await set_nonce_nx(context, nonce_key, nonce_expire)
     return nonce_available

@@ -7,7 +7,6 @@ from unittest.mock import Mock
 from aiohttp import web
 
 from .tests_utils import (
-    async_test,
     delete_all_es_data,
     delete_all_redis_data,
     is_http_accepted_eventually,
@@ -22,11 +21,7 @@ from .tests_utils import (
 )
 
 
-class TestProcess(unittest.TestCase):
-
-    def add_async_cleanup(self, coroutine):
-        loop = asyncio.get_event_loop()
-        self.addCleanup(loop.run_until_complete, coroutine())
+class TestProcess(unittest.IsolatedAsyncioTestCase):
 
     async def terminate(self, server_out, server_inc):
         await asyncio.sleep(1)
@@ -100,13 +95,12 @@ class TestProcess(unittest.TestCase):
         def get_server_inc_stdout():
             return stdout_inc[0]
 
-        self.add_async_cleanup(tear_down)
+        self.addAsyncCleanup(tear_down)
         return \
             (server_out, get_server_out_stdout), \
             (server_inc, get_server_inc_stdout), \
             feed_runner_2
 
-    @async_test
     async def test_http_and_exit_clean(self):
         (server_out, stdout_out), (server_inc, stdout_inc), _ = await self.setup_manual(mock_env())
         self.assertTrue(await is_http_accepted_eventually())
@@ -127,7 +121,6 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(server_inc.returncode, 0)
         self.assertEqual(server_out.returncode, 0)
 
-    @async_test
     async def test_if_es_down_exit_clean(self):
         (server_out, stdout_out), (server_inc, stdout_inc), _ = await self.setup_manual({
             **mock_env(), 'ELASTICSEARCH__PORT': '9202'  # Nothing listening
@@ -142,7 +135,6 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(server_inc.returncode, 0)
         self.assertEqual(server_out.returncode, 0)
 
-    @async_test
     async def test_if_es_slow_exit_clean(self):
         async def return_200_slow(_):
             await asyncio.sleep(30)
@@ -151,7 +143,7 @@ class TestProcess(unittest.TestCase):
             web.post('/_bulk', return_200_slow),
         ]
         es_runner = await run_es_application(port=9210, override_routes=routes)
-        self.add_async_cleanup(es_runner.cleanup)
+        self.addAsyncCleanup(es_runner.cleanup)
 
         (server_out, stdout_out), (server_inc, stdout_inc), _ = await self.setup_manual({
             **mock_env(), 'ELASTICSEARCH__PORT': '9210'

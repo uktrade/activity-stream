@@ -8,14 +8,13 @@ from unittest.mock import patch
 
 import aiohttp
 from aiohttp import web
-import aioredis
+import redis.asyncio as redis
 from freezegun import freeze_time
 
 
 from .tests_utils import (
     ORIGINAL_SLEEP,
     append_until,
-    async_test,
     delete_all_es_data,
     delete_all_redis_data,
     fast_sleep,
@@ -42,11 +41,7 @@ from .tests_utils import (
 )
 
 
-class TestBase(unittest.TestCase):
-
-    def add_async_cleanup(self, coroutine):
-        loop = asyncio.get_event_loop()
-        self.addCleanup(loop.run_until_complete, coroutine())
+class TestBase(unittest.IsolatedAsyncioTestCase):
 
     async def setup_manual(self, env, mock_feed, mock_feed_status, mock_headers):
         ''' Test setUp function that can be customised on a per-test basis '''
@@ -72,18 +67,17 @@ class TestBase(unittest.TestCase):
         feed_runner = await run_feed_application(mock_feed, mock_feed_status,
                                                  mock_headers,
                                                  feed_requested_callback, 8081)
-        self.add_async_cleanup(feed_runner.cleanup)
+        self.addAsyncCleanup(feed_runner.cleanup)
 
         sentry_runner = await run_sentry_application()
-        self.add_async_cleanup(sentry_runner.cleanup)
+        self.addAsyncCleanup(sentry_runner.cleanup)
 
         cleanup = await run_app_until_accepts_http()
-        self.add_async_cleanup(cleanup)
+        self.addAsyncCleanup(cleanup)
 
 
 class TestAuthentication(TestBase):
 
-    @async_test
     async def test_no_auth_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -97,7 +91,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Authentication credentials were not provided."}')
 
-    @async_test
     async def test_bad_id_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -112,7 +105,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
-    @async_test
     async def test_bad_secret_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -126,7 +118,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
-    @async_test
     async def test_bad_secret_then_401_v3_activities(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -140,7 +131,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
-    @async_test
     async def test_bad_secret_then_401_v3_objects(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -154,7 +144,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
-    @async_test
     async def test_bad_method_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -168,7 +157,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
-    @async_test
     async def test_bad_content_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -183,7 +171,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
-    @async_test
     async def test_bad_content_type_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -197,7 +184,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
-    @async_test
     async def test_no_content_type_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -215,7 +201,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertIn('Content-Type header was not set.', text)
 
-    @async_test
     async def test_no_proto_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -232,7 +217,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertIn('The X-Forwarded-Proto header was not set.', text)
 
-    @async_test
     async def test_time_skew_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -249,7 +233,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
-    @async_test
     async def test_repeat_auth_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -267,7 +250,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status_2, 401)
         self.assertEqual(text_2, '{"details": "Incorrect authentication credentials."}')
 
-    @async_test
     async def test_invalid_header_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -281,7 +263,6 @@ class TestAuthentication(TestBase):
         _, status_1, _ = await get(url, bad_auth, x_forwarded_for, b'{}')
         self.assertEqual(status_1, 401)
 
-    @async_test
     async def test_invalid_ts_format_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -295,7 +276,6 @@ class TestAuthentication(TestBase):
         _, status_1, _ = await get(url, bad_auth, x_forwarded_for, b'{}')
         self.assertEqual(status_1, 401)
 
-    @async_test
     async def test_missing_nonce_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -309,7 +289,6 @@ class TestAuthentication(TestBase):
         _, status_1, _ = await get(url, bad_auth, x_forwarded_for, b'{}')
         self.assertEqual(status_1, 401)
 
-    @async_test
     async def test_reused_nonce_then_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                 mock_feed_status=lambda: 200, mock_headers=lambda: {})
@@ -330,7 +309,6 @@ class TestAuthentication(TestBase):
         _, status_2, _ = await get(url, auth, x_forwarded_for, b'{}')
         self.assertEqual(status_2, 401)
 
-    @async_test
     async def test_nonces_cleared(self):
         ''' Makes duplicate requests, but with the code patched so the nonce expiry time
             is shorter then the allowed Hawk skew. The second request succeeding gives
@@ -356,7 +334,6 @@ class TestAuthentication(TestBase):
         _, status_2, _ = await get(url, auth, x_forwarded_for, b'{}')
         self.assertEqual(status_2, 200)
 
-    @async_test
     async def test_no_x_fwd_for_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                 mock_feed_status=lambda: 200, mock_headers=lambda: {})
@@ -372,7 +349,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
-    @async_test
     async def test_bad_x_fwd_for_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -386,7 +362,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
-    @async_test
     async def test_beginning_x_fwd_for_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -400,7 +375,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
-    @async_test
     async def test_too_few_x_fwd_for_401(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -414,7 +388,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"details": "Incorrect authentication credentials."}')
 
-    @async_test
     async def test_post_creds_get_405(self):
         await self.setup_manual(env=mock_env(), mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -428,7 +401,6 @@ class TestAuthentication(TestBase):
         self.assertEqual(status, 405)
         self.assertEqual(text, '{"details": "405: Method Not Allowed"}')
 
-    @async_test
     async def test_ip_within_subnet_gets_200(self):
         mock_env_with_whitelist = mock_env()
         mock_env_with_whitelist['INCOMING_IP_WHITELIST__3'] = '10.0.0.0/8'
@@ -451,7 +423,6 @@ class TestAuthentication(TestBase):
                                        has_at_least_hits(2))
         self.assertEqual(status, 200)
 
-    @async_test
     async def test_ip_outside_subnet_gets_401(self):
         mock_env_with_whitelist = mock_env()
         mock_env_with_whitelist['INCOMING_IP_WHITELIST__3'] = '10.0.0.0/8'
@@ -471,7 +442,6 @@ class TestAuthentication(TestBase):
 
 class TestApplication(TestBase):
 
-    @async_test
     async def test_get_returns_feed_data(self):
         url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -509,7 +479,6 @@ class TestApplication(TestBase):
         self.assertIn('dit:exportOpportunities:Enquiry:42862:Create', ids)
         self.assertEqual(headers['Server'], 'activity-stream')
 
-    @async_test
     async def test_v2_activities_get_returns_feed_data(self):
         url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -545,7 +514,6 @@ class TestApplication(TestBase):
         self.assertIn('dit:exportOpportunities:Enquiry:42863:Create', ids)
         self.assertIn('dit:exportOpportunities:Enquiry:42862:Create', ids)
 
-    @async_test
     async def test_v2_activities_get_term_query(self):
         url = 'http://127.0.0.1:8080/v2/objects'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -572,7 +540,6 @@ class TestApplication(TestBase):
         ids = [item['_source']['id'] for item in result['hits']['hits']]
         self.assertEqual([desired_id], ids)
 
-    @async_test
     async def test_v3_objects_get_term_query(self):
         url = 'http://127.0.0.1:8080/v3/objects/_search'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -609,7 +576,6 @@ class TestApplication(TestBase):
         ids = [item['_source']['id'] for item in result['hits']['hits']]
         self.assertEqual([desired_id], ids)
 
-    @async_test
     async def test_v2_activities_get_bool_query(self):
         url = 'http://127.0.0.1:8080/v2/objects'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -636,7 +602,6 @@ class TestApplication(TestBase):
         ids = [item['_source']['id'] for item in result['hits']['hits']]
         self.assertEqual([desired_id], ids)
 
-    @async_test
     async def test_v2_activities_get_function_score_query(self):
         url = 'http://127.0.0.1:8080/v2/objects'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -667,7 +632,6 @@ class TestApplication(TestBase):
         ids = [item['_source']['id'] for item in result['hits']['hits']]
         self.assertEqual([desired_id], ids)
 
-    @async_test
     async def test_v2_activities_get_filter_obj_query(self):
         url = 'http://127.0.0.1:8080/v2/objects'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -698,7 +662,6 @@ class TestApplication(TestBase):
         ids = [item['_source']['id'] for item in result['hits']['hits']]
         self.assertEqual([desired_id], ids)
 
-    @async_test
     async def test_v2_activities_get_filter_list_query(self):
         url = 'http://127.0.0.1:8080/v2/objects'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -729,7 +692,6 @@ class TestApplication(TestBase):
         ids = [item['_source']['id'] for item in result['hits']['hits']]
         self.assertEqual([desired_id], ids)
 
-    @async_test
     async def test_v2_activities_get_aggs_query(self):
         url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -759,7 +721,6 @@ class TestApplication(TestBase):
         self.assertEqual(len(result['hits']['hits']), 2)
         self.assertEqual(len(result['aggregations']['my_agg']['buckets']), 2)
 
-    @async_test
     async def test_v3_root(self):
         url = 'http://127.0.0.1:8080/v3/'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -779,7 +740,6 @@ class TestApplication(TestBase):
 
         self.assertEqual(status, 200)
 
-    @async_test
     async def test_v3_activities_get_aggs_query(self):
         url = 'http://127.0.0.1:8080/v3/activities/_search'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -809,7 +769,6 @@ class TestApplication(TestBase):
         self.assertEqual(len(result['hits']['hits']), 2)
         self.assertEqual(len(result['aggregations']['my_agg']['buckets']), 2)
 
-    @async_test
     async def test_v2_activities_get_filter_aggs_query(self):
         url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -844,7 +803,6 @@ class TestApplication(TestBase):
         self.assertEqual(len(result['hits']['hits']), 0)
         self.assertEqual(result['aggregations']['my_agg']['buckets'], [])
 
-    @async_test
     async def test_v2_activities_permissioned_empty_query(self):
         url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -881,7 +839,6 @@ class TestApplication(TestBase):
         self.assertEqual(status, 200)
         self.assertEqual(len(result['hits']['hits']), 2)
 
-    @async_test
     async def test_v2_activities_permissioned_filtered_query(self):
         url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -923,7 +880,6 @@ class TestApplication(TestBase):
         self.assertEqual(status, 200)
         self.assertEqual(len(result['hits']['hits']), 1)
 
-    @async_test
     async def test_v2_activities_permissioned_empty_query_match_none(self):
         url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -955,7 +911,6 @@ class TestApplication(TestBase):
         self.assertEqual(status, 200)
         self.assertEqual(len(result['hits']['hits']), 0)
 
-    @async_test
     async def test_v2_objects_permissioned_empty_query(self):
         url = 'http://127.0.0.1:8080/v2/objects'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -991,7 +946,6 @@ class TestApplication(TestBase):
         self.assertEqual(status, 200)
         self.assertEqual(len(result['hits']['hits']), 2)
 
-    @async_test
     async def test_v2_objects_permissioned_filtered_query(self):
         url = 'http://127.0.0.1:8080/v2/objects'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -1032,7 +986,6 @@ class TestApplication(TestBase):
         self.assertEqual(status, 200)
         self.assertEqual(len(result['hits']['hits']), 1)
 
-    @async_test
     async def test_v2_objects_permissioned_empty_query_match_none(self):
         url = 'http://127.0.0.1:8080/v2/objects'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -1064,7 +1017,6 @@ class TestApplication(TestBase):
         self.assertEqual(status, 200)
         self.assertEqual(len(result['hits']['hits']), 0)
 
-    @async_test
     async def test_v2_objects_get_returns_feed_data(self):
         url = 'http://127.0.0.1:8080/v2/objects'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -1100,7 +1052,6 @@ class TestApplication(TestBase):
         self.assertIn('dit:exportOpportunities:Enquiry:42863', ids)
         self.assertIn('dit:exportOpportunities:Enquiry:42862', ids)
 
-    @async_test
     async def test_pagination(self):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
@@ -1147,7 +1098,6 @@ class TestApplication(TestBase):
         self.assertEqual(result_2_json['hits']['hits'][0]['_source']['id'],
                          'dit:exportOpportunities:Enquiry:49862:Create')
 
-    @async_test
     async def test_get_can_filter(self):
         env = {
             **mock_env(),
@@ -1231,7 +1181,6 @@ class TestApplication(TestBase):
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
     @patch('secrets.choice', return_value='qwerty12')
-    @async_test
     async def test_single_page(self, _, __):
         posted_to_es_once, append_es = append_until(lambda results: len(results) == 1)
 
@@ -1247,7 +1196,7 @@ class TestApplication(TestBase):
         es_runner = await run_es_application(port=9208, override_routes=routes)
         original_env = mock_env()
         vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9208')
-        self.add_async_cleanup(es_runner.cleanup)
+        self.addAsyncCleanup(es_runner.cleanup)
         await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
                                 mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -1297,7 +1246,6 @@ class TestApplication(TestBase):
     @freeze_time('2012-01-14 12:00:01')
     @patch('os.urandom', return_value=b'something-random')
     @patch('secrets.choice', return_value='qwerty12')
-    @async_test
     async def test_single_page_aws_authentication(self, _, __):
         posted_to_es_once, append_es = append_until(lambda results: len(results) == 1)
 
@@ -1319,7 +1267,7 @@ class TestApplication(TestBase):
             'ES_AWS_SECRET_ACCESS_KEY': 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
             'ES_AWS_REGION': 'us-east-1',
         }
-        self.add_async_cleanup(es_runner.cleanup)
+        self.addAsyncCleanup(es_runner.cleanup)
         await self.setup_manual(env=aws_es_env,
                                 mock_feed=read_file, mock_feed_status=lambda: 200,
                                 mock_headers=lambda: {})
@@ -1378,7 +1326,6 @@ class TestApplication(TestBase):
     #   }, ...
     # ]
     #
-    @async_test
     async def test_get_search(self):
         # -- Setup --
         # Source feed has 5 objects;
@@ -1445,7 +1392,6 @@ class TestApplication(TestBase):
             'url': 'www.great.gov.uk/article',
         })
 
-    @async_test
     async def test_es_auth(self):
         get_es_once, append_es = append_until(lambda results: len(results) == 1)
 
@@ -1462,7 +1408,7 @@ class TestApplication(TestBase):
             web.get('/activities/_search', return_200_and_callback),
         ]
         es_runner = await run_es_application(port=9204, override_routes=routes)
-        self.add_async_cleanup(es_runner.cleanup)
+        self.addAsyncCleanup(es_runner.cleanup)
 
         original_env = mock_env()
         vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9204')
@@ -1481,7 +1427,6 @@ class TestApplication(TestBase):
 
         self.assertEqual(es_headers['Authorization'], 'Basic c29tZS1pZDpzb21lLXNlY3JldA==')
 
-    @async_test
     async def test_es_401_is_proxied(self):
         routes = [
             web.get('/activities/_search', respond_http('{"elasticsearch": "error"}', 401)),
@@ -1505,7 +1450,6 @@ class TestApplication(TestBase):
         self.assertEqual(status, 401)
         self.assertEqual(text, '{"elasticsearch": "error"}')
 
-    @async_test
     async def test_es_5xx_recovered_from(self):
         modified_500 = 0
         modified_503 = 0
@@ -1581,7 +1525,6 @@ class TestApplication(TestBase):
             metrics_text = await metrics_result.text()
             self.assertIn('status="success"', metrics_text)
 
-    @async_test
     async def test_delete_fail_not_snapshot(self):
         http_400 = b'HTTP/1.1 400 OK\r\ncontent-type: application/json; charset=UTF-8' \
                    b'\r\ncontent-length: 30\r\n\r\n' \
@@ -1648,10 +1591,9 @@ class TestApplication(TestBase):
             server.close()
             await server.wait_closed()
 
-    @async_test
     async def test_es_no_connect_recovered(self):
         modified = 0
-        max_modifications = 4
+        max_modifications = 6
 
         async def handle_client(local_reader, local_writer):
             nonlocal modified
@@ -1683,8 +1625,8 @@ class TestApplication(TestBase):
             await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
                                     mock_feed=read_file, mock_feed_status=lambda: 200,
                                     mock_headers=lambda: {})
+            await ORIGINAL_SLEEP(4)
             await wait_until_get_working()
-            await ORIGINAL_SLEEP(3)
 
         url = 'http://127.0.0.1:8080/v2/activities'
         x_forwarded_for = '1.2.3.4, 127.0.0.0'
@@ -1697,7 +1639,6 @@ class TestApplication(TestBase):
         self.assertEqual(result['hits']['hits'][0]['_source']['id'],
                          'dit:exportOpportunities:Enquiry:49863:Create')
 
-    @async_test
     async def test_es_no_connect_on_get_500(self):
         es_runner = await run_es_application(port=9206, override_routes=[])
         original_env = mock_env()
@@ -1724,7 +1665,6 @@ class TestApplication(TestBase):
         self.assertEqual(text, '{"details": "An unknown error occurred."}')
         await asyncio.sleep(1)
 
-    @async_test
     async def test_multipage(self):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(
@@ -1741,7 +1681,6 @@ class TestApplication(TestBase):
         self.assertIn('dit:exportOpportunities:Enquiry:4986999:Create',
                       str(results))
 
-    @async_test
     async def test_two_feeds(self):
         env = {
             **mock_env(),
@@ -1760,7 +1699,6 @@ class TestApplication(TestBase):
         self.assertIn('dit:exportOpportunities:Enquiry:49863:Create', str(results))
         self.assertIn('dit:exportOpportunities:Enquiry:42863:Create', str(results))
 
-    @async_test
     async def test_two_feeds_one_fails(self):
         env = {
             **mock_env(),
@@ -1778,7 +1716,6 @@ class TestApplication(TestBase):
 
         self.assertIn('dit:exportOpportunities:Enquiry:49863:Create', str(results))
 
-    @async_test
     async def test_zendesk(self):
         def has_two_zendesk_tickets(results):
             if 'hits' not in results or 'hits' not in results['hits']:
@@ -1814,7 +1751,6 @@ class TestApplication(TestBase):
         self.assertIn('"dit:zendesk:Ticket:3:Create"', results)
         self.assertIn('"2011-04-12T12:48:13+00:00"', results)
 
-    @async_test
     async def test_aventri(self):
         # pylint: disable=too-many-statements
         def aventri_fetch(results):
@@ -1914,7 +1850,6 @@ class TestApplication(TestBase):
         self.assertEqual(deleted_event['object']['type'], ['dit:aventri:Event', 'Tombstone'])
         self.assertEqual(attendee_deleted_event['object']['dit:aventri:attendeeQuestions'], None)
 
-    @async_test
     async def test_aventri_attendee_with_no_company(self):
         def aventri_fetch(results):
             if 'hits' not in results or 'hits' not in results['hits']:
@@ -1993,7 +1928,6 @@ class TestApplication(TestBase):
         self.assertEqual(attendee['object']['dit:aventri:lastlobbylogin'], None)
         self.assertEqual(attendee['object']['dit:aventri:attendeeQuestions'], {})
 
-    @async_test
     async def test_aventri_event_with_zero_dates(self):
         def aventri_fetch(results):
             if 'hits' not in results or 'hits' not in results['hits']:
@@ -2050,7 +1984,6 @@ class TestApplication(TestBase):
         self.assertEqual(event['object']['startTime'], None)
         self.assertEqual(event['object']['endTime'], None)
 
-    @async_test
     async def test_aventri_event_with_null_dates(self):
         def aventri_fetch(results):
             if 'hits' not in results or 'hits' not in results['hits']:
@@ -2107,7 +2040,6 @@ class TestApplication(TestBase):
         self.assertEqual(event['object']['startTime'], None)
         self.assertEqual(event['object']['endTime'], None)
 
-    @async_test
     async def test_maxemail(self):
         def maxemail_base_fetch(results):
             if 'hits' not in results or 'hits' \
@@ -2157,7 +2089,6 @@ class TestApplication(TestBase):
             'dit:maxemail:Email:Unsubscribed:459:2020-11-03T08:38:19:a.b@dummy.co' in ids)
         self.assertTrue('dit:maxemail:Campaign:459' in ids)
 
-    @async_test
     async def test_on_bad_json_retries(self):
         sent_broken = False
 
@@ -2182,7 +2113,6 @@ class TestApplication(TestBase):
             str(results),
         )
 
-    @async_test
     async def test_on_feed_401_retries(self):
         sent_401 = False
 
@@ -2203,7 +2133,6 @@ class TestApplication(TestBase):
             str(results),
         )
 
-    @async_test
     async def test_on_feed_429_retries(self):
         sent_429 = False
         sent_retry_after = False
@@ -2234,7 +2163,6 @@ class TestApplication(TestBase):
             str(results),
         )
 
-    @async_test
     async def test_returns_some_metrics(self):
         with patch('asyncio.sleep', wraps=fast_sleep):
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
@@ -2267,7 +2195,6 @@ class TestApplication(TestBase):
         self.assertIn('elasticsearch_feed_activities_total'
                       '{feed_unique_id="first_feed",searchable="searchable"} 2.0', text)
 
-    @async_test
     async def test_empty_feed_is_success(self):
         env = {
             **mock_env(),
@@ -2289,7 +2216,6 @@ class TestApplication(TestBase):
 
         self.assertIn('status="success"', await result.text())
 
-    @async_test
     async def test_if_lost_lock_then_raise(self):
         async def mock_close():
             await ORIGINAL_SLEEP(0)
@@ -2298,8 +2224,10 @@ class TestApplication(TestBase):
             raven_client().remote.get_transport().close = mock_close
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                     mock_feed_status=lambda: 200, mock_headers=lambda: {})
-            redis_client = await aioredis.create_redis('redis://127.0.0.1:6379')
-            await redis_client.execute('DEL', 'lock')
+            pool = redis.ConnectionPool.from_url('redis://127.0.0.1:6379')
+            redis_client = redis.Redis.from_pool(pool)
+            await redis_client.execute_command('DEL', 'lock')
+            await redis_client.aclose()
             await ORIGINAL_SLEEP(2)
 
         raven_client().captureMessage.assert_called()
