@@ -59,7 +59,7 @@ frozenlist==1.4.1
     #   aiosignal
 identify==2.5.24
     # via pre-commit
-idna==3.5
+idna==3.10
     # via
     #   -r requirements.txt
     #   yarl
@@ -106,7 +106,7 @@ six==1.16.0
     #   -r requirements.txt
     #   mohawk
     #   python-dateutil
-urllib3==1.26.18
+urllib3==1.26.20
     # via
     #   -r requirements.txt
     #   botocore
