@@ -1210,8 +1210,8 @@ class TestApplication(TestBase):
         self.assertEqual(self.feed_requested[0].result(
         ).headers['Authorization'], (
             'Hawk '
-            'mac="2bwVsvN/PASaUjQWCj9ySuyY5PswD/LNaeBcIB8ki00=", '
-            'hash="q/t+NNAkQZNlq/aAD6PlexImwQTxwgT2MahfTa9XRLA=", '
+            'mac="keUgjONtI1hLtS4DzGl+0G63o1nPFmvtIsTsZsB/NPM=", '
+            'hash="B0weSUXsMcb5UhL41FZbrUJCAotzSI3HawE1NPLRUz8=", '
             'id="feed-some-id", '
             'ts="1326542401", '
             'nonce="c29tZX"'
@@ -1281,8 +1281,8 @@ class TestApplication(TestBase):
         self.assertEqual(self.feed_requested[0].result(
         ).headers['Authorization'], (
             'Hawk '
-            'mac="2bwVsvN/PASaUjQWCj9ySuyY5PswD/LNaeBcIB8ki00=", '
-            'hash="q/t+NNAkQZNlq/aAD6PlexImwQTxwgT2MahfTa9XRLA=", '
+            'mac="keUgjONtI1hLtS4DzGl+0G63o1nPFmvtIsTsZsB/NPM=", '
+            'hash="B0weSUXsMcb5UhL41FZbrUJCAotzSI3HawE1NPLRUz8=", '
             'id="feed-some-id", '
             'ts="1326542401", '
             'nonce="c29tZX"'

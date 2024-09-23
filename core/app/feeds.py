@@ -102,7 +102,7 @@ class Feed(metaclass=ABCMeta):
                 num_attempts += 1
                 try:
                     result = await http_make_request(
-                        context.session, context.metrics, 'GET', href, data=b'', headers=headers)
+                        context.session, context.metrics, 'GET', href, data=None, headers=headers)
                     result.raise_for_status()
                     return result._body
                 except aiohttp.ClientResponseError as client_error:
@@ -190,10 +190,9 @@ class ActivityStreamFeed(Feed):
                 host=parsed_url.host,
                 port=str(parsed_url.port),
                 path=parsed_url.raw_path_qs,
-                content_type=b'text/plain',
+                content_type=b'',
                 content=b'',
             ),
-            'Content-Type': 'text/plain',
         }
 
 
@@ -314,7 +313,7 @@ class EventFeed(Feed):
         context.logger.info('Making aventri auth request to %s', self.auth_url)
         result = await http_make_request(
             context.session, context.metrics, 'GET', self.auth_url,
-            data=b'',
+            data=None,
             params=(
                 ('accountid', str(self.account_id)),
                 ('key', str(self.api_key)),
@@ -424,7 +423,7 @@ class EventFeed(Feed):
                 context,
                 'GET',
                 self.event_questions_list_url.format(event_id=event_id),
-                data=b'',
+                data=None,
             )
             return [question['ds_fieldname'] for question in response.values()]
 
@@ -439,7 +438,7 @@ class EventFeed(Feed):
                 )
 
                 page_of_events = await self.http_make_aventri_request(
-                    context, 'GET', self.seed, data=b'', params=params,
+                    context, 'GET', self.seed, data=None, params=params,
                 )
                 for event in page_of_events:
 
@@ -472,7 +471,7 @@ class EventFeed(Feed):
                 )
                 with logged(logger.debug, logger.warning, 'Fetching attendee list', []):
                     attendees = await self.http_make_aventri_request(
-                        context, 'GET', url, data=b'', params=params,
+                        context, 'GET', url, data=None, params=params,
                     )
                 for attendee in attendees:
                     yield attendee
@@ -496,7 +495,7 @@ class EventFeed(Feed):
                 )
                 with logged(logger.debug, logger.warning, 'Fetching sessions list', []):
                     sessions = await self.http_make_aventri_request(
-                        context, 'GET', url, data=b'', params=params,
+                        context, 'GET', url, data=None, params=params,
                     )
                 for session in sessions:
                     yield session
@@ -520,7 +519,7 @@ class EventFeed(Feed):
                 )
                 with logged(logger.debug, logger.warning, 'Fetching sessions list', []):
                     sessions = await self.http_make_aventri_request(
-                        context, 'GET', url, data=b'', params=params,
+                        context, 'GET', url, data=None, params=params,
                     )
                 for session in sessions:
                     yield session
