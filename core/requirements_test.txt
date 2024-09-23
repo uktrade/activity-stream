@@ -30,10 +30,6 @@ aiosignal==1.3.1
     #   aiohttp
 astroid==2.15.8
     # via pylint
-async-timeout==4.0.3
-    # via
-    #   -r requirements.txt
-    #   redis
 attrs==23.1.0
     # via
     #   -r requirements.txt
@@ -59,7 +55,7 @@ frozenlist==1.4.1
     #   aiosignal
 identify==2.5.24
     # via pre-commit
-idna==3.5
+idna==3.7
     # via
     #   -r requirements.txt
     #   yarl
