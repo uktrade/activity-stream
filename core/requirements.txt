@@ -32,7 +32,7 @@ frozenlist==1.4.1
     # via
     #   aiohttp
     #   aiosignal
-idna==3.5
+idna==3.10
     # via yarl
 jmespath==1.0.1
     # via botocore
@@ -50,7 +50,7 @@ redis==5.0.8
     # via -r requirements.in
 six==1.16.0
     # via python-dateutil
-urllib3==1.26.18
+urllib3==1.26.20
     # via botocore
 wrapt==1.16.0
     # via aiobotocore
