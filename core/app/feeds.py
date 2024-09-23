@@ -190,10 +190,10 @@ class ActivityStreamFeed(Feed):
                 host=parsed_url.host,
                 port=str(parsed_url.port),
                 path=parsed_url.raw_path_qs,
-                content_type=b'',
+                content_type=b'text/plain',
                 content=b'',
             ),
-            'Content-Type': '',
+            'Content-Type': 'text/plain',
         }
 
 
