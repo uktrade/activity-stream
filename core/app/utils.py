@@ -26,7 +26,7 @@ def get_child_context(context, name):
 
 def sub_dict_lower(super_dict, keys):
     return {
-        key.lower(): super_dict[key]
+        key.lower(): super_dict[key] if key in super_dict else None
         for key in keys
     }
 
