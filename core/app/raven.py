@@ -37,7 +37,8 @@ class QueuedAioHttpTransport:
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            # The loop has been closed (e.g. in tests)
+            # The loop has been closed (e.g. in tests), lets just forget about the error
+            success_cb()
             return
 
         loop.create_task(self.queue_or_leak(_send))
