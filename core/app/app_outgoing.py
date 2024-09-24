@@ -175,7 +175,7 @@ async def create_outgoing_application(context, feeds):
     that it is better to bubble such exceptions in order to fail deployments,
     but this is not yet decided.
     """
-    asyncio.get_event_loop().create_task(
+    asyncio.create_task(
         repeat_until_cancelled(
             context, EXCEPTION_INTERVALS,
             to_repeat=ingest_feeds, to_repeat_args=(context, feeds),
@@ -389,7 +389,7 @@ async def create_metrics_application(parent_context, metrics_registry, feeds):
         await redis_set_metrics(context, generate_latest(metrics_registry))
         await sleep(context, METRICS_INTERVAL)
 
-    asyncio.get_event_loop().create_task(
+    asyncio.create_task(
         repeat_until_cancelled(
             context, EXCEPTION_INTERVALS, to_repeat=poll_metrics)
     )

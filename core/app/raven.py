@@ -35,13 +35,11 @@ class QueuedAioHttpTransport:
         async def _send():
             await send(self.session, self.metrics, url, data, headers, success_cb, failure_cb)
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.create_task(self.queue_or_leak(_send))
         except RuntimeError:
             # The loop has been closed (e.g. in tests), lets just forget about the error
             success_cb()
             return
-
-        loop.create_task(self.queue_or_leak(_send))
 
 
 def leaky_queue():
