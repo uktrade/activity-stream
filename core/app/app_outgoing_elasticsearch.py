@@ -184,7 +184,7 @@ async def delete_indexes(context, index_names):
                         payload=b'',
                     )
                 except Exception:
-                    context.logger.exception(
+                    context.logger.debug(
                         'Failed index DELETE of (%s)', [index_name])
                     if i == len(RETRY_TIMEOUTS) - 1:
                         failed_index_names.append(index_name)
@@ -200,7 +200,7 @@ async def delete_indexes(context, index_names):
 
 
 async def wait_for_indexes_to_delete(context, index_names):
-    max_attempts = 60
+    max_attempts = 180
     with logged(context.logger.debug, context.logger.warning, 'Waiting for indexes to delete (%s)',
                 [index_names]):
         for index_name in index_names:
