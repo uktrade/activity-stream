@@ -4,13 +4,13 @@
 #
 #    pip-compile requirements_test.in
 #
-aiobotocore==2.5.4
+aiobotocore==2.15.1
     # via -r requirements.txt
-aiocsv==1.2.5
+aiocsv==1.3.2
     # via -r requirements.txt
-aiodnsresolver==0.0.120
+aiodnsresolver==0.0.155
     # via -r requirements.txt
-aiofiles==23.2.1
+aiofiles==24.1.0
     # via -r requirements.txt
 aiohappyeyeballs==2.4.0
     # via
@@ -20,7 +20,7 @@ aiohttp==3.10.5
     # via
     #   -r requirements.txt
     #   aiobotocore
-aioitertools==0.11.0
+aioitertools==0.12.0
     # via
     #   -r requirements.txt
     #   aiobotocore
@@ -34,11 +34,11 @@ async-timeout==4.0.3
     # via
     #   -r requirements.txt
     #   redis
-attrs==23.1.0
+attrs==24.2.0
     # via
     #   -r requirements.txt
     #   aiohttp
-botocore==1.31.17
+botocore==1.35.23
     # via
     #   -r requirements.txt
     #   aiobotocore
@@ -75,7 +75,7 @@ mccabe==0.6.1
     # via pylint
 mohawk==0.3.4
     # via -r requirements_test.in
-multidict==6.0.4
+multidict==6.1.0
     # via
     #   -r requirements.txt
     #   aiohttp
@@ -86,11 +86,11 @@ platformdirs==4.0.0
     # via virtualenv
 pre-commit==2.21.0
     # via -r requirements_test.in
-prometheus-client==0.3.0
+prometheus-client==0.21.0
     # via -r requirements.txt
 pylint==2.3.1
     # via -r requirements_test.in
-python-dateutil==2.8.2
+python-dateutil==2.9.0.post0
     # via
     #   -r requirements.txt
     #   botocore
@@ -106,7 +106,11 @@ six==1.16.0
     #   -r requirements.txt
     #   mohawk
     #   python-dateutil
-urllib3==1.26.20
+typing-extensions==4.12.2
+    # via
+    #   -r requirements.txt
+    #   aiocsv
+urllib3==2.2.3
     # via
     #   -r requirements.txt
     #   botocore
@@ -117,7 +121,7 @@ wrapt==1.16.0
     #   -r requirements.txt
     #   aiobotocore
     #   astroid
-yarl==1.9.3
+yarl==1.12.1
     # via
     #   -r requirements.txt
     #   aiohttp
