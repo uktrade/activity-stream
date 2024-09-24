@@ -7,9 +7,6 @@ from prometheus_client import (
     CollectorRegistry,
 )
 
-from .dns import (
-    AioHttpDnsResolver,
-)
 from .feeds import (
     parse_feed_config,
 )
@@ -78,7 +75,7 @@ async def run_incoming_application():
     settings.ES_AWS_REGION = es_aws_region
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
-    conn = aiohttp.TCPConnector(use_dns_cache=False, resolver=AioHttpDnsResolver(metrics))
+    conn = aiohttp.TCPConnector()
     session = aiohttp.ClientSession(
         connector=conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},

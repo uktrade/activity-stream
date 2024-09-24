@@ -8,8 +8,6 @@ aiobotocore==2.15.1
     # via -r requirements.txt
 aiocsv==1.3.2
     # via -r requirements.txt
-aiodnsresolver==0.0.155
-    # via -r requirements.txt
 aiofiles==24.1.0
     # via -r requirements.txt
 aiohappyeyeballs==2.4.0

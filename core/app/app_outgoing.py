@@ -24,9 +24,6 @@ from .app_outgoing_elasticsearch import (
     delete_indexes,
     refresh_index,
 )
-from .dns import (
-    AioHttpDnsResolver,
-)
 from .elasticsearch import (
     es_min_verification_age,
 )
@@ -125,10 +122,8 @@ async def run_outgoing_application():
     settings.ES_AWS_REGION = es_aws_region
     metrics_registry = CollectorRegistry()
     metrics = get_metrics(metrics_registry)
-    conn = aiohttp.TCPConnector(limit_per_host=10, use_dns_cache=False,
-                                resolver=AioHttpDnsResolver(metrics))
-    single_use_conn = aiohttp.TCPConnector(limit_per_host=10, use_dns_cache=False,
-                                           force_close=True, resolver=AioHttpDnsResolver(metrics))
+    conn = aiohttp.TCPConnector(limit_per_host=10)
+    single_use_conn = aiohttp.TCPConnector(limit_per_host=10, force_close=True)
     session = aiohttp.ClientSession(
         connector=conn,
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
