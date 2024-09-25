@@ -98,28 +98,6 @@ def lookup_credentials(incoming_key_pairs, passed_access_key_id):
     } if matching_key_pairs else None
 
 
-def raven_reporter(context):
-    @web.middleware
-    async def _raven_reporter(request, handler):
-        try:
-            return await handler(request)
-        except (web.HTTPSuccessful, web.HTTPRedirection, web.HTTPClientError):
-            raise
-        except BaseException:
-            context.raven_client.captureException(data={
-                'request': {
-                    'url': str(request.url.with_scheme(request.headers['X-Forwarded-Proto'])),
-                    'query_string': request.query_string,
-                    'method': request.method,
-                    'data': await request.read(),
-                    'headers':  dict(request.headers),
-                }
-            })
-            raise
-
-    return _raven_reporter
-
-
 def convert_errors_to_json():
     @web.middleware
     async def _convert_errors_to_json(request, handler):

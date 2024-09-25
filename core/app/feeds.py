@@ -10,6 +10,7 @@ from io import TextIOWrapper, BytesIO
 import aiocsv
 import aiofiles
 import aiohttp
+import sentry_sdk
 import yarl
 from aiobotocore.session import get_session
 from botocore.config import Config
@@ -381,7 +382,7 @@ class EventFeed(Feed):
                     num_attempts,
                     retry_interval,
                 )
-                context.raven_client.captureMessage(
+                sentry_sdk.capture_message(
                     f'aventri: HTTP {client_error.status} received at attempt ({num_attempts}).'
                     f'Will retry after ({retry_interval}) seconds',
                 )
