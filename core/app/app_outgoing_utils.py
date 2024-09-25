@@ -1,5 +1,7 @@
 import asyncio
 
+import sentry_sdk
+
 
 def flatten(to_flatten):
     return list(flatten_generator(to_flatten))
@@ -31,10 +33,10 @@ async def repeat_until_cancelled(context, exception_intervals, to_repeat,
             interval_index = min(num_exceptions_in_chain, len(exception_intervals) - 1)
             exception_interval = exception_intervals[interval_index]
             num_exceptions_in_chain += 1
+            sentry_sdk.capture_exception()
             context.logger.exception(
                 'Raised exception in async_repeat_until_cancelled. '
                 'Waiting %s seconds until looping.', exception_interval)
-            context.raven_client.captureException()
 
             try:
                 await asyncio.sleep(exception_interval)

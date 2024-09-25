@@ -1,6 +1,6 @@
 aiohttp
 prometheus_client
-raven
+sentry-sdk[aiohttp]
 redis
 aiofiles
 aiobotocore

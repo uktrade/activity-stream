@@ -30,7 +30,6 @@ from .app_incoming_server import (
     handle_get_p1_check,
     handle_get_p2_check,
     handle_get_search_v2,
-    raven_reporter,
     server_logger,
 )
 from .elasticsearch import (
@@ -81,11 +80,11 @@ async def run_incoming_application():
         headers={'Accept-Encoding': 'identity;q=1.0, *;q=0'},
     )
     redis_client = await redis_get_client(redis_uri)
-    raven_client = get_raven_client(sentry, session, metrics)
+    get_raven_client(sentry, session, metrics)
 
     context = Context(
         logger=logger, metrics=metrics,
-        raven_client=raven_client, redis_client=redis_client, session=session,
+        raven_client=None, redis_client=redis_client, session=session,
         single_use_session=None, es_semaphore=asyncio.Semaphore(value=500),
     )
 
@@ -114,7 +113,6 @@ async def create_incoming_application(
     app = web.Application(middlewares=[
         server_logger(context.logger),
         convert_errors_to_json(),
-        raven_reporter(context),
     ])
 
     private_app_v1 = web.Application(middlewares=[

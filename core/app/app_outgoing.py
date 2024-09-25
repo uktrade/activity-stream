@@ -140,11 +140,11 @@ async def run_outgoing_application():
     )
 
     redis_client = await redis_get_client(redis_uri)
-    raven_client = get_raven_client(sentry, session, metrics)
+    get_raven_client(sentry, session, metrics)
 
     context = Context(
         logger=logger, metrics=metrics,
-        raven_client=raven_client, redis_client=redis_client, session=session,
+        raven_client=None, redis_client=redis_client, session=session,
         single_use_session=single_use_session, es_semaphore=asyncio.Semaphore(value=1),
     )
 

@@ -1567,7 +1567,9 @@ class TestApplication(TestBase):
         original_env = mock_env()
         vcap_services = original_env['VCAP_SERVICES'].replace(':9200', ':9201')
 
-        with patch('asyncio.sleep', wraps=fast_sleep), patch('raven.Client') as raven_client:
+        with \
+                patch('asyncio.sleep', wraps=fast_sleep), \
+                patch('sentry_sdk.capture_exception') as sentry_capture_exception:
             await self.setup_manual(env={**original_env, 'VCAP_SERVICES': vcap_services},
                                     mock_feed=read_file, mock_feed_status=lambda: 200,
                                     mock_headers=lambda: {})
@@ -1577,7 +1579,7 @@ class TestApplication(TestBase):
 
             await get_until(url, x_forwarded_for, has_at_least_hits(2))
 
-            raven_client().captureException.assert_not_called()
+            sentry_capture_exception.assert_not_called()
 
             # The full ingest has a minimum duration, and the delete is only called at the
             # beginning of the second ingest
@@ -1586,7 +1588,7 @@ class TestApplication(TestBase):
 
             # This is the point of the test: the exception should have been
             # captured, since this error is not expected
-            raven_client().captureException.assert_called()
+            sentry_capture_exception.assert_called()
 
             server.close()
             await server.wait_closed()
@@ -2217,11 +2219,10 @@ class TestApplication(TestBase):
         self.assertIn('status="success"', await result.text())
 
     async def test_if_lost_lock_then_raise(self):
-        async def mock_close():
-            await ORIGINAL_SLEEP(0)
 
-        with patch('asyncio.sleep', wraps=fast_sleep), patch('raven.Client') as raven_client:
-            raven_client().remote.get_transport().close = mock_close
+        with \
+                patch('asyncio.sleep', wraps=fast_sleep), \
+                patch('sentry_sdk.capture_message') as sentry_capture_message:
             await self.setup_manual(env=mock_env(), mock_feed=read_file,
                                     mock_feed_status=lambda: 200, mock_headers=lambda: {})
             pool = redis.ConnectionPool.from_url('redis://127.0.0.1:6379')
@@ -2230,4 +2231,4 @@ class TestApplication(TestBase):
             await redis_client.aclose()
             await ORIGINAL_SLEEP(2)
 
-        raven_client().captureMessage.assert_called()
+        sentry_capture_message.assert_called()

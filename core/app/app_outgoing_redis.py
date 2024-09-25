@@ -1,5 +1,7 @@
 import asyncio
 
+import sentry_sdk
+
 from .logger import (
     logged,
 )
@@ -10,6 +12,7 @@ from .utils import (
     get_child_context,
     sleep,
 )
+
 
 # So the latest URL for feeds don't hang around in Redis for
 # ever if the feed is turned off
@@ -53,7 +56,7 @@ async def acquire_and_keep_lock(parent_context, exception_intervals, key):
         await sleep(context, extend_interval)
         response = await redis_client.execute_command('EXPIRE', key, ttl)
         if not response:
-            context.raven_client.captureMessage('Lock has been lost')
+            sentry_sdk.capture_message('Lock has been lost')
             await acquire()
 
     await acquire()
