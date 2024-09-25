@@ -12,7 +12,7 @@ aiofiles==24.1.0
     # via -r requirements.in
 aiohappyeyeballs==2.4.0
     # via aiohttp
-aiohttp==3.10.5
+aiohttp==3.10.6
     # via
     #   -r requirements.in
     #   aiobotocore
