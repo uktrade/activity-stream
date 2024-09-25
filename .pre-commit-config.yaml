@@ -1,11 +1,7 @@
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v1.2.3
+  rev: v4.6.0
   hooks:
-    - id: autopep8-wrapper
-      args:
-        - --in-place
-        - --max-line-length=99
     - id: check-ast
     - id: check-added-large-files
     - id: check-json
@@ -21,6 +17,13 @@ repos:
     - id: pretty-format-json
       args:
         - --autofix
+- repo: https://github.com/hhatto/autopep8
+  rev: v2.3.1
+  hooks:
+    - id: autopep8
+      args:
+        - --in-place
+        - --max-line-length=99
 # We run pylint from local env, to ensure modules can be found
 - repo: local
   hooks:
