@@ -14,7 +14,7 @@ aiohappyeyeballs==2.4.0
     # via
     #   -r requirements.txt
     #   aiohttp
-aiohttp==3.10.5
+aiohttp==3.10.6
     # via
     #   -r requirements.txt
     #   aiobotocore
