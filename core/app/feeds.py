@@ -1338,7 +1338,7 @@ class MaxemailFeedFull(MaxemailFeed):
             async for record in _process_maxemail_event_file('unsubscribed'):
                 yield {
                     'id': f'dit:{feed.activity_key}:Email:Unsubscribed'
-                          f':{record["event_id"]}:Create',
+                    f':{record["event_id"]}:Create',
                     'type': 'Create',
                     'dit:application': feed.activity_key,
                     'published': record['occurred'],

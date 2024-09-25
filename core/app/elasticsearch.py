@@ -133,13 +133,13 @@ def aws_sigv4_headers(
             canonical_headers = ''.join(f'{key}:{value}\n' for key, value in headers)
 
             return f'{method}\n{canonical_uri}\n{canonical_querystring}\n' + \
-                   f'{canonical_headers}\n{signed_headers}\n{body_hash}'
+                f'{canonical_headers}\n{signed_headers}\n{body_hash}'
 
         def sign(key, msg):
             return hmac.new(key, msg.encode('ascii'), hashlib.sha256).digest()
 
         string_to_sign = f'{algorithm}\n{amzdate}\n{credential_scope}\n' + \
-                         hashlib.sha256(canonical_request().encode('ascii')).hexdigest()
+            hashlib.sha256(canonical_request().encode('ascii')).hexdigest()
 
         date_key = sign(('AWS4' + aws_secret_access_key).encode('ascii'), datestamp)
         region_key = sign(date_key, region_name)
