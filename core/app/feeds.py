@@ -168,14 +168,17 @@ class ActivityStreamFeed(Feed):
     @classmethod
     def parse_config(cls, config):
         return cls(**sub_dict_lower(config,
-                                    ['UNIQUE_ID', 'SEED', 'ACCESS_KEY_ID', 'SECRET_ACCESS_KEY']))
+                                    ['UNIQUE_ID', 'SEED', 'ACCESS_KEY_ID', 'SECRET_ACCESS_KEY', 
+                                     'FULL_INGEST_INTERVAL']))
 
-    def __init__(self, unique_id, seed, access_key_id, secret_access_key):
+    def __init__(self, unique_id, seed, access_key_id, secret_access_key, full_ingest_interval):
         self.lock = asyncio.Lock()
         self.unique_id = unique_id
         self.seed = seed
         self.access_key_id = access_key_id
         self.secret_access_key = secret_access_key
+        if full_ingest_interval is not None:
+            self.full_ingest_interval = full_ingest_interval
 
     @classmethod
     async def get_activities(cls, _, feed):
