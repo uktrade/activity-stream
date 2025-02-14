@@ -118,7 +118,7 @@ urllib3==2.2.3
     #   -r requirements.txt
     #   botocore
     #   sentry-sdk
-virtualenv==20.26.5
+virtualenv==20.26.6
     # via pre-commit
 wrapt==1.16.0
     # via
